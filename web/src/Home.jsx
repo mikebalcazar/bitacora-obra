@@ -23,7 +23,7 @@ export default function Home() {
       <div className="row">
         <div className="row" style={{ gap: 10, fontWeight: 600, fontSize: 15 }}><i className="dot" style={{ background: 'var(--accent)' }} />Bitácora de Obra</div>
         <div className="spacer" />
-        {user.role === 'admin' && <button className="btn sm" onClick={() => go('/admin')}>Usuarios</button>}
+        {staff && <button className="btn sm" onClick={() => go('/admin')}>Usuarios y accesos</button>}
         <button className="btn sm" onClick={logout} title={user.email}>Salir</button>
       </div>
       <div className="row"><h1 style={{ fontSize: 20 }}>Proyectos</h1><div className="spacer" />{staff && <button className="btn primary sm" onClick={() => setCreating(true)}>+ Proyecto</button>}</div>

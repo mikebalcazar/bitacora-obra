@@ -90,7 +90,7 @@ export default function Project({ id }) {
           {(projects.length ? projects : [data.project]).map((p) => <option key={p.id} value={p.id}>{p.name}{p.client ? ` · ${p.client}` : ''}</option>)}
         </select>
         <div className="spacer" />
-        <button className="btn sm hide-m" onClick={() => setReport(true)} disabled={!plan}>Generar reporte</button>
+        {staff && <button className="btn sm hide-m" onClick={() => setReport(true)} disabled={!plan}>Generar reporte</button>}
         {staff && <button className="btn primary sm" onClick={() => { if (!plan) return toast('Primero sube un plano'); setAdding(true); setMview('plan'); }}>+ Elemento</button>}
         <button className="avatar hide-m" onClick={logout} title={`${user.name} · salir`}>{user.name.slice(0, 2).toUpperCase()}</button>
       </div>
@@ -151,13 +151,13 @@ export default function Project({ id }) {
         )}
       </main>
 
-      <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} user={user} onChanged={load} onClose={() => { setSel(null); setMview('plan'); }} />
+      <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} user={user} members={data.members} onChanged={load} onClose={() => { setSel(null); setMview('plan'); }} />
 
       <nav className="mnav">
         <button className={mview === 'plan' ? 'on' : ''} onClick={() => { setMview('plan'); setDrawer(false); }}><i dangerouslySetInnerHTML={{ __html: ICO.plan }} />Plano</button>
         <button className={drawer ? 'on' : ''} onClick={() => { setMview('plan'); setDrawer(!drawer); }}><i dangerouslySetInnerHTML={{ __html: ICO.list }} />Pendientes{openTotal ? <span className="badge">{openTotal}</span> : null}</button>
         <button className={mview === 'elem' ? 'on' : ''} disabled={!sel} onClick={() => sel && setMview('elem')} style={{ opacity: sel ? 1 : .4 }}><i dangerouslySetInnerHTML={{ __html: ICO.elem }} />Elemento</button>
-        <button onClick={() => plan && setReport(true)}><i dangerouslySetInnerHTML={{ __html: ICO.doc }} />Reporte</button>
+        {staff && <button onClick={() => plan && setReport(true)}><i dangerouslySetInnerHTML={{ __html: ICO.doc }} />Reporte</button>}
       </nav>
 
       {newAt && <NewElementModal n={data.elements.length + 1} members={data.members} onCancel={() => setNewAt(null)} onOk={createElement} />}
