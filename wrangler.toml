@@ -7,7 +7,11 @@ compatibility_flags = ["nodejs_compat"]
 directory = "./web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*", "/files/*"]
+# Qué atiende el Worker antes que los archivos del sitio. Lo que no esté aquí lo
+# resuelve la capa de archivos, y como esta aplicación vive en una sola página,
+# lo que no encuentra devuelve index.html: por eso una ruta olvidada aquí no da
+# "no encontrado", sino la pantalla de entrada, que despista.
+run_worker_first = ["/api/*", "/files/*", "/descargas/*"]
 
 [vars]
 APP_NAME = "Bitácora de Obra"
