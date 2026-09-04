@@ -91,7 +91,7 @@ export default function Project({ id }) {
     if (!r) return;
     setNewAt(null); await load();
     if (r.subido && r.r?.id) selectEl(r.r.id);
-    else toast('Sin señal: el elemento se sube solo cuando vuelva.');
+    else toast('Sin señal: el ítem se sube solo cuando vuelva.');
   }
   async function uploadPlan(file, name) {
     setUploading(true);
@@ -127,24 +127,24 @@ export default function Project({ id }) {
         </select>
         <div className="spacer" />
         {staff && <button className="btn sm hide-m" onClick={() => setReport(true)} disabled={!plan}>Generar reporte</button>}
-        {staff && <button className="btn primary sm" onClick={() => { if (!plan) return toast('Primero sube un plano'); setAdding(true); setMview('plan'); }}>+ Elemento</button>}
+        {staff && <button className="btn primary sm" onClick={() => { if (!plan) return toast('Primero sube un plano'); setAdding(true); setMview('plan'); }}>+ Ítem</button>}
         <button className="avatar hide-m" onClick={logout} title={`${user.name} · salir`}>{user.name.slice(0, 2).toUpperCase()}</button>
       </div>
 
       <aside className="rail">
         <section>
           <div className="eyebrow">Planos</div>
-          {data.plans.map((p) => <button key={p.id} className={'item' + (p.id === planId ? ' on' : '')} onClick={() => { setPlanId(p.id); setSel(null); }}><span>{p.name}</span><small>{data.elements.filter((e) => e.plan_id === p.id).length} elem.</small></button>)}
+          {data.plans.map((p) => <button key={p.id} className={'item' + (p.id === planId ? ' on' : '')} onClick={() => { setPlanId(p.id); setSel(null); }}><span>{p.name}</span><small>{data.elements.filter((e) => e.plan_id === p.id).length} ítems</small></button>)}
           {staff && <label className="btn sm" style={{ justifyContent: 'flex-start' }}>{uploading ? 'Procesando…' : '+ Subir plano (PDF / imagen)'}<input type="file" accept="application/pdf,image/*" hidden disabled={uploading} onChange={(e) => e.target.files[0] && uploadPlan(e.target.files[0])} /></label>}
           {staff && plan && <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => setEditPlan(true)}>Renombrar / borrar plano</button>}
         </section>
         <section>
           <div className="eyebrow">Resumen del plano</div>
           <div className="stats">
-            <div className="stat"><b>{elements.length}</b><span>elementos</span></div>
+            <div className="stat"><b>{elements.length}</b><span>ítems</span></div>
             <div className="stat"><b>{elements.reduce((a, e) => a + e.n_log, 0)}</b><span>registros</span></div>
             <div className="stat"><b>{elements.reduce((a, e) => a + e.n_pend + e.n_proc, 0)}</b><span>pendientes</span></div>
-            <div className="stat"><b>{data.elements.length}</b><span>en proyecto</span></div>
+            <div className="stat"><b>{data.elements.length}</b><span>en la obra</span></div>
           </div>
         </section>
         <section>
@@ -165,7 +165,7 @@ export default function Project({ id }) {
           <div className="spacer" />
           <button className={'btn sm' + (filterOpen ? ' on' : '')} onClick={() => setFilterOpen(!filterOpen)} title="Sólo pines con pendientes">Pendientes {filterOpen ? '●' : '○'}</button>
         </div>
-        {adding && <div className="hint">Toca el plano donde va el elemento · <button className="btn sm" onClick={() => setAdding(false)}>Cancelar</button></div>}
+        {adding && <div className="hint">Toca el plano donde va el ítem · <button className="btn sm" onClick={() => setAdding(false)}>Cancelar</button></div>}
         {plan ? (
           <PlanCanvas plan={plan} elements={shown} sel={sel} flash={flash} adding={adding} onPick={(eid) => selectEl(eid)} onClick={onPlanClick} />
         ) : (
@@ -187,12 +187,12 @@ export default function Project({ id }) {
         )}
       </main>
 
-      <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} user={user} members={data.members} onChanged={load} onClose={() => { setSel(null); setMview('plan'); }} />
+      <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} user={user} members={data.members} todos={data.elements} onIr={(eid, pid) => selectEl(eid, { planId: pid })} onChanged={load} onClose={() => { setSel(null); setMview('plan'); }} />
 
       <nav className="mnav">
         <button className={mview === 'plan' ? 'on' : ''} onClick={() => { setMview('plan'); setDrawer(false); }}><i dangerouslySetInnerHTML={{ __html: ICO.plan }} />Plano</button>
         <button className={drawer ? 'on' : ''} onClick={() => { setMview('plan'); setDrawer(!drawer); }}><i dangerouslySetInnerHTML={{ __html: ICO.list }} />Pendientes{openTotal ? <span className="badge">{openTotal}</span> : null}</button>
-        <button className={mview === 'elem' ? 'on' : ''} disabled={!sel} onClick={() => sel && setMview('elem')} style={{ opacity: sel ? 1 : .4 }}><i dangerouslySetInnerHTML={{ __html: ICO.elem }} />Elemento</button>
+        <button className={mview === 'elem' ? 'on' : ''} disabled={!sel} onClick={() => sel && setMview('elem')} style={{ opacity: sel ? 1 : .4 }}><i dangerouslySetInnerHTML={{ __html: ICO.elem }} />Ítem</button>
         {staff && <button onClick={() => plan && setReport(true)}><i dangerouslySetInnerHTML={{ __html: ICO.doc }} />Reporte</button>}
       </nav>
 
@@ -217,14 +217,14 @@ function NewElementModal({ n, members, onCancel, onOk }) {
   return (
     <div className="ov" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <form className="modal" onSubmit={(e) => { e.preventDefault(); onOk(f); }}>
-        <div><div className="eyebrow">Nuevo elemento</div><h2>Ubicado en el plano</h2></div>
+        <div><div className="eyebrow">Nuevo ítem</div><h2>Ubicado en el plano</h2></div>
         <div className="two">
           <div className="field"><label>Clave</label><input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></div>
           <div className="field"><label>Tipo</label><select value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
         </div>
         <div className="field"><label>Nombre</label><input required autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Cocina — isla central" /></div>
         <div className="field"><label>Responsable</label><input list="resps" value={f.resp} onChange={(e) => setF({ ...f, resp: e.target.value })} placeholder="Taller 101 / contratista" /><datalist id="resps">{resps.map((r) => <option key={r} value={r} />)}</datalist></div>
-        <div className="acts"><button type="button" className="btn" onClick={onCancel}>Cancelar</button><button className="btn primary">Crear elemento</button></div>
+        <div className="acts"><button type="button" className="btn" onClick={onCancel}>Cancelar</button><button className="btn primary">Crear ítem</button></div>
       </form>
     </div>
   );
@@ -238,7 +238,7 @@ function ReportModal({ hasSel, onCancel, onOk }) {
       <form className="modal" onSubmit={(e) => { e.preventDefault(); onOk(o); }}>
         <div><div className="eyebrow">Reporte</div><h2>¿Qué reporte necesitas?</h2></div>
         <div className="field"><label>Tipo</label><Seg k="type" opts={[['bitacora', 'Bitácora'], ['punch', 'Punchlist'], ['ambos', 'Ambos']]} /></div>
-        <div className="field"><label>Alcance</label><Seg k="scope" opts={[...(hasSel ? [['elem', 'Elemento']] : []), ['plano', 'Este plano'], ['proj', 'Todo el proyecto']]} /></div>
+        <div className="field"><label>Alcance</label><Seg k="scope" opts={[...(hasSel ? [['elem', 'Este ítem']] : []), ['plano', 'Este plano'], ['proj', 'Todo el proyecto']]} /></div>
         {o.type !== 'punch' && <div className="two"><div className="field"><label>Desde</label><input type="date" value={o.from} onChange={(e) => setO({ ...o, from: e.target.value })} /></div><div className="field"><label>Hasta</label><input type="date" value={o.to} onChange={(e) => setO({ ...o, to: e.target.value })} /></div></div>}
         {o.type !== 'bitacora' && <div className="field"><label>Punchlist: incluir</label><Seg k="status" opts={[['abiertos', 'Sólo abiertos'], ['todos', 'Todos']]} /></div>}
         <div className="field"><label>Para (nombre del destinatario, opcional)</label><input value={o.dest} onChange={(e) => setO({ ...o, dest: e.target.value })} placeholder="Arq. Rodríguez — Constructora" /></div>
@@ -257,7 +257,7 @@ function EditPlanModal({ plan, onClose, onChanged }) {
       <form className="modal" onSubmit={async (e) => { e.preventDefault(); await api.patch(`/plans/${plan.id}`, { name }).catch((x) => toast(x.message)); onChanged(); onClose(); }}>
         <h2>Plano</h2>
         <div className="field"><label>Nombre</label><input value={name} onChange={(e) => setName(e.target.value)} /></div>
-        {!confirm ? <button type="button" className="btn danger" onClick={() => setConfirm(true)}>Borrar plano y todos sus elementos…</button>
+        {!confirm ? <button type="button" className="btn danger" onClick={() => setConfirm(true)}>Borrar plano y todos sus ítems…</button>
           : <button type="button" className="btn danger" onClick={async () => { await api.del(`/plans/${plan.id}`).catch((x) => toast(x.message)); onChanged(); onClose(); }}>Confirmar borrado definitivo</button>}
         <div className="acts"><button type="button" className="btn" onClick={onClose}>Cancelar</button><button className="btn primary">Guardar</button></div>
       </form>

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api, leer, escribir, fileUrl, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
 
-export default function ElementPanel({ elementId, flash, plan, staff, user, members = [], onChanged, onClose }) {
+export default function ElementPanel({ elementId, flash, plan, staff, user, members = [], todos = [], onIr, onChanged, onClose }) {
   const { toast } = useApp();
   const [d, setD] = useState(null);
   const [tab, setTab] = useState(!staff || flash ? 'punch' : 'log');
@@ -14,7 +14,7 @@ export default function ElementPanel({ elementId, flash, plan, staff, user, memb
   useEffect(() => { if (flash) setTab('punch'); }, [flash]);
   useEffect(() => { if (flash && d) setTimeout(() => document.querySelector(`[data-k="${flash}"]`)?.scrollIntoView({ block: 'center' }), 50); }, [flash, d]);
 
-  if (!elementId) return <aside className="panel"><div className="empty"><h3>{staff ? 'Selecciona un elemento' : 'Selecciona un pendiente'}</h3>Toca un pin del plano{staff ? ' o crea uno con + Elemento' : '. Solo salen los pines donde tienes algo asignado.'}</div></aside>;
+  if (!elementId) return <aside className="panel"><div className="empty"><h3>{staff ? 'Selecciona un ítem' : 'Selecciona un pendiente'}</h3>Toca un pin del plano{staff ? ' o crea uno con + Ítem' : '. Solo salen los pines donde tienes algo asignado.'}</div></aside>;
   if (!d) return <aside className="panel"><div className="spin" /></aside>;
   const { element: e, log, punch } = d;
   const open = punch.filter((k) => k.status !== 'ok').length;
@@ -29,6 +29,29 @@ export default function ElementPanel({ elementId, flash, plan, staff, user, memb
           <div className="spacer" />
           {staff && <button className="btn sm" onClick={() => setEdit(true)}>Editar</button>}
         </div>
+        {/* Saltar de un ítem a otro sin volver al plano. En el celular el plano
+            ocupa toda la pantalla, así que revisar diez ítems seguidos eran
+            treinta toques; aquí son diez. Los de otro plano también salen, y al
+            elegirlos el plano cambia solo. */}
+        {todos.length > 1 && onIr && (
+          <select
+            className="saltar"
+            value={e.id}
+            onChange={(ev) => {
+              const otro = todos.find((x) => x.id === ev.target.value);
+              if (otro) onIr(otro.id, otro.plan_id);
+            }}
+          >
+            {todos.map((x) => {
+              const abiertos = (x.n_pend || 0) + (x.n_proc || 0);
+              return (
+                <option key={x.id} value={x.id}>
+                  {x.code ? `${x.code} · ` : ''}{x.name}{abiertos ? ` — ${abiertos} pend.` : ''}
+                </option>
+              );
+            })}
+          </select>
+        )}
         <h2>{e.name}</h2>
         <div className="meta">{e.resp && <span>Resp. <b style={{ fontWeight: 500, color: 'var(--ink2)' }}>{e.resp}</b></span>}<span>{e.plan_name}</span><span>Creado {fmtD(e.created_at)}</span></div>
         <div className="tabs">
@@ -111,7 +134,7 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
   return (
     <>
       <div className="body" ref={bodyRef}>
-        {!log.length && <div className="empty"><h3>Sin registros</h3>Escribe el primer registro de este elemento.</div>}
+        {!log.length && <div className="empty"><h3>Sin registros</h3>Escribe el primer registro de este ítem.</div>}
         {log.map((m) => {
           const day = fmtDay(m.created_at); const showDay = day !== lastDay; lastDay = day;
           return (
@@ -195,7 +218,7 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff, members }) {
       <div className="body">
         {tot > 0 && <div className="plsum"><span>{ok}/{tot} resueltos</span><div className="bar"><i style={{ width: `${(ok / tot) * 100}%`, background: 'var(--ok)' }} /><i style={{ width: `${(pr / tot) * 100}%`, background: 'var(--proc)' }} /></div></div>}
         <div className="pl">
-          {!punch.length && <div className="empty"><h3>Sin pendientes</h3>{staff ? 'Este elemento no tiene detalles abiertos.' : 'Aquí no tienes nada asignado.'}</div>}
+          {!punch.length && <div className="empty"><h3>Sin pendientes</h3>{staff ? 'Este ítem no tiene detalles abiertos.' : 'Aquí no tienes nada asignado.'}</div>}
           {punch.map((k) => (
             <div key={k.id} className={'pi ' + k.status + (k.id === flash ? ' flash' : '')} data-k={k.id}>
               <div className="st" onClick={() => cycle(k)} title="Cambiar estado">{k.status === 'ok' ? '✓' : k.status === 'proc' ? '…' : ''}</div>
@@ -245,7 +268,7 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff, members }) {
 
 // Lo único que el contratista empuja: la foto de que ya quedó y, si quiere, una
 // nota. El pendiente pasa a "en proceso" y queda anotado en la bitácora del
-// elemento con su nombre y la hora. Quien lo cierra es el supervisor.
+// ítem con su nombre y la hora. Quien lo cierra es el supervisor.
 function Evidencia({ k, onListo, onCancel }) {
   const { toast } = useApp();
   const [nota, setNota] = useState('');
@@ -288,11 +311,11 @@ function EditElement({ e, onClose, onChanged, onDeleted }) {
   return (
     <div className="ov" onClick={(ev) => ev.target === ev.currentTarget && onClose()}>
       <form className="modal" onSubmit={async (ev) => { ev.preventDefault(); await api.patch(`/elements/${e.id}`, f).catch((x) => toast(x.message)); onChanged(); onClose(); }}>
-        <h2>Editar elemento</h2>
+        <h2>Editar ítem</h2>
         <div className="two"><div className="field"><label>Clave</label><input value={f.code} onChange={(ev) => setF({ ...f, code: ev.target.value })} /></div><div className="field"><label>Tipo</label><input value={f.type} onChange={(ev) => setF({ ...f, type: ev.target.value })} /></div></div>
         <div className="field"><label>Nombre</label><input required value={f.name} onChange={(ev) => setF({ ...f, name: ev.target.value })} /></div>
         <div className="field"><label>Responsable</label><input value={f.resp} onChange={(ev) => setF({ ...f, resp: ev.target.value })} /></div>
-        {!confirm ? <button type="button" className="btn danger" onClick={() => setConfirm(true)}>Borrar elemento (bitácora y punchlist incluidos)…</button>
+        {!confirm ? <button type="button" className="btn danger" onClick={() => setConfirm(true)}>Borrar ítem (bitácora y punchlist incluidos)…</button>
           : <button type="button" className="btn danger" onClick={async () => { await api.del(`/elements/${e.id}`).catch((x) => toast(x.message)); onDeleted(); }}>Confirmar borrado definitivo</button>}
         <div className="acts"><button type="button" className="btn" onClick={onClose}>Cancelar</button><button className="btn primary">Guardar</button></div>
       </form>

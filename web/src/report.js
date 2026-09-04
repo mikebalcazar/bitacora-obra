@@ -2,7 +2,7 @@ import { fileUrl, fmtD, fmtT, isLate, ST, ROLES } from './api.js';
 
 const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// Recorte del plano alrededor del elemento → dataURL (canvas)
+// Recorte del plano alrededor del ítem → dataURL (canvas)
 const imgCache = {};
 function loadImg(src) {
   if (!imgCache[src]) imgCache[src] = new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
@@ -50,20 +50,20 @@ export async function buildReport({ project, plans, elements, logs, punch, user,
     <div class="r"><b>FORESPOT</b>Folio ${folio}<br>Emitido ${fmtD(today.toISOString())}<br>Supervisión: ${esc(user.name)}${dest ? '<br>Para: ' + esc(dest) : ''}</div></header>`;
   if (type !== 'punch') {
     const byEl = groupBy(L, 'element_id');
-    idx += `<h3>Bitácora <span>${Object.keys(byEl).length} elementos · ${L.length} registros</span></h3>
+    idx += `<h3>Bitácora <span>${Object.keys(byEl).length} ítems · ${L.length} registros</span></h3>
     <div class="sum"><span><b>${L.length}</b> registros</span><span><b>${L.filter((m) => m.kind === 'acuerdo').length}</b> acuerdos</span><span><b>${L.filter((m) => m.kind === 'arreglo').length}</b> arreglos</span><span><b>${L.reduce((a, m) => a + m.photos.length, 0)}</b> fotos</span></div>
-    <table><thead><tr><th>Elemento</th><th>Plano</th><th>Registros</th><th>Último</th></tr></thead><tbody>${Object.values(byEl).map((ms) => `<tr><td><b>${esc(ms[0].element_code)}</b> ${esc(ms[0].element_name)}</td><td>${esc(ms[0].plan_name)}</td><td>${ms.length}</td><td>${fmtD(ms[ms.length - 1].created_at)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Sin registros en el periodo.</td></tr>'}</tbody></table>`;
+    <table><thead><tr><th>Ítem</th><th>Plano</th><th>Registros</th><th>Último</th></tr></thead><tbody>${Object.values(byEl).map((ms) => `<tr><td><b>${esc(ms[0].element_code)}</b> ${esc(ms[0].element_name)}</td><td>${esc(ms[0].plan_name)}</td><td>${ms.length}</td><td>${fmtD(ms[ms.length - 1].created_at)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Sin registros en el periodo.</td></tr>'}</tbody></table>`;
   }
   if (type !== 'bitacora') {
     const late = K.filter(isLate).length;
     idx += `<h3>Punchlist <span>${K.length} detalles${status === 'abiertos' ? ' abiertos' : ''}</span></h3>
     <div class="sum"><span><b>${K.filter((k) => k.status === 'pend').length}</b> pendientes</span><span><b>${K.filter((k) => k.status === 'proc').length}</b> en proceso</span><span><b>${K.filter((k) => k.status === 'ok').length}</b> resueltos</span><span><b style="color:${late ? '#D33A2F' : 'inherit'}">${late}</b> vencidos</span></div>
-    <table><thead><tr><th>#</th><th>Detalle</th><th>Elemento</th><th>Estado</th><th>Responsable</th><th>Límite</th></tr></thead><tbody>${K.map((k, i) => `<tr><td>${i + 1}</td><td>${esc(k.title)}</td><td>${esc(k.element_code)} · ${esc(k.plan_name)}</td><td><span class="pill ${k.status}">${ST[k.status]}</span>${isLate(k) ? ' <span class="pill late">Vencido</span>' : ''}</td><td>${esc(k.resp)}</td><td>${fmtD(k.due_date)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Sin detalles.</td></tr>'}</tbody></table>`;
+    <table><thead><tr><th>#</th><th>Detalle</th><th>Ítem</th><th>Estado</th><th>Responsable</th><th>Límite</th></tr></thead><tbody>${K.map((k, i) => `<tr><td>${i + 1}</td><td>${esc(k.title)}</td><td>${esc(k.element_code)} · ${esc(k.plan_name)}</td><td><span class="pill ${k.status}">${ST[k.status]}</span>${isLate(k) ? ' <span class="pill late">Vencido</span>' : ''}</td><td>${esc(k.resp)}</td><td>${fmtD(k.due_date)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Sin detalles.</td></tr>'}</tbody></table>`;
   }
   idx += `<footer><div>Elaboró<br><b>${esc(user.name)}</b> · FORESPOT</div><div>Recibió<br><b>${esc(dest) || '________________________'}</b></div></footer>`;
   pages.push(idx);
 
-  // Fichas bitácora: una por elemento
+  // Fichas bitácora: una por ítem
   for (const ms of Object.values(groupBy(L, 'element_id'))) {
     const m0 = ms[0];
     const c = await crop(m0.image_key, m0.plan_w, m0.plan_h, m0.x, m0.y, m0.element_code);
@@ -83,7 +83,7 @@ export async function buildReport({ project, plans, elements, logs, punch, user,
     const c = await crop(k.image_key, k.plan_w, k.plan_h, k.x, k.y, k.element_code);
     pages.push(`${head}<h2 class="ft"><span class="num">#${i}</span>${esc(k.title)}</h2>
       <div class="ficha"><div class="fields">
-        <div><label>Estado</label><span class="pill ${k.status}">${ST[k.status]}</span>${isLate(k) ? ' <span class="pill late">Vencido</span>' : ''}</div><div><label>Elemento</label>${esc(k.element_code)} · ${esc(k.element_name)}</div><div><label>Responsable</label>${esc(k.resp)}</div>
+        <div><label>Estado</label><span class="pill ${k.status}">${ST[k.status]}</span>${isLate(k) ? ' <span class="pill late">Vencido</span>' : ''}</div><div><label>Ítem</label>${esc(k.element_code)} · ${esc(k.element_name)}</div><div><label>Responsable</label>${esc(k.resp)}</div>
         <div><label>Ubicación</label>${esc(k.plan_name)}</div><div><label>Fecha límite</label>${fmtD(k.due_date)}</div><div><label>${k.status === 'ok' ? 'Resuelto' : 'Registrado'}</label>${fmtD(k.status === 'ok' ? k.done_at : k.created_at)}</div>
         ${k.description ? `<div style="grid-column:1/-1"><label>Descripción</label>${esc(k.description)}</div>` : ''}
       </div><div class="sheetcrop"><label>Plano · ${esc(k.plan_file || k.plan_name)}</label>${c ? `<img class="crop" src="${c}" alt="">` : ''}</div></div>
