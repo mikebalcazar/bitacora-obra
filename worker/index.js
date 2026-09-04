@@ -113,6 +113,10 @@ async function api(req, env, url, path) {
   const m = req.method;
   const seg = path.slice(5).split('/').filter(Boolean); // after /api/
 
+  // Señal de vida, sin sesión: la usa el despliegue para comprobar que el
+  // Worker quedó arriba antes de dar por buena la publicación.
+  if (seg[0] === 'salud' && m === 'GET') return json({ ok: true, app: env.APP_NAME || 'Bitácora de Obra', hora: now() });
+
   // ----- auth -----
   if (seg[0] === 'auth') {
     if (seg[1] === 'request' && m === 'POST') {
