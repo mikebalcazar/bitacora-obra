@@ -11,7 +11,7 @@ run_worker_first = ["/api/*", "/files/*"]
 
 [vars]
 APP_NAME = "Bitácora de Obra"
-MAIL_FROM = "Bitácora de Obra <onboarding@resend.dev>"
+MAIL_FROM = "Bitácora de Obra <bitacora@envios.taller101.mx>"
 DEV = ""
 
 [[d1_databases]]

@@ -19,6 +19,11 @@ una sola vez.
 | `CLOUDFLARE_API_TOKEN` | El mismo de T101. Permisos: Workers Scripts:Edit, Workers R2 Storage:Edit, D1:Edit, Account Settings:Read, User Details:Read | No se publica nada |
 | `RESEND_API_KEY` | La misma de T101 | Todo funciona menos los correos con el código de acceso |
 
+Los correos salen desde `bitacora@envios.taller101.mx`, el dominio que ya está
+verificado en Resend para el portal de Taller 101. Es lo único que hace falta
+compartir para que el código de acceso le llegue a cualquiera; con el remitente
+de prueba de Resend solo llegaba a tu propio correo.
+
 **No se pide la cuenta de Cloudflare por separado:** el token ya dice a qué cuenta
 pertenece. La base D1 y el almacén R2 se crean solos en el primer despliegue.
 
