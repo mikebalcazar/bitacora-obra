@@ -1,0 +1,25 @@
+name = "bitacora-obra"
+main = "worker/index.js"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/files/*"]
+
+[vars]
+APP_NAME = "Bitácora de Obra"
+MAIL_FROM = "Bitácora de Obra <onboarding@resend.dev>"
+DEV = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bitacora-obra"
+database_id = "__D1_ID__"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "bitacora-obra-files"
