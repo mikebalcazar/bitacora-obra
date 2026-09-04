@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { fileUrl, elStatus } from './api.js';
+import { pdfjs, esPdf } from './pdf.js';
 
 // Plano rasterizado + pines. Pan (arrastrar), zoom (rueda / pinch), tap para elegir.
 export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick, onClick }) {
@@ -10,13 +11,103 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
   const start = useRef(null);
   const moved = useRef(false);
 
+  // ── capa nítida ──────────────────────────────────────────────────────────
+  // La imagen del plano es una sola, del tamaño que se subió: al acercarse a
+  // leer una cota lo que crece son sus píxeles y no se distingue nada. Si el
+  // plano llegó en PDF, el original sigue guardado, así que encima de la imagen
+  // se dibuja la página del PDF a la escala a la que se está viendo: al ser
+  // dibujo y no fotografía, las líneas y la letra salen limpias a cualquier
+  // acercamiento. El lienzo mide lo que la pantalla, no lo que el plano, así
+  // que acercarse no cuesta más memoria.
+  const lienzo = useRef(null);
+  const pagina = useRef(null);
+  const tarea = useRef(null);
+  const [listo, setListo] = useState(null);   // la vista con la que se dibujó lo que hay pintado
+  const [tam, setTam] = useState({ w: 0, h: 0 });
+
   const fit = () => {
     const b = box.current; if (!b || !plan.width) return;
     const pad = 24;
     const s = Math.min((b.clientWidth - pad * 2) / plan.width, (b.clientHeight - pad * 2 - 40) / plan.height);
     setV({ s, x: (b.clientWidth - plan.width * s) / 2, y: (b.clientHeight - plan.height * s) / 2 + 20 });
   };
-  useEffect(() => { fit(); const ro = new ResizeObserver(fit); ro.observe(box.current); return () => ro.disconnect(); }, [plan.id]);
+  const mide = () => { const b = box.current; if (b) setTam({ w: b.clientWidth, h: b.clientHeight }); };
+  useEffect(() => {
+    fit(); mide();
+    const ro = new ResizeObserver(() => { fit(); mide(); });
+    ro.observe(box.current);
+    return () => ro.disconnect();
+  }, [plan.id]);
+
+  // Abrir el PDF original del plano, si lo hay. Si falla —no era PDF, ya no
+  // está el archivo, el navegador no puede— no se avisa ni se rompe nada: se
+  // queda la imagen de siempre.
+  useEffect(() => {
+    setListo(null);
+    pagina.current = null;
+    if (!plan.source_key || !esPdf(plan.file_name || plan.source_key)) return;
+    let vivo = true;
+    let doc;
+    (async () => {
+      try {
+        const lib = await pdfjs();
+        doc = await lib.getDocument({ url: fileUrl(plan.source_key), withCredentials: true }).promise;
+        const p = await doc.getPage(1);
+        if (!vivo) return;
+        pagina.current = p;
+        setListo(null);
+        dibujaNitido();
+      } catch { /* se queda el plano rasterizado */ }
+    })();
+    return () => { vivo = false; tarea.current?.cancel(); doc?.destroy?.(); };
+  }, [plan.id, plan.source_key]);
+
+  // Redibujar cuando la vista se queda quieta: mientras se arrastra o se hace
+  // pinza se estira lo ya pintado, que es instantáneo, y al soltar entra la
+  // versión nítida.
+  useEffect(() => {
+    if (!pagina.current || !tam.w) return;
+    const t = setTimeout(dibujaNitido, 140);
+    return () => clearTimeout(t);
+  }, [v.x, v.y, v.s, tam.w, tam.h]);
+
+  async function dibujaNitido() {
+    const p = pagina.current, b = box.current, c = lienzo.current;
+    if (!p || !b || !c) return;
+    const vista = { ...v };
+    const punto = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.round(b.clientWidth * punto), h = Math.round(b.clientHeight * punto);
+    if (!w || !h) return;
+
+    // Se pinta aparte y se copia de golpe: así nunca se ve el plano en blanco
+    // mientras el PDF se dibuja.
+    const aparte = document.createElement('canvas');
+    aparte.width = w; aparte.height = h;
+    const ctx = aparte.getContext('2d');
+    const base = p.getViewport({ scale: 1 });
+    const escala = (plan.width / base.width) * vista.s * punto;
+    if (!(escala > 0) || !Number.isFinite(escala)) return;
+
+    tarea.current?.cancel();
+    const t = p.render({
+      canvasContext: ctx,
+      viewport: p.getViewport({ scale: escala }),
+      transform: [1, 0, 0, 1, vista.x * punto, vista.y * punto],
+    });
+    tarea.current = t;
+    try { await t.promise; } catch { return; }          // cancelada: llega otra en camino
+    if (tarea.current !== t || !lienzo.current) return;
+
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(aparte, 0, 0);
+    setListo(vista);
+  }
+
+  // Mientras no llega el redibujado, lo pintado se mueve y se estira con el
+  // plano: el desfase nunca se ve.
+  const desfase = listo
+    ? { k: v.s / listo.s, x: v.x - listo.x * (v.s / listo.s), y: v.y - listo.y * (v.s / listo.s) }
+    : null;
 
   function toWorld(cx, cy) {
     const r = box.current.getBoundingClientRect();
@@ -71,8 +162,19 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
 
   return (
     <div ref={box} className={'canvas' + (adding ? ' adding' : '') + (drag ? ' dragging' : '')} onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
-      <div className="world" style={{ transform: `translate(${v.x}px,${v.y}px) scale(${v.s})` }}>
+      <div className="capa" style={{ transform: `translate(${v.x}px,${v.y}px) scale(${v.s})` }}>
         <img src={fileUrl(plan.image_key)} width={plan.width} height={plan.height} alt={plan.name} draggable={false} />
+      </div>
+      <canvas
+        ref={lienzo}
+        className="nitido"
+        style={{
+          width: tam.w, height: tam.h,
+          opacity: desfase ? 1 : 0,
+          transform: desfase ? `translate(${desfase.x}px,${desfase.y}px) scale(${desfase.k})` : 'none',
+        }}
+      />
+      <div className="world" style={{ transform: `translate(${v.x}px,${v.y}px) scale(${v.s})` }}>
         {elements.map((e) => {
           const n = e.n_pend + e.n_proc;
           return (
