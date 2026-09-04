@@ -66,6 +66,68 @@ async function projectOfPunch(env, punchId) {
   return r ? r.project_id : null;
 }
 
+// ---------- PIN ----------
+// Seis dígitos son un millón de combinaciones: se guardan derivados, nunca en
+// claro, y probar a ciegas se castiga con esperas que crecen. PBKDF2 con
+// doscientas mil vueltas hace que cada intento cueste, aquí y para quien
+// quisiera probar el millón con la base robada en la mano.
+const VUELTAS = 200000;
+const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+
+async function derivaPin(pin, salt) {
+  const enc = new TextEncoder();
+  const clave = await crypto.subtle.importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(salt), iterations: VUELTAS },
+    clave, 256
+  );
+  return b64(bits);
+}
+const pinValido = (p) => /^[0-9]{6}$/.test(String(p || ''));
+// Un PIN que se adivina de una no protege nada: 123456, 000000, 111111, y las
+// escaleras. No es una lista larga a propósito; es quitar lo obvio.
+function pinFlojo(p) {
+  const s = String(p);
+  if (/^(\d)\1{5}$/.test(s)) return 'Ese PIN es un solo número repetido.';
+  if ('0123456789'.includes(s) || '9876543210'.includes(s)) return 'Ese PIN es una escalera de números.';
+  if (['123456', '654321', '111111', '000000', '121212', '112233'].includes(s)) return 'Ese PIN es de los primeros que alguien probaría.';
+  return null;
+}
+
+// Las esperas, iguales para el usuario y para la dirección de internet.
+const CASTIGOS_PIN = [15 * 60, 60 * 60, 4 * 3600, 24 * 3600];
+const FALLOS_PIN = 5;
+function esperaLegible(seg) {
+  const min = Math.ceil(seg / 60);
+  if (min <= 1) return 'un minuto';
+  if (min < 90) return `${min} minutos`;
+  const h = Math.round(min / 60);
+  return h === 1 ? 'una hora' : `${h} horas`;
+}
+function quienIntenta(req) {
+  return req.headers.get('CF-Connecting-IP') || (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'desconocido';
+}
+const bloqueado = (hasta) => !!hasta && hasta > now();
+
+async function castigaIp(env, ip) {
+  const r = await env.DB.prepare(`SELECT * FROM pin_intentos WHERE ip = ?`).bind(ip).first();
+  const fails = (r?.fails || 0) + 1;
+  if (fails >= FALLOS_PIN) {
+    const castigos = Math.min((r?.castigos || 0) + 1, CASTIGOS_PIN.length);
+    const seg = CASTIGOS_PIN[castigos - 1];
+    await env.DB.prepare(
+      `INSERT INTO pin_intentos (ip, fails, castigos, locked_until, visto_en) VALUES (?,0,?,?,?)
+       ON CONFLICT(ip) DO UPDATE SET fails=0, castigos=excluded.castigos, locked_until=excluded.locked_until, visto_en=excluded.visto_en`
+    ).bind(ip, castigos, new Date(Date.now() + seg * 1000).toISOString(), now()).run();
+    return seg;
+  }
+  await env.DB.prepare(
+    `INSERT INTO pin_intentos (ip, fails, castigos, locked_until, visto_en) VALUES (?,?,0,NULL,?)
+     ON CONFLICT(ip) DO UPDATE SET fails=excluded.fails, visto_en=excluded.visto_en`
+  ).bind(ip, fails, now()).run();
+  return 0;
+}
+
 async function sendMail(env, to, subject, html) {
   if (!env.RESEND_API_KEY) return { dev: true };
   const r = await fetch('https://api.resend.com/emails', {
@@ -141,7 +203,65 @@ async function api(req, env, url, path) {
   if (seg[0] === 'salud' && m === 'GET') return json({ ok: true, app: env.APP_NAME || 'Bitácora de Obra', hora: now() });
 
   // ----- auth -----
+  // Abre sesión y la devuelve firmada en cookie, y también como token suelto:
+  // la app de Android y la de Windows no comparten origen con el sitio, así que
+  // para ellas la cookie no sirve y llevan el token a mano.
+  async function abreSesion(u) {
+    const token = uid() + uid().replace(/-/g, '');
+    await env.DB.prepare(`INSERT INTO sessions (token, user_id, expires_at) VALUES (?,?,?)`).bind(token, u.id, plusMin(60 * 24 * 90)).run();
+    const secure = url.protocol === 'https:' ? '; Secure' : '';
+    return json({ ok: true, user: pubUser(u), token, tiene_pin: !!u.pin_hash }, 200, {
+      'set-cookie': `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}${secure}`,
+    });
+  }
+
   if (seg[0] === 'auth') {
+    // Entrar con el PIN de siempre: sin esperar correo, que en obra es lo que
+    // hace que la gente deje de abrir la app.
+    if (seg[1] === 'pin' && !seg[2] && m === 'POST') {
+      const { email, pin } = await req.json();
+      const e = String(email || '').trim().toLowerCase();
+      const ip = quienIntenta(req);
+
+      const freno = await env.DB.prepare(`SELECT * FROM pin_intentos WHERE ip = ?`).bind(ip).first();
+      if (bloqueado(freno?.locked_until)) {
+        return err('Demasiados intentos desde aquí. Espera un rato o entra con un código a tu correo.', 429);
+      }
+
+      const u = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND active = 1`).bind(e).first();
+      // Sin usuario, sin PIN puesto o con PIN malo se contesta lo mismo: quien
+      // esté probando no aprende de aquí quién existe y quién no.
+      const malo = async () => {
+        const seg2 = await castigaIp(env, ip);
+        return err(seg2 ? `Demasiados intentos. Espera ${esperaLegible(seg2)} o entra con un código a tu correo.` : 'Correo o PIN incorrecto.', 401);
+      };
+      if (!u || !u.pin_hash || !pinValido(pin)) return await malo();
+
+      if (bloqueado(u.pin_locked_until)) {
+        return err('Este usuario está bloqueado un rato por intentos fallidos. Entra con un código a tu correo.', 429);
+      }
+
+      const hash = await derivaPin(pin, u.pin_salt);
+      if (hash !== u.pin_hash) {
+        const fails = (u.pin_fails || 0) + 1;
+        if (fails >= FALLOS_PIN) {
+          const castigos = Math.min((u.pin_castigos || 0) + 1, CASTIGOS_PIN.length);
+          const segs = CASTIGOS_PIN[castigos - 1];
+          await env.DB.prepare(`UPDATE users SET pin_fails = 0, pin_castigos = ?, pin_locked_until = ? WHERE id = ?`)
+            .bind(castigos, new Date(Date.now() + segs * 1000).toISOString(), u.id).run();
+        } else {
+          await env.DB.prepare(`UPDATE users SET pin_fails = ? WHERE id = ?`).bind(fails, u.id).run();
+        }
+        return await malo();
+      }
+
+      await env.DB.batch([
+        env.DB.prepare(`UPDATE users SET pin_fails = 0, pin_castigos = 0, pin_locked_until = NULL WHERE id = ?`).bind(u.id),
+        env.DB.prepare(`DELETE FROM pin_intentos WHERE ip = ?`).bind(ip),
+      ]);
+      return await abreSesion(u);
+    }
+
     if (seg[1] === 'request' && m === 'POST') {
       const { email } = await req.json();
       const e = String(email || '').trim().toLowerCase();
@@ -173,15 +293,14 @@ async function api(req, env, url, path) {
       }
       const user = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND active = 1`).bind(e).first();
       if (!user) return err('Usuario no encontrado', 404);
-      const token = uid() + uid().replace(/-/g, '');
+      // Entrar por correo también levanta el castigo: quien probó su PIN de más
+      // pero sí es quien dice ser, no se queda fuera cuatro horas.
       await env.DB.batch([
-        env.DB.prepare(`INSERT INTO sessions (token, user_id, expires_at) VALUES (?,?,?)`).bind(token, user.id, plusMin(60 * 24 * 90)),
         env.DB.prepare(`DELETE FROM login_codes WHERE email = ?`).bind(e),
+        env.DB.prepare(`UPDATE users SET pin_fails = 0, pin_castigos = 0, pin_locked_until = NULL WHERE id = ?`).bind(user.id),
+        env.DB.prepare(`DELETE FROM pin_intentos WHERE ip = ?`).bind(quienIntenta(req)),
       ]);
-      const secure = url.protocol === 'https:' ? '; Secure' : '';
-      return json({ ok: true, user: pubUser(user), token }, 200, {
-        'set-cookie': `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}${secure}`,
-      });
+      return await abreSesion(user);
     }
     if (seg[1] === 'logout' && m === 'POST') {
       const token = getCookie(req, COOKIE);
@@ -195,6 +314,21 @@ async function api(req, env, url, path) {
   if (!user) return err('no autorizado', 401);
 
   if (seg[0] === 'me' && m === 'GET') return json({ user: pubUser(user) });
+
+  // Poner o cambiar el PIN. Se pide tener sesión: o se acaba de entrar con el
+  // código del correo —la primera vez, o porque lo olvidó— o ya estaba dentro.
+  if (seg[0] === 'pin' && m === 'POST') {
+    const { pin } = await req.json();
+    if (!pinValido(pin)) return err('El PIN son seis dígitos.');
+    const flojo = pinFlojo(pin);
+    if (flojo) return err(flojo);
+    const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+    const hash = await derivaPin(pin, salt);
+    await env.DB.prepare(
+      `UPDATE users SET pin_hash = ?, pin_salt = ?, pin_set_at = ?, pin_fails = 0, pin_castigos = 0, pin_locked_until = NULL WHERE id = ?`
+    ).bind(hash, salt, now(), user.id).run();
+    return json({ ok: true });
+  }
 
   // ----- users (admin) -----
   if (seg[0] === 'users') {
@@ -522,5 +656,5 @@ async function api(req, env, url, path) {
 }
 
 function pubUser(u) {
-  return { id: u.id, email: u.email, name: u.name, role: u.role, company: u.company };
+  return { id: u.id, email: u.email, name: u.name, role: u.role, company: u.company, tiene_pin: !!u.pin_hash };
 }
