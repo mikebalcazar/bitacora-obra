@@ -82,14 +82,12 @@ a{color:var(--accent)}
 .canvas{position:absolute;inset:0;cursor:grab}
 .canvas.adding{cursor:crosshair}
 .canvas.dragging{cursor:grabbing}
-.capa,.world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
-.capa{z-index:0}
-.world{z-index:2}
-.capa img{display:block;user-select:none;-webkit-user-drag:none;background:#fff}
-/* La página del PDF, dibujada a la escala en que se está viendo. Va encima de
-   la imagen y debajo de los pines, y no atrapa el dedo: el arrastre y el toque
-   siguen siendo del plano. */
-.nitido{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;z-index:1;will-change:transform}
+/* El plano entero —imagen y PDF— se dibuja aquí, y este lienzo mide lo que la
+   pantalla: nunca hay una imagen enorme estirada, que es lo que dejaba al
+   celular sin memoria de video al acercarse. */
+.hoja{position:absolute;left:0;top:0;z-index:0;background:var(--surface2)}
+/* Solo los pines se mueven con CSS: son cuatro nodos chicos, no una textura. */
+.world{position:absolute;left:0;top:0;transform-origin:0 0;z-index:2;will-change:transform}
 .pin{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:var(--ink3);border:2px solid #fff;color:#fff;font-size:11px;font-weight:600;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer}
 .pin.pend{background:var(--pend)}.pin.proc{background:var(--proc)}.pin.ok{background:var(--ok)}
 .pin.sel{outline:3px solid var(--accent);outline-offset:2px}
