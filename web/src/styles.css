@@ -207,3 +207,9 @@ a{color:var(--accent)}
   background:#3a3f45;color:#fff;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.22)}
 .senal.subiendo{background:var(--accent)}
 .senal b{font-weight:600}
+
+/* Las apps, debajo de la pantalla de entrada: quien llega aquí sin tenerlas es
+   justo quien las necesita. */
+.descargas{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;margin-top:16px;font-size:13px}
+.descargas a{text-decoration:none}
+.descargas a small{margin-left:6px}

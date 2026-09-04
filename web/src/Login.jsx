@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { api, setToken } from './api.js';
+import React, { useEffect, useState } from 'react';
+import { api, setToken, empaquetada, BASE } from './api.js';
 
 // Entrar es correo + PIN de seis dígitos, y ya. El código por correo sigue ahí,
 // pero como puerta de la primera vez y como salida cuando alguien olvida su PIN:
@@ -16,6 +16,15 @@ export default function Login({ onLogin }) {
   const [err, setErr] = useState('');
   const [aviso, setAviso] = useState('');
   const [devCode, setDevCode] = useState('');
+  const [apps, setApps] = useState(null);
+
+  // Las apps se ofrecen aquí, que es donde llega quien todavía no las tiene.
+  // Dentro de la app ya instalada no se ofrecen: sería ofrecerle lo que ya está
+  // usando. Y solo salen las que de verdad están armadas.
+  useEffect(() => {
+    if (empaquetada) return;
+    api.get('/apps').then((r) => setApps(r.apps || {})).catch(() => setApps({}));
+  }, []);
 
   const recuerda = () => { try { localStorage.setItem('bo_email', email); } catch {} };
 
@@ -115,6 +124,24 @@ export default function Login({ onLogin }) {
           </>
         )}
       </form>
+
+      {apps && (!!apps['android.apk'] || !!apps['windows.exe']) && (
+        <div className="descargas">
+          <span className="muted">Instálala en tu equipo:</span>
+          {apps['android.apk'] && (
+            <a className="btn sm" href={`${BASE}/descargas/android.apk`}>
+              Android <small className="muted">{pesa(apps['android.apk'].tamano)}</small>
+            </a>
+          )}
+          {apps['windows.exe'] && (
+            <a className="btn sm" href={`${BASE}/descargas/windows.exe`}>
+              Windows <small className="muted">{pesa(apps['windows.exe'].tamano)}</small>
+            </a>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
+const pesa = (b) => (b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(0)} MB` : `${Math.round(b / 1024)} KB`);

@@ -223,6 +223,7 @@ export default {
       if (req.method === 'OPTIONS' && cors) return new Response(null, { status: 204, headers: cors });
       let r;
       if (path.startsWith('/api/')) r = await api(req, env, url, path);
+      else if (path.startsWith('/descargas/')) r = await entregaApp(env, path.slice(11));
       else if (path.startsWith('/files/')) r = await serveFile(req, env, path.slice(7));
       else return env.ASSETS.fetch(req);
       if (cors) { r = new Response(r.body, r); for (const [k, v] of Object.entries(cors)) r.headers.set(k, v); }
@@ -235,6 +236,28 @@ export default {
     }
   },
 };
+
+// Las apps se bajan sin haber entrado: quien va a instalarlas todavía no tiene
+// sesión, y muchas veces es alguien de obra al que le pasaron la liga. Son los
+// mismos archivos que arma GitHub, guardados en R2 al terminar de armarlos.
+const APPS = {
+  'android.apk': { llave: 'apps/android.apk', tipo: 'application/vnd.android.package-archive', nombre: 'Bitacora de Obra.apk' },
+  'windows.exe': { llave: 'apps/windows.exe', tipo: 'application/vnd.microsoft.portable-executable', nombre: 'Bitacora de Obra.exe' },
+};
+
+async function entregaApp(env, cual) {
+  const app = APPS[cual];
+  if (!app) return err('no encontrado', 404);
+  const obj = await env.FILES.get(app.llave);
+  if (!obj) return err('Todavía no se ha armado esta app.', 404);
+  const h = new Headers();
+  h.set('content-type', app.tipo);
+  h.set('content-disposition', `attachment; filename="${app.nombre}"`);
+  h.set('content-length', String(obj.size));
+  // Sin caché larga: la liga es siempre la misma y detrás cambia la versión.
+  h.set('cache-control', 'public, max-age=300');
+  return new Response(obj.body, { headers: h });
+}
 
 async function serveFile(req, env, key) {
   const user = await getUser(req, env);
@@ -254,6 +277,17 @@ async function api(req, env, url, path) {
 
   // Señal de vida, sin sesión: la usa el despliegue para comprobar que el
   // Worker quedó arriba antes de dar por buena la publicación.
+  // Qué apps están disponibles y de cuándo son. Sin sesión: se pregunta desde la
+  // pantalla de entrada, antes de que nadie haya entrado.
+  if (seg[0] === 'apps' && m === 'GET') {
+    const salida = {};
+    for (const [cual, app] of Object.entries(APPS)) {
+      const obj = await env.FILES.head(app.llave).catch(() => null);
+      if (obj) salida[cual] = { tamano: obj.size, cuando: obj.uploaded };
+    }
+    return json({ apps: salida });
+  }
+
   if (seg[0] === 'salud' && m === 'GET') return json({ ok: true, app: env.APP_NAME || 'Bitácora de Obra', hora: now() });
 
   // ----- auth -----
