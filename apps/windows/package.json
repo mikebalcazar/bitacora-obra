@@ -1,0 +1,23 @@
+{
+  "name": "bitacora-obra-windows",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bitácora de Obra para Windows",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "mx.forespot.bitacoraobra",
+    "productName": "Bitacora de Obra",
+    "directories": { "output": "salida" },
+    "files": ["main.js", "dist/**"],
+    "win": { "target": ["nsis"] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "perMachine": false }
+  }
+}

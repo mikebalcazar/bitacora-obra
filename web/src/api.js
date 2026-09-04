@@ -5,12 +5,18 @@ const TOKEN_KEY = 'bo_token';
 export const getToken = () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } };
 export const setToken = (t) => { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch {} };
 
+// Dentro del sitio, las rutas son relativas y la cookie hace el trabajo. Dentro
+// de la app de Android o de Windows, el sitio va empaquetado y el servidor está
+// en otro lado: la dirección se fija al compilar y la sesión viaja como token.
+export const BASE = (import.meta.env?.VITE_API_BASE || '').replace(/\/$/, '');
+export const empaquetada = !!BASE;
+
 async function call(method, path, body, isForm = false) {
   const headers = {};
   const t = getToken();
   if (t) headers.authorization = `Bearer ${t}`;
   if (body && !isForm) headers['content-type'] = 'application/json';
-  const r = await fetch('/api' + path, { method, headers, body: isForm ? body : body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+  const r = await fetch(BASE + '/api' + path, { method, headers, body: isForm ? body : body ? JSON.stringify(body) : undefined, credentials: BASE ? 'omit' : 'same-origin' });
   let data = null;
   try { data = await r.json(); } catch { data = {}; }
   if (!r.ok) { const e = new Error(data.error || `Error ${r.status}`); e.status = r.status; throw e; }
@@ -135,8 +141,14 @@ if (typeof window !== 'undefined') {
   window.addEventListener('offline', () => avisa());
 }
 
-// URL de archivo R2 (misma origin, cookie). Si hay token bearer y no cookie, se agrega ?t= para <img>.
-export const fileUrl = (key) => `/files/${key}`;
+// Dirección de una foto o un plano. Dentro del sitio basta la ruta: la cookie
+// viaja sola. En las apps empaquetadas una etiqueta de imagen no puede mandar
+// encabezados, así que el token va en la dirección.
+export const fileUrl = (key) => {
+  if (!BASE) return `/files/${key}`;
+  const t = getToken();
+  return `${BASE}/files/${key}${t ? `?t=${encodeURIComponent(t)}` : ''}`;
+};
 
 // ---------- utilidades ----------
 export const fmtD = (iso) => iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '';

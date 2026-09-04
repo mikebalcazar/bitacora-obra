@@ -16,7 +16,12 @@ function getCookie(req, name) {
   return m ? decodeURIComponent(m[1]) : null;
 }
 async function getUser(req, env) {
-  const token = getCookie(req, COOKIE) || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  // En las apps empaquetadas la cookie no viaja —otro origen— y una etiqueta de
+  // imagen no puede mandar encabezados, así que para los archivos el token
+  // también se acepta en la dirección. Solo para eso: queda escrito en registros
+  // y en el historial, y por eso no se usa para el resto.
+  const enDireccion = new URL(req.url).pathname.startsWith('/files/') ? new URL(req.url).searchParams.get('t') : null;
+  const token = getCookie(req, COOKIE) || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '') || enDireccion;
   if (!token) return null;
   const row = await env.DB.prepare(
     `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1`
@@ -183,17 +188,50 @@ async function photosFor(env, ownerType, ids) {
 }
 
 // ---------- router ----------
+// La app de Android y la de Windows llevan su propia copia del sitio adentro, así
+// que no comparten origen con el servidor: sus peticiones son de otro origen y
+// el navegador las bloquea si no se dicen bienvenidas. Se nombran una por una;
+// abrirlo a cualquiera sería regalar la puerta.
+const ORIGENES = new Set([
+  'capacitor://localhost',   // Android
+  'http://localhost',        // Android, y desarrollo
+  'https://localhost',
+  'tauri://localhost',
+  'http://tauri.localhost',
+  'https://tauri.localhost',
+  'app://bitacora',          // Windows empaquetado
+]);
+function permiso(req) {
+  const o = req.headers.get('origin');
+  if (!o || !ORIGENES.has(o)) return null;
+  return {
+    'access-control-allow-origin': o,
+    'access-control-allow-credentials': 'true',
+    'access-control-allow-headers': 'content-type, authorization',
+    'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+    'access-control-max-age': '86400',
+    'vary': 'Origin',
+  };
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     const path = url.pathname;
+    const cors = permiso(req);
     try {
-      if (path.startsWith('/api/')) return await api(req, env, url, path);
-      if (path.startsWith('/files/')) return await serveFile(req, env, path.slice(7));
-      return env.ASSETS.fetch(req);
+      if (req.method === 'OPTIONS' && cors) return new Response(null, { status: 204, headers: cors });
+      let r;
+      if (path.startsWith('/api/')) r = await api(req, env, url, path);
+      else if (path.startsWith('/files/')) r = await serveFile(req, env, path.slice(7));
+      else return env.ASSETS.fetch(req);
+      if (cors) { r = new Response(r.body, r); for (const [k, v] of Object.entries(cors)) r.headers.set(k, v); }
+      return r;
     } catch (e) {
       console.error(e);
-      return err(e.message || 'error interno', 500);
+      const r = err(e.message || 'error interno', 500);
+      if (cors) for (const [k, v] of Object.entries(cors)) r.headers.set(k, v);
+      return r;
     }
   },
 };
