@@ -33,6 +33,12 @@ export const fmtDay = (iso) => new Date(iso).toLocaleDateString('es-MX', { weekd
 export const isLate = (k) => k.status !== 'ok' && k.due_date && new Date(k.due_date + 'T23:59:59') < new Date();
 export const ini = (n = '') => n.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
 export const ST = { pend: 'Pendiente', proc: 'En proceso', ok: 'Resuelto' };
+
+// Los tres roles, con el nombre que se usa en obra.
+export const ROLES = { admin: 'Dueño', int: 'Supervisor', con: 'Contratista' };
+export const esDueno = (u) => u?.role === 'admin';
+export const esContratista = (u) => u?.role === 'con';
+export const dirige = (u) => u?.role === 'admin' || u?.role === 'int';
 export const elStatus = (e) => (!e.n_total ? 'none' : e.n_pend ? 'pend' : e.n_proc ? 'proc' : 'ok');
 export const todayISO = (offsetDays = 0) => { const d = new Date(); d.setDate(d.getDate() + offsetDays); return d.toISOString().slice(0, 10); };
 

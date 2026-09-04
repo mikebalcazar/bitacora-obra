@@ -1,4 +1,4 @@
-import { fileUrl, fmtD, fmtT, isLate, ST } from './api.js';
+import { fileUrl, fmtD, fmtT, isLate, ST, ROLES } from './api.js';
 
 const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -73,7 +73,7 @@ export async function buildReport({ project, plans, elements, logs, punch, user,
         <div><label>Plano</label>${esc(m0.plan_name)}</div><div><label>Periodo</label>${fmtD(ms[0].created_at)} — ${fmtD(ms[ms.length - 1].created_at)}</div><div><label>Acuerdos</label>${ms.filter((m) => m.kind === 'acuerdo').length}</div>
       </div><div class="sheetcrop"><label>Ubicación · ${esc(m0.plan_file || m0.plan_name)}</label>${c ? `<img class="crop" src="${c}" alt="">` : ''}</div></div>
       <label class="sec">Historial</label>
-      ${ms.map((m) => `<div class="entry"><div class="et"><time>${fmtD(m.created_at)} · ${fmtT(m.created_at)}</time><b>${esc(m.user_name)}</b><span>${m.user_role === 'con' ? 'Contratista' : 'Interno'}</span><span class="pill ${m.kind === 'acuerdo' ? 'acu' : 'gen'}">${m.kind}</span></div><p>${esc(m.text)}</p>${m.photos.length ? `<div class="big">${m.photos.map(fig).join('')}</div>` : ''}</div>`).join('')}
+      ${ms.map((m) => `<div class="entry"><div class="et"><time>${fmtD(m.created_at)} · ${fmtT(m.created_at)}</time><b>${esc(m.user_name)}</b><span>${ROLES[m.user_role] || 'Supervisor'}</span><span class="pill ${m.kind === 'acuerdo' ? 'acu' : 'gen'}">${m.kind}</span></div><p>${esc(m.text)}</p>${m.photos.length ? `<div class="big">${m.photos.map(fig).join('')}</div>` : ''}</div>`).join('')}
       ${foot}`);
   }
   // Fichas punchlist: una por detalle

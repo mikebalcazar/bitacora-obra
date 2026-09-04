@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, fileUrl, fmtD, fmtT, fmtDay, isLate, ini, ST, compressImage, todayISO } from './api.js';
+import { api, fileUrl, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
 
-export default function ElementPanel({ elementId, flash, plan, staff, user, onChanged, onClose }) {
+export default function ElementPanel({ elementId, flash, plan, staff, user, members = [], onChanged, onClose }) {
   const { toast } = useApp();
   const [d, setD] = useState(null);
-  const [tab, setTab] = useState(flash ? 'punch' : 'log');
+  const [tab, setTab] = useState(!staff || flash ? 'punch' : 'log');
   const [lb, setLb] = useState(null);
   const [edit, setEdit] = useState(false);
 
@@ -14,7 +14,7 @@ export default function ElementPanel({ elementId, flash, plan, staff, user, onCh
   useEffect(() => { if (flash) setTab('punch'); }, [flash]);
   useEffect(() => { if (flash && d) setTimeout(() => document.querySelector(`[data-k="${flash}"]`)?.scrollIntoView({ block: 'center' }), 50); }, [flash, d]);
 
-  if (!elementId) return <aside className="panel"><div className="empty"><h3>Selecciona un elemento</h3>Toca un pin del plano{staff ? ' o crea uno con + Elemento' : ''}.</div></aside>;
+  if (!elementId) return <aside className="panel"><div className="empty"><h3>{staff ? 'Selecciona un elemento' : 'Selecciona un pendiente'}</h3>Toca un pin del plano{staff ? ' o crea uno con + Elemento' : '. Solo salen los pines donde tienes algo asignado.'}</div></aside>;
   if (!d) return <aside className="panel"><div className="spin" /></aside>;
   const { element: e, log, punch } = d;
   const open = punch.filter((k) => k.status !== 'ok').length;
@@ -32,11 +32,11 @@ export default function ElementPanel({ elementId, flash, plan, staff, user, onCh
         <h2>{e.name}</h2>
         <div className="meta">{e.resp && <span>Resp. <b style={{ fontWeight: 500, color: 'var(--ink2)' }}>{e.resp}</b></span>}<span>{e.plan_name}</span><span>Creado {fmtD(e.created_at)}</span></div>
         <div className="tabs">
-          <button className={'tab' + (tab === 'log' ? ' on' : '')} onClick={() => setTab('log')}>Bitácora <span className="n">{log.length}</span></button>
-          <button className={'tab' + (tab === 'punch' ? ' on' : '')} onClick={() => setTab('punch')}>Punchlist <span className="n">{open}/{punch.length}</span></button>
+          {staff && <button className={'tab' + (tab === 'log' ? ' on' : '')} onClick={() => setTab('log')}>Bitácora <span className="n">{log.length}</span></button>}
+          <button className={'tab' + (tab === 'punch' ? ' on' : '')} onClick={() => setTab('punch')}>{staff ? 'Punchlist' : 'Lo que me toca'} <span className="n">{open}/{punch.length}</span></button>
         </div>
       </div>
-      {tab === 'log' ? <Log e={e} log={log} onChanged={changed} setLb={setLb} user={user} staff={staff} /> : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} />}
+      {tab === 'log' && staff ? <Log e={e} log={log} onChanged={changed} setLb={setLb} user={user} staff={staff} /> : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} members={members} />}
       {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
       {edit && <EditElement e={e} onClose={() => setEdit(false)} onChanged={() => { changed(); }} onDeleted={() => { onChanged(); onClose(); }} />}
     </aside>
@@ -106,7 +106,7 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
               <div className="msg">
                 <div className={'avatar av' + (m.user_role === 'con' ? ' con' : '')}>{ini(m.user_name)}</div>
                 <div>
-                  <div className="who"><b>{m.user_name}</b><span className="role">{m.user_role === 'con' ? 'Contratista' : 'Interno'}</span><time>{fmtT(m.created_at)}</time></div>
+                  <div className="who"><b>{m.user_name}</b><span className="role">{ROLES[m.user_role] || 'Supervisor'}</span><time>{fmtT(m.created_at)}</time></div>
                   <div className={'txt' + (m.kind === 'acuerdo' ? ' acuerdo' : '')}><span className="kind">{m.kind}</span>{m.text}<Photos photos={m.photos} setLb={setLb} onDelete={staff || m.user_id === user.id ? delPhoto : null} /></div>
                 </div>
               </div>
@@ -126,15 +126,18 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
   );
 }
 
-function Punch({ e, punch, flash, onChanged, setLb, user, staff }) {
+function Punch({ e, punch, flash, onChanged, setLb, user, staff, members }) {
   const { toast } = useApp();
-  const [f, setF] = useState({ title: '', resp: e.resp || '', due_date: todayISO(3) });
+  const [f, setF] = useState({ title: '', resp: e.resp || '', due_date: todayISO(3), assignee_id: '' });
+  const [evid, setEvid] = useState(null);          // el pendiente que se está dando por terminado
+  const contratistas = (members || []).filter((m) => m.role === 'con');
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const { pending, add, clear, remove } = usePending();
   const tot = punch.length, ok = punch.filter((k) => k.status === 'ok').length, pr = punch.filter((k) => k.status === 'proc').length;
 
   async function cycle(k) {
+    if (!staff) return;   // el contratista marca terminado con evidencia, no a dedo
     const next = k.status === 'pend' ? 'proc' : k.status === 'proc' ? 'ok' : 'pend';
     await api.patch(`/punch/${k.id}`, { status: next }).catch((x) => toast(x.message)); onChanged();
   }
@@ -143,6 +146,7 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff }) {
     setBusy(true);
     try {
       const fd = new FormData(); fd.append('title', f.title.trim()); fd.append('resp', f.resp); fd.append('due_date', f.due_date);
+      if (f.assignee_id) fd.append('assignee_id', f.assignee_id);
       pending.forEach((p) => fd.append('photos', p.file));
       await api.form(`/elements/${e.id}/punch`, fd);
       setF({ ...f, title: '' }); clear(); setAdding(false); onChanged();
@@ -161,18 +165,24 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff }) {
       <div className="body">
         {tot > 0 && <div className="plsum"><span>{ok}/{tot} resueltos</span><div className="bar"><i style={{ width: `${(ok / tot) * 100}%`, background: 'var(--ok)' }} /><i style={{ width: `${(pr / tot) * 100}%`, background: 'var(--proc)' }} /></div></div>}
         <div className="pl">
-          {!punch.length && <div className="empty"><h3>Sin pendientes</h3>Este elemento no tiene detalles abiertos.</div>}
+          {!punch.length && <div className="empty"><h3>Sin pendientes</h3>{staff ? 'Este elemento no tiene detalles abiertos.' : 'Aquí no tienes nada asignado.'}</div>}
           {punch.map((k) => (
             <div key={k.id} className={'pi ' + k.status + (k.id === flash ? ' flash' : '')} data-k={k.id}>
               <div className="st" onClick={() => cycle(k)} title="Cambiar estado">{k.status === 'ok' ? '✓' : k.status === 'proc' ? '…' : ''}</div>
               <div>
                 <div className="t">{k.title}</div>
-                <div className="sub"><span className={'pill ' + k.status}>{ST[k.status]}</span>{isLate(k) && <span className="pill late">Vencido</span>}<span>{k.status === 'ok' ? 'Resuelto ' + fmtD(k.done_at) : 'Límite ' + fmtD(k.due_date)}</span>{k.resp && <span>{k.resp}</span>}</div>
+                <div className="sub"><span className={'pill ' + k.status}>{ST[k.status]}</span>{isLate(k) && <span className="pill late">Vencido</span>}<span>{k.status === 'ok' ? 'Resuelto ' + fmtD(k.done_at) : 'Límite ' + fmtD(k.due_date)}</span>{staff && k.assignee_name && <span>{k.assignee_name}{k.assignee_company ? ` · ${k.assignee_company}` : ''}</span>}{!k.assignee_name && k.resp && <span>{k.resp}</span>}</div>
                 <Photos photos={k.photos} setLb={setLb} onDelete={staff ? delPhoto : null} />
-                <div className="row" style={{ marginTop: 6, gap: 6 }}>
-                  <label className="btn sm">+ Foto<input type="file" accept="image/*" capture="environment" multiple hidden onChange={(ev) => { addPhotos(k, [...ev.target.files]); ev.target.value = ''; }} /></label>
-                  {staff && <button className="btn sm danger" onClick={() => del(k)}>Borrar</button>}
-                </div>
+                {evid === k.id ? (
+                  <Evidencia k={k} onListo={() => { setEvid(null); onChanged(); }} onCancel={() => setEvid(null)} />
+                ) : (
+                  <div className="row" style={{ marginTop: 6, gap: 6 }}>
+                    {staff && <label className="btn sm">+ Foto<input type="file" accept="image/*" capture="environment" multiple hidden onChange={(ev) => { addPhotos(k, [...ev.target.files]); ev.target.value = ''; }} /></label>}
+                    {!staff && k.status !== 'ok' && <button className="btn primary sm" onClick={() => setEvid(k.id)}>Ya quedó — subir evidencia</button>}
+                    {!staff && k.status === 'proc' && <span className="muted" style={{ fontSize: 12.5 }}>Esperando revisión del supervisor</span>}
+                    {staff && <button className="btn sm danger" onClick={() => del(k)}>Borrar</button>}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -181,15 +191,61 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff }) {
           <div className="newpi">
             <div className="eyebrow">Nuevo detalle</div>
             <input autoFocus value={f.title} onChange={(ev) => setF({ ...f, title: ev.target.value })} placeholder="Describe el detalle o tarea…" />
-            <div className="two"><input value={f.resp} onChange={(ev) => setF({ ...f, resp: ev.target.value })} placeholder="Responsable" /><input type="date" value={f.due_date} onChange={(ev) => setF({ ...f, due_date: ev.target.value })} /></div>
+            <div className="two">
+              {contratistas.length
+                ? <select value={f.assignee_id} onChange={(ev) => setF({ ...f, assignee_id: ev.target.value })}>
+                    <option value="">Sin asignar</option>
+                    {contratistas.map((c) => <option key={c.id} value={c.id}>{c.name}{c.company ? ` · ${c.company}` : ''}</option>)}
+                  </select>
+                : <input value={f.resp} onChange={(ev) => setF({ ...f, resp: ev.target.value })} placeholder="Responsable" />}
+              <input type="date" value={f.due_date} onChange={(ev) => setF({ ...f, due_date: ev.target.value })} />
+            </div>
+            {!contratistas.length && <div className="muted" style={{ fontSize: 12.5 }}>Para asignárselo a alguien, agrégalo primero a la obra en Usuarios y accesos.</div>}
+            {!!contratistas.length && !f.assignee_id && <div className="muted" style={{ fontSize: 12.5 }}>Sin asignar, nadie lo va a ver en su lista.</div>}
             <PendingStrip pending={pending} remove={remove} />
             <div className="row"><PhotoInput onFiles={add} /><div className="spacer" /><button className="btn sm" onClick={() => { setAdding(false); clear(); }}>Cancelar</button><button className="btn primary sm" disabled={busy || !f.title.trim()} onClick={create}>{busy ? 'Guardando…' : 'Agregar'}</button></div>
           </div>
         ) : (
-          <button className="btn primary block" onClick={() => setAdding(true)}>+ Nuevo detalle</button>
+          staff && <button className="btn primary block" onClick={() => setAdding(true)}>+ Nuevo detalle</button>
         )}
       </div>
     </>
+  );
+}
+
+// Lo único que el contratista empuja: la foto de que ya quedó y, si quiere, una
+// nota. El pendiente pasa a "en proceso" y queda anotado en la bitácora del
+// elemento con su nombre y la hora. Quien lo cierra es el supervisor.
+function Evidencia({ k, onListo, onCancel }) {
+  const { toast } = useApp();
+  const [nota, setNota] = useState('');
+  const [busy, setBusy] = useState(false);
+  const { pending, add, clear, remove } = usePending();
+
+  async function enviar() {
+    if (!nota.trim() && !pending.length) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('nota', nota.trim());
+      pending.forEach((p) => fd.append('photos', p.file));
+      await api.form(`/punch/${k.id}/evidencia`, fd);
+      clear(); onListo();
+    } catch (x) { toast(x.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="newpi" style={{ marginTop: 8 }}>
+      <div className="eyebrow">Evidencia de que ya quedó</div>
+      <textarea rows={2} value={nota} onChange={(ev) => setNota(ev.target.value)} placeholder="Qué hiciste (opcional si subes foto)…" />
+      <PendingStrip pending={pending} remove={remove} />
+      <div className="row">
+        <PhotoInput onFiles={add} />
+        <div className="spacer" />
+        <button className="btn sm" onClick={() => { clear(); onCancel(); }}>Cancelar</button>
+        <button className="btn primary sm" disabled={busy || (!nota.trim() && !pending.length)} onClick={enviar}>{busy ? 'Subiendo…' : 'Marcar terminado'}</button>
+      </div>
+    </div>
   );
 }
 
