@@ -6,7 +6,7 @@ import { useApp } from './App.jsx';
 // para que quien da de alta a alguien sepa qué le está entregando.
 const QUE_PUEDE = {
   admin: 'Todo lo del supervisor, y además da de alta gente y reparte roles.',
-  int: 'Crea y edita obras, planos, elementos y pendientes. Es quien cierra un pendiente cuando ya quedó.',
+  int: 'Crea y edita obras, planos, ítems y pendientes. Es quien cierra un pendiente cuando ya quedó.',
   con: 'Ve nada más los pendientes que traen su nombre. Sube la evidencia de que los arregló y los marca terminados. No edita nada ni cierra.',
 };
 
