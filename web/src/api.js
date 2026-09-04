@@ -1,3 +1,4 @@
+import { pdfjs, esPdf } from './pdf.js';
 // Cliente API — cookies de sesión (HttpOnly). Fallback bearer para PWA en iOS si la cookie se pierde.
 const TOKEN_KEY = 'bo_token';
 export const getToken = () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } };
@@ -48,29 +49,57 @@ export async function compressImage(file, max = 1600, q = 0.82) {
   return new File([blob], (file.name || 'foto').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
 }
 
-// Plano: PDF (pág. 1) o imagen → PNG/JPEG rasterizado ~2600 px
+// Plano: PDF (pág. 1) o imagen → PNG rasterizado.
+//
+// Esta imagen es la que se ve de un vistazo y la que sale en los reportes; para
+// acercarse a leer cotas está la capa nítida que se dibuja del PDF original.
+// Aun así se rasteriza grande, porque en un plano de obra lo que se busca son
+// líneas finas y letra chica: a 2600 px una hoja de 90 cm queda a 73 puntos por
+// pulgada y no se distingue nada. Se prueba de mayor a menor hasta que el
+// archivo entre en 8 MB, y nunca se pasa a JPEG: sus manchas alrededor de cada
+// línea negra son justo lo que arruina un plano.
 export async function rasterizePlan(file) {
-  const TARGET = 2600;
-  let canvas;
-  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
-    const pdfjs = await import('pdfjs-dist');
-    const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
-    pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-    const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
-    const page = await doc.getPage(1);
-    const vp1 = page.getViewport({ scale: 1 });
-    const scale = TARGET / Math.max(vp1.width, vp1.height);
-    const vp = page.getViewport({ scale });
-    canvas = document.createElement('canvas'); canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
-    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  const MEDIDAS = [5000, 4000, 3200, 2600];
+  const LIMITE = 8 * 1024 * 1024;
+  // Safari en iPhone no dibuja lienzos de más de 16.7 millones de píxeles: se
+  // queda en blanco sin avisar. Por eso el área también manda, no solo el lado.
+  const AREA_MAX = 16 * 1024 * 1024;
+  const pdf = file.type === 'application/pdf' || esPdf(file.name);
+  let pagina, bitmap, ancho1, alto1;
+
+  if (pdf) {
+    const lib = await pdfjs();
+    const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+    pagina = await doc.getPage(1);
+    const vp = pagina.getViewport({ scale: 1 });
+    ancho1 = vp.width; alto1 = vp.height;
   } else {
-    const bmp = await createImageBitmap(file);
-    const s = Math.min(1, TARGET / Math.max(bmp.width, bmp.height));
-    canvas = document.createElement('canvas'); canvas.width = Math.round(bmp.width * s); canvas.height = Math.round(bmp.height * s);
-    canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bitmap = await createImageBitmap(file);
+    ancho1 = bitmap.width; alto1 = bitmap.height;
   }
-  let blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
-  if (blob.size > 4 * 1024 * 1024) blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.9));
-  return { blob, width: canvas.width, height: canvas.height };
+
+  let ultimo = null;
+  for (const medida of MEDIDAS) {
+    let escala = medida / Math.max(ancho1, alto1);
+    if (!pdf) escala = Math.min(1, escala);           // una foto no se inventa detalle
+    if (ancho1 * alto1 * escala * escala > AREA_MAX) {
+      escala = Math.sqrt(AREA_MAX / (ancho1 * alto1));
+    }
+    const w = Math.max(1, Math.round(ancho1 * escala));
+    const h = Math.max(1, Math.round(alto1 * escala));
+    const lienzo = document.createElement('canvas');
+    lienzo.width = w; lienzo.height = h;
+    const ctx = lienzo.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    if (pdf) await pagina.render({ canvasContext: ctx, viewport: pagina.getViewport({ scale: escala }) }).promise;
+    else ctx.drawImage(bitmap, 0, 0, w, h);
+
+    const blob = await new Promise((res) => lienzo.toBlob(res, 'image/png'));
+    if (!blob) continue;
+    ultimo = { blob, width: w, height: h };
+    if (blob.size <= LIMITE) return ultimo;
+  }
+
+  // Ni en la medida más chica cupo: se entrega tal cual antes que quedarse sin plano.
+  return ultimo;
 }
