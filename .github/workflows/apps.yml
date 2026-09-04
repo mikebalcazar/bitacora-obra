@@ -1,0 +1,99 @@
+# Arma la app de Android y la de Windows. No corre solo: se dispara a mano desde
+# la pestaña Actions, porque armarlas tarda y casi nunca hace falta en cada
+# cambio. Al terminar, los archivos quedan colgados de la corrida, en Artifacts.
+
+name: Armar apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      servidor:
+        description: 'Dirección del servidor con el que van a hablar las apps'
+        required: true
+        default: 'https://bitacora-obra.mike-929.workers.dev'
+
+jobs:
+  android:
+    name: Android (.apk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Instalar dependencias
+        run: npm ci && npm --prefix web ci
+
+      # La app lleva el sitio adentro, así que la dirección del servidor se fija
+      # aquí: dentro de la app las rutas relativas no llevan a ningún lado.
+      - name: Armar la aplicación
+        env:
+          VITE_API_BASE: ${{ inputs.servidor }}
+        run: npm run build
+
+      - name: Preparar el proyecto de Android
+        run: |
+          set -e
+          npm i --no-save @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7
+          npx cap add android
+          npx cap sync android
+
+      - name: Armar el .apk
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bitacora-obra-android
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  windows:
+    name: Windows (instalador)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci && npm --prefix web ci
+
+      - name: Armar la aplicación
+        env:
+          VITE_API_BASE: ${{ inputs.servidor }}
+        run: npm run build
+
+      - name: Meter la aplicación dentro del envoltorio
+        run: |
+          New-Item -ItemType Directory -Force -Path apps/windows/dist | Out-Null
+          Copy-Item -Recurse -Force web/dist/* apps/windows/dist/
+        shell: pwsh
+
+      - name: Armar el instalador
+        working-directory: apps/windows
+        run: |
+          npm install --no-package-lock
+          npm run dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bitacora-obra-windows
+          path: apps/windows/salida/*.exe
+          if-no-files-found: error

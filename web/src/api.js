@@ -1,15 +1,22 @@
 import { pdfjs, esPdf } from './pdf.js';
+import * as local from './local.js';
 // Cliente API — cookies de sesión (HttpOnly). Fallback bearer para PWA en iOS si la cookie se pierde.
 const TOKEN_KEY = 'bo_token';
 export const getToken = () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } };
 export const setToken = (t) => { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch {} };
+
+// Dentro del sitio, las rutas son relativas y la cookie hace el trabajo. Dentro
+// de la app de Android o de Windows, el sitio va empaquetado y el servidor está
+// en otro lado: la dirección se fija al compilar y la sesión viaja como token.
+export const BASE = (import.meta.env?.VITE_API_BASE || '').replace(/\/$/, '');
+export const empaquetada = !!BASE;
 
 async function call(method, path, body, isForm = false) {
   const headers = {};
   const t = getToken();
   if (t) headers.authorization = `Bearer ${t}`;
   if (body && !isForm) headers['content-type'] = 'application/json';
-  const r = await fetch('/api' + path, { method, headers, body: isForm ? body : body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
+  const r = await fetch(BASE + '/api' + path, { method, headers, body: isForm ? body : body ? JSON.stringify(body) : undefined, credentials: BASE ? 'omit' : 'same-origin' });
   let data = null;
   try { data = await r.json(); } catch { data = {}; }
   if (!r.ok) { const e = new Error(data.error || `Error ${r.status}`); e.status = r.status; throw e; }
@@ -23,8 +30,125 @@ export const api = {
   form: (p, fd) => call('POST', p, fd, true),
 };
 
-// URL de archivo R2 (misma origin, cookie). Si hay token bearer y no cookie, se agrega ?t= para <img>.
-export const fileUrl = (key) => `/files/${key}`;
+// ─────────────────────── la obra, sin señal ───────────────────────
+// Todo lo que se lee queda guardado en el dispositivo, y todo lo que se escribe
+// entra a una fila que se vacía sola en cuanto vuelve la señal.
+
+export const hayRed = () => (typeof navigator === 'undefined' ? true : navigator.onLine !== false);
+
+// Se avisa a la app cuando cambia algo: cuántos faltan por subir, si se está
+// leyendo de lo guardado, si algo se atoró.
+const OYENTES = new Set();
+export const alCambiarRed = (fn) => { OYENTES.add(fn); return () => OYENTES.delete(fn); };
+async function avisa(extra = {}) {
+  const faltan = await local.cuantosFaltan();
+  for (const fn of OYENTES) { try { fn({ faltan, red: hayRed(), ...extra }); } catch {} }
+}
+
+// Un fallo de red es "no hubo forma de llegar", no "el servidor dijo que no".
+// El segundo no se guarda para reintentar: reintentarlo daría lo mismo.
+const esFalloDeRed = (e) => !e || !e.status;
+
+// Leer: la red manda, y lo guardado es la red de abajo.
+export async function leer(ruta, { soloCache = false } = {}) {
+  if (!soloCache && hayRed()) {
+    try {
+      const datos = await call('GET', ruta);
+      await local.guarda(ruta, datos);
+      avisa({ deCache: false });
+      return datos;
+    } catch (e) {
+      if (!esFalloDeRed(e)) throw e;   // 403, 404: eso sí es respuesta
+    }
+  }
+  const guardado = await local.lee(ruta);
+  if (guardado) { avisa({ deCache: true }); return { ...guardado, __deCache: true, __cuando: await local.cuando(ruta) }; }
+  throw new Error(hayRed() ? 'No se pudo cargar.' : 'Sin señal y sin copia guardada de esto todavía.');
+}
+
+// Escribir: se intenta subir; si no se puede, se guarda para después. Las fotos
+// se guardan tal cual —IndexedDB sí guarda archivos— y se vuelven a armar al
+// subirlas.
+export async function escribir({ metodo = 'POST', ruta, cuerpo = null, campos = null, archivos = null, parche = null }) {
+  // El identificador se hace aquí, no en el servidor, y viaja con la operación.
+  // Si la señal se cae justo al terminar de subir, nadie sabe si llegó: al
+  // reintentar, el servidor reconoce el identificador y no la repite. Sin esto,
+  // una foto subida con mala señal terminaría apareciendo tres veces.
+  const idOp = crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
+  if (campos || archivos) campos = { ...(campos || {}), op_id: idOp };
+  else cuerpo = { ...(cuerpo || {}), op_id: idOp };
+
+  const subir = async () => {
+    if (campos || archivos) {
+      const fd = new FormData();
+      for (const [k, v] of Object.entries(campos || {})) fd.append(k, v);
+      for (const f of archivos || []) fd.append('photos', f);
+      return await call('POST', ruta, fd, true);
+    }
+    return await call(metodo, ruta, cuerpo);
+  };
+
+  if (hayRed()) {
+    try { const r = await subir(); avisa(); return { ok: true, subido: true, r }; }
+    catch (e) { if (!esFalloDeRed(e)) throw e; }
+  }
+
+  const op = { id: idOp, metodo, ruta, cuerpo, campos, archivos, creado: Date.now() };
+  await local.encola(op);
+  // Que se vea enseguida, aunque no haya subido: para quien lo escribió ya está
+  // hecho, y volver a pedírselo cuando haya señal es la manera segura de que no
+  // lo vuelva a hacer.
+  if (parche) await local.parchea(parche.clave, parche.fn);
+  avisa();
+  return { ok: true, subido: false, id: op.id };
+}
+
+// Vaciar la fila, en orden. Lo que el servidor rechaza de plano se saca de la
+// fila: reintentarlo eternamente solo la tapa.
+let vaciando = false;
+export async function vaciaFila() {
+  if (vaciando || !hayRed()) return { subidas: 0, rechazadas: 0 };
+  vaciando = true;
+  let subidas = 0, rechazadas = 0, ultimoError = null;
+  try {
+    for (const op of await local.fila()) {
+      try {
+        if (op.campos || op.archivos) {
+          const fd = new FormData();
+          for (const [k, v] of Object.entries(op.campos || {})) fd.append(k, v);
+          for (const f of op.archivos || []) fd.append('photos', f);
+          await call('POST', op.ruta, fd, true);
+        } else {
+          await call(op.metodo, op.ruta, op.cuerpo);
+        }
+        await local.desencola(op.id);
+        subidas++;
+      } catch (e) {
+        if (esFalloDeRed(e)) break;             // se fue la señal otra vez: mañana será
+        await local.desencola(op.id);           // el servidor dijo que no
+        rechazadas++; ultimoError = e.message;
+      }
+    }
+  } finally {
+    vaciando = false;
+    avisa({ ultimoError });
+  }
+  return { subidas, rechazadas, ultimoError };
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => { vaciaFila(); avisa(); });
+  window.addEventListener('offline', () => avisa());
+}
+
+// Dirección de una foto o un plano. Dentro del sitio basta la ruta: la cookie
+// viaja sola. En las apps empaquetadas una etiqueta de imagen no puede mandar
+// encabezados, así que el token va en la dirección.
+export const fileUrl = (key) => {
+  if (!BASE) return `/files/${key}`;
+  const t = getToken();
+  return `${BASE}/files/${key}${t ? `?t=${encodeURIComponent(t)}` : ''}`;
+};
 
 // ---------- utilidades ----------
 export const fmtD = (iso) => iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '';

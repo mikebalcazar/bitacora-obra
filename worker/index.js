@@ -16,7 +16,12 @@ function getCookie(req, name) {
   return m ? decodeURIComponent(m[1]) : null;
 }
 async function getUser(req, env) {
-  const token = getCookie(req, COOKIE) || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  // En las apps empaquetadas la cookie no viaja —otro origen— y una etiqueta de
+  // imagen no puede mandar encabezados, así que para los archivos el token
+  // también se acepta en la dirección. Solo para eso: queda escrito en registros
+  // y en el historial, y por eso no se usa para el resto.
+  const enDireccion = new URL(req.url).pathname.startsWith('/files/') ? new URL(req.url).searchParams.get('t') : null;
+  const token = getCookie(req, COOKIE) || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '') || enDireccion;
   if (!token) return null;
   const row = await env.DB.prepare(
     `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1`
@@ -66,6 +71,68 @@ async function projectOfPunch(env, punchId) {
   return r ? r.project_id : null;
 }
 
+// ---------- PIN ----------
+// Seis dígitos son un millón de combinaciones: se guardan derivados, nunca en
+// claro, y probar a ciegas se castiga con esperas que crecen. PBKDF2 con
+// doscientas mil vueltas hace que cada intento cueste, aquí y para quien
+// quisiera probar el millón con la base robada en la mano.
+const VUELTAS = 200000;
+const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+
+async function derivaPin(pin, salt) {
+  const enc = new TextEncoder();
+  const clave = await crypto.subtle.importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(salt), iterations: VUELTAS },
+    clave, 256
+  );
+  return b64(bits);
+}
+const pinValido = (p) => /^[0-9]{6}$/.test(String(p || ''));
+// Un PIN que se adivina de una no protege nada: 123456, 000000, 111111, y las
+// escaleras. No es una lista larga a propósito; es quitar lo obvio.
+function pinFlojo(p) {
+  const s = String(p);
+  if (/^(\d)\1{5}$/.test(s)) return 'Ese PIN es un solo número repetido.';
+  if ('0123456789'.includes(s) || '9876543210'.includes(s)) return 'Ese PIN es una escalera de números.';
+  if (['123456', '654321', '111111', '000000', '121212', '112233'].includes(s)) return 'Ese PIN es de los primeros que alguien probaría.';
+  return null;
+}
+
+// Las esperas, iguales para el usuario y para la dirección de internet.
+const CASTIGOS_PIN = [15 * 60, 60 * 60, 4 * 3600, 24 * 3600];
+const FALLOS_PIN = 5;
+function esperaLegible(seg) {
+  const min = Math.ceil(seg / 60);
+  if (min <= 1) return 'un minuto';
+  if (min < 90) return `${min} minutos`;
+  const h = Math.round(min / 60);
+  return h === 1 ? 'una hora' : `${h} horas`;
+}
+function quienIntenta(req) {
+  return req.headers.get('CF-Connecting-IP') || (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'desconocido';
+}
+const bloqueado = (hasta) => !!hasta && hasta > now();
+
+async function castigaIp(env, ip) {
+  const r = await env.DB.prepare(`SELECT * FROM pin_intentos WHERE ip = ?`).bind(ip).first();
+  const fails = (r?.fails || 0) + 1;
+  if (fails >= FALLOS_PIN) {
+    const castigos = Math.min((r?.castigos || 0) + 1, CASTIGOS_PIN.length);
+    const seg = CASTIGOS_PIN[castigos - 1];
+    await env.DB.prepare(
+      `INSERT INTO pin_intentos (ip, fails, castigos, locked_until, visto_en) VALUES (?,0,?,?,?)
+       ON CONFLICT(ip) DO UPDATE SET fails=0, castigos=excluded.castigos, locked_until=excluded.locked_until, visto_en=excluded.visto_en`
+    ).bind(ip, castigos, new Date(Date.now() + seg * 1000).toISOString(), now()).run();
+    return seg;
+  }
+  await env.DB.prepare(
+    `INSERT INTO pin_intentos (ip, fails, castigos, locked_until, visto_en) VALUES (?,?,0,NULL,?)
+     ON CONFLICT(ip) DO UPDATE SET fails=excluded.fails, visto_en=excluded.visto_en`
+  ).bind(ip, fails, now()).run();
+  return 0;
+}
+
 async function sendMail(env, to, subject, html) {
   if (!env.RESEND_API_KEY) return { dev: true };
   const r = await fetch('https://api.resend.com/emails', {
@@ -75,6 +142,22 @@ async function sendMail(env, to, subject, html) {
   });
   if (!r.ok) throw new Error('mail: ' + (await r.text()));
   return { ok: true };
+}
+
+// ---------- operaciones repetidas ----------
+// Lo que se escribió sin señal llega con un identificador hecho en el
+// dispositivo. Si la señal se cayó justo al terminar de subir, nadie supo si
+// llegó, y al reintentar llega otra vez con el mismo identificador: se reconoce
+// y no se repite. Sin esto, una foto subida con mala señal aparecería tres
+// veces en la bitácora.
+async function yaHecha(env, opId) {
+  if (!opId) return false;
+  const r = await env.DB.prepare(`SELECT 1 FROM operaciones WHERE id = ?`).bind(opId).first();
+  return !!r;
+}
+async function apunta(env, opId) {
+  if (!opId) return;
+  await env.DB.prepare(`INSERT OR IGNORE INTO operaciones (id, cuando) VALUES (?,?)`).bind(opId, now()).run();
 }
 
 // ---------- photos ----------
@@ -105,17 +188,50 @@ async function photosFor(env, ownerType, ids) {
 }
 
 // ---------- router ----------
+// La app de Android y la de Windows llevan su propia copia del sitio adentro, así
+// que no comparten origen con el servidor: sus peticiones son de otro origen y
+// el navegador las bloquea si no se dicen bienvenidas. Se nombran una por una;
+// abrirlo a cualquiera sería regalar la puerta.
+const ORIGENES = new Set([
+  'capacitor://localhost',   // Android
+  'http://localhost',        // Android, y desarrollo
+  'https://localhost',
+  'tauri://localhost',
+  'http://tauri.localhost',
+  'https://tauri.localhost',
+  'app://bitacora',          // Windows empaquetado
+]);
+function permiso(req) {
+  const o = req.headers.get('origin');
+  if (!o || !ORIGENES.has(o)) return null;
+  return {
+    'access-control-allow-origin': o,
+    'access-control-allow-credentials': 'true',
+    'access-control-allow-headers': 'content-type, authorization',
+    'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+    'access-control-max-age': '86400',
+    'vary': 'Origin',
+  };
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     const path = url.pathname;
+    const cors = permiso(req);
     try {
-      if (path.startsWith('/api/')) return await api(req, env, url, path);
-      if (path.startsWith('/files/')) return await serveFile(req, env, path.slice(7));
-      return env.ASSETS.fetch(req);
+      if (req.method === 'OPTIONS' && cors) return new Response(null, { status: 204, headers: cors });
+      let r;
+      if (path.startsWith('/api/')) r = await api(req, env, url, path);
+      else if (path.startsWith('/files/')) r = await serveFile(req, env, path.slice(7));
+      else return env.ASSETS.fetch(req);
+      if (cors) { r = new Response(r.body, r); for (const [k, v] of Object.entries(cors)) r.headers.set(k, v); }
+      return r;
     } catch (e) {
       console.error(e);
-      return err(e.message || 'error interno', 500);
+      const r = err(e.message || 'error interno', 500);
+      if (cors) for (const [k, v] of Object.entries(cors)) r.headers.set(k, v);
+      return r;
     }
   },
 };
@@ -141,7 +257,65 @@ async function api(req, env, url, path) {
   if (seg[0] === 'salud' && m === 'GET') return json({ ok: true, app: env.APP_NAME || 'Bitácora de Obra', hora: now() });
 
   // ----- auth -----
+  // Abre sesión y la devuelve firmada en cookie, y también como token suelto:
+  // la app de Android y la de Windows no comparten origen con el sitio, así que
+  // para ellas la cookie no sirve y llevan el token a mano.
+  async function abreSesion(u) {
+    const token = uid() + uid().replace(/-/g, '');
+    await env.DB.prepare(`INSERT INTO sessions (token, user_id, expires_at) VALUES (?,?,?)`).bind(token, u.id, plusMin(60 * 24 * 90)).run();
+    const secure = url.protocol === 'https:' ? '; Secure' : '';
+    return json({ ok: true, user: pubUser(u), token, tiene_pin: !!u.pin_hash }, 200, {
+      'set-cookie': `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}${secure}`,
+    });
+  }
+
   if (seg[0] === 'auth') {
+    // Entrar con el PIN de siempre: sin esperar correo, que en obra es lo que
+    // hace que la gente deje de abrir la app.
+    if (seg[1] === 'pin' && !seg[2] && m === 'POST') {
+      const { email, pin } = await req.json();
+      const e = String(email || '').trim().toLowerCase();
+      const ip = quienIntenta(req);
+
+      const freno = await env.DB.prepare(`SELECT * FROM pin_intentos WHERE ip = ?`).bind(ip).first();
+      if (bloqueado(freno?.locked_until)) {
+        return err('Demasiados intentos desde aquí. Espera un rato o entra con un código a tu correo.', 429);
+      }
+
+      const u = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND active = 1`).bind(e).first();
+      // Sin usuario, sin PIN puesto o con PIN malo se contesta lo mismo: quien
+      // esté probando no aprende de aquí quién existe y quién no.
+      const malo = async () => {
+        const seg2 = await castigaIp(env, ip);
+        return err(seg2 ? `Demasiados intentos. Espera ${esperaLegible(seg2)} o entra con un código a tu correo.` : 'Correo o PIN incorrecto.', 401);
+      };
+      if (!u || !u.pin_hash || !pinValido(pin)) return await malo();
+
+      if (bloqueado(u.pin_locked_until)) {
+        return err('Este usuario está bloqueado un rato por intentos fallidos. Entra con un código a tu correo.', 429);
+      }
+
+      const hash = await derivaPin(pin, u.pin_salt);
+      if (hash !== u.pin_hash) {
+        const fails = (u.pin_fails || 0) + 1;
+        if (fails >= FALLOS_PIN) {
+          const castigos = Math.min((u.pin_castigos || 0) + 1, CASTIGOS_PIN.length);
+          const segs = CASTIGOS_PIN[castigos - 1];
+          await env.DB.prepare(`UPDATE users SET pin_fails = 0, pin_castigos = ?, pin_locked_until = ? WHERE id = ?`)
+            .bind(castigos, new Date(Date.now() + segs * 1000).toISOString(), u.id).run();
+        } else {
+          await env.DB.prepare(`UPDATE users SET pin_fails = ? WHERE id = ?`).bind(fails, u.id).run();
+        }
+        return await malo();
+      }
+
+      await env.DB.batch([
+        env.DB.prepare(`UPDATE users SET pin_fails = 0, pin_castigos = 0, pin_locked_until = NULL WHERE id = ?`).bind(u.id),
+        env.DB.prepare(`DELETE FROM pin_intentos WHERE ip = ?`).bind(ip),
+      ]);
+      return await abreSesion(u);
+    }
+
     if (seg[1] === 'request' && m === 'POST') {
       const { email } = await req.json();
       const e = String(email || '').trim().toLowerCase();
@@ -173,15 +347,14 @@ async function api(req, env, url, path) {
       }
       const user = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND active = 1`).bind(e).first();
       if (!user) return err('Usuario no encontrado', 404);
-      const token = uid() + uid().replace(/-/g, '');
+      // Entrar por correo también levanta el castigo: quien probó su PIN de más
+      // pero sí es quien dice ser, no se queda fuera cuatro horas.
       await env.DB.batch([
-        env.DB.prepare(`INSERT INTO sessions (token, user_id, expires_at) VALUES (?,?,?)`).bind(token, user.id, plusMin(60 * 24 * 90)),
         env.DB.prepare(`DELETE FROM login_codes WHERE email = ?`).bind(e),
+        env.DB.prepare(`UPDATE users SET pin_fails = 0, pin_castigos = 0, pin_locked_until = NULL WHERE id = ?`).bind(user.id),
+        env.DB.prepare(`DELETE FROM pin_intentos WHERE ip = ?`).bind(quienIntenta(req)),
       ]);
-      const secure = url.protocol === 'https:' ? '; Secure' : '';
-      return json({ ok: true, user: pubUser(user), token }, 200, {
-        'set-cookie': `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}${secure}`,
-      });
+      return await abreSesion(user);
     }
     if (seg[1] === 'logout' && m === 'POST') {
       const token = getCookie(req, COOKIE);
@@ -195,6 +368,21 @@ async function api(req, env, url, path) {
   if (!user) return err('no autorizado', 401);
 
   if (seg[0] === 'me' && m === 'GET') return json({ user: pubUser(user) });
+
+  // Poner o cambiar el PIN. Se pide tener sesión: o se acaba de entrar con el
+  // código del correo —la primera vez, o porque lo olvidó— o ya estaba dentro.
+  if (seg[0] === 'pin' && m === 'POST') {
+    const { pin } = await req.json();
+    if (!pinValido(pin)) return err('El PIN son seis dígitos.');
+    const flojo = pinFlojo(pin);
+    if (flojo) return err(flojo);
+    const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+    const hash = await derivaPin(pin, salt);
+    await env.DB.prepare(
+      `UPDATE users SET pin_hash = ?, pin_salt = ?, pin_set_at = ?, pin_fails = 0, pin_castigos = 0, pin_locked_until = NULL WHERE id = ?`
+    ).bind(hash, salt, now(), user.id).run();
+    return json({ ok: true });
+  }
 
   // ----- users (admin) -----
   if (seg[0] === 'users') {
@@ -365,10 +553,13 @@ async function api(req, env, url, path) {
     if (!pid || !(await canAccessProject(env, user, pid))) return err('sin acceso', 403);
     if (seg[2] === 'elements' && m === 'POST') {
       const b = await req.json();
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
+      if (!isStaff(user)) return err('Los elementos los levanta el supervisor.', 403);
       if (!b.name) return err('nombre requerido');
-      const id = uid();
+      const id = b.op_id && /^[0-9a-f-]{36}$/i.test(b.op_id) ? b.op_id : uid();
       await env.DB.prepare(`INSERT INTO elements (id, plan_id, code, type, name, resp, x, y, created_by) VALUES (?,?,?,?,?,?,?,?,?)`)
         .bind(id, seg[1], b.code || '', b.type || 'Otro', b.name, b.resp || '', +b.x, +b.y, user.id).run();
+      await apunta(env, b.op_id);
       return json({ ok: true, id });
     }
     if (!seg[2] && m === 'PATCH') {
@@ -422,6 +613,8 @@ async function api(req, env, url, path) {
     if (seg[2] === 'log' && m === 'POST') {
       if (!isStaff(user)) return err('El contratista sube su evidencia en el pendiente que le toca, no en la bitácora.', 403);
       const fd = await req.formData();
+      const op = String(fd.get('op_id') || '');
+      if (await yaHecha(env, op)) return json({ ok: true, repetida: true });
       const text = String(fd.get('text') || '').trim();
       const files = fd.getAll('photos');
       if (!text && !files.length) return err('texto o foto requerido');
@@ -429,11 +622,14 @@ async function api(req, env, url, path) {
       const kind = ['trabajo', 'arreglo', 'acuerdo'].includes(fd.get('kind')) ? fd.get('kind') : 'trabajo';
       await env.DB.prepare(`INSERT INTO log_entries (id, element_id, user_id, kind, text) VALUES (?,?,?,?,?)`).bind(id, eid, user.id, kind, text).run();
       const photos = await savePhotos(env, user, 'log', id, files);
+      await apunta(env, op);
       return json({ ok: true, id, photos });
     }
     if (seg[2] === 'punch' && m === 'POST') {
       if (!isStaff(user)) return err('Los pendientes los levanta el supervisor.', 403);
       const fd = await req.formData();
+      const op = String(fd.get('op_id') || '');
+      if (await yaHecha(env, op)) return json({ ok: true, repetida: true });
       const title = String(fd.get('title') || '').trim();
       if (!title) return err('título requerido');
       // A quién le toca. Tiene que ser alguien que ya esté en esta obra: si no,
@@ -447,6 +643,7 @@ async function api(req, env, url, path) {
       await env.DB.prepare(`INSERT INTO punch_items (id, element_id, title, description, resp, due_date, created_by, assignee_id) VALUES (?,?,?,?,?,?,?,?)`)
         .bind(id, eid, title, fd.get('description') || '', fd.get('resp') || '', fd.get('due_date') || null, user.id, asignado).run();
       const photos = await savePhotos(env, user, 'punch', id, fd.getAll('photos'));
+      await apunta(env, op);
       return json({ ok: true, id, photos });
     }
   }
@@ -462,6 +659,7 @@ async function api(req, env, url, path) {
       // quedó bien. El contratista tiene su propia puerta, la de evidencia.
       if (!isStaff(user)) return err('Sube tu evidencia y márcalo terminado; cerrarlo lo hace el supervisor.', 403);
       const b = await req.json();
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
       const st = ['pend', 'proc', 'ok'].includes(b.status) ? b.status : null;
       if (b.assignee_id !== undefined && b.assignee_id) {
         const ok = await env.DB.prepare(`SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?`).bind(pid, b.assignee_id).first();
@@ -472,6 +670,7 @@ async function api(req, env, url, path) {
           assignee_id = COALESCE(?, assignee_id),
           status = COALESCE(?, status), done_at = CASE WHEN ? = 'ok' THEN ? WHEN ? IS NOT NULL THEN NULL ELSE done_at END, done_by = CASE WHEN ? = 'ok' THEN ? ELSE done_by END WHERE id = ?`
       ).bind(b.title ?? null, b.description ?? null, b.resp ?? null, b.due_date ?? null, b.assignee_id ?? null, st, st, now(), st, st, user.id, kid).run();
+      await apunta(env, b.op_id);
       return json({ ok: true });
     }
     if (seg[2] === 'photos' && m === 'POST') {
@@ -488,6 +687,8 @@ async function api(req, env, url, path) {
       const k = await env.DB.prepare(`SELECT * FROM punch_items WHERE id = ?`).bind(kid).first();
       if (!k) return err('no encontrado', 404);
       const fd = await req.formData();
+      const op = String(fd.get('op_id') || '');
+      if (await yaHecha(env, op)) return json({ ok: true, repetida: true });
       const nota = String(fd.get('nota') || '').trim();
       const fotos = fd.getAll('photos').filter((f) => f instanceof File && f.size);
       if (!nota && !fotos.length) return err('Sube al menos una foto o escribe qué hiciste.');
@@ -499,6 +700,7 @@ async function api(req, env, url, path) {
       if (k.status === 'pend') {
         await env.DB.prepare(`UPDATE punch_items SET status = 'proc' WHERE id = ?`).bind(kid).run();
       }
+      await apunta(env, op);
       return json({ ok: true, photos, status: k.status === 'ok' ? 'ok' : 'proc' });
     }
     if (!seg[2] && m === 'DELETE') {
@@ -522,5 +724,5 @@ async function api(req, env, url, path) {
 }
 
 function pubUser(u) {
-  return { id: u.id, email: u.email, name: u.name, role: u.role, company: u.company };
+  return { id: u.id, email: u.email, name: u.name, role: u.role, company: u.company, tiene_pin: !!u.pin_hash };
 }

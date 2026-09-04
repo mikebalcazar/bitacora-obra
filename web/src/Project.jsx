@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { api, elStatus, fmtD, isLate, rasterizePlan } from './api.js';
+import { api, leer, escribir, hayRed, fileUrl, elStatus, fmtD, isLate, rasterizePlan } from './api.js';
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
 import ElementPanel from './ElementPanel.jsx';
@@ -29,13 +29,31 @@ export default function Project({ id }) {
 
   const load = useCallback(async () => {
     try {
-      const r = await api.get(`/projects/${id}`);
+      const r = await leer(`/projects/${id}`);
       setData(r);
       setPlanId((p) => (p && r.plans.some((x) => x.id === p) ? p : r.plans[0]?.id || null));
     } catch (e) { toast(e.message); go('/'); }
   }, [id]);
-  useEffect(() => { load(); api.get('/projects').then((r) => setProjects(r.projects)).catch(() => {}); }, [load]);
-  useEffect(() => { if (drawer) api.get(`/projects/${id}/punch`).then((r) => setOpenItems(r.items)).catch((e) => toast(e.message)); }, [drawer, data]);
+  useEffect(() => { load(); leer('/projects').then((r) => setProjects(r.projects)).catch(() => {}); }, [load]);
+
+  // Bajar los planos de la obra en cuanto se abre, con señal. Se quedan en la
+  // caché del navegador, así que el día que se entre al sótano el plano ya está
+  // ahí. Un plano que no se puede abrir en obra no sirve de nada.
+  useEffect(() => {
+    if (!data || !hayRed()) return;
+    let vivo = true;
+    (async () => {
+      for (const p of data.plans) {
+        if (!vivo) return;
+        for (const llave of [p.image_key, p.source_key]) {
+          if (!llave) continue;
+          try { await fetch(fileUrl(llave), { credentials: 'same-origin' }); } catch {}
+        }
+      }
+    })();
+    return () => { vivo = false; };
+  }, [data?.plans?.length, data?.project?.id]);
+  useEffect(() => { if (drawer) leer(`/projects/${id}/punch`).then((r) => setOpenItems(r.items)).catch((e) => toast(e.message)); }, [drawer, data]);
 
   const plan = data?.plans.find((p) => p.id === planId) || null;
   const elements = useMemo(() => (data ? data.elements.filter((e) => e.plan_id === planId) : []), [data, planId]);
@@ -53,9 +71,27 @@ export default function Project({ id }) {
     setAdding(false); setNewAt({ x, y });
   }
   async function createElement(f) {
-    const r = await api.post(`/plans/${planId}/elements`, { ...f, x: newAt.x, y: newAt.y }).catch((e) => toast(e.message));
+    const punto = { ...f, x: newAt.x, y: newAt.y };
+    const r = await escribir({
+      ruta: `/plans/${planId}/elements`,
+      cuerpo: punto,
+      // Sin señal el pin aparece igual, con sus ceros: para quien lo clavó ya
+      // está puesto, y pedírselo otra vez mañana es la manera de que no lo haga.
+      parche: {
+        clave: `/projects/${id}`,
+        fn: (d) => {
+          d.elements = [...(d.elements || []), {
+            ...punto, id: 'local-' + Date.now(), plan_id: planId,
+            n_pend: 0, n_proc: 0, n_total: 0, n_log: 0, created_at: new Date().toISOString(), __pendiente: true,
+          }];
+          return d;
+        },
+      },
+    }).catch((e) => { toast(e.message); return null; });
     if (!r) return;
-    setNewAt(null); await load(); selectEl(r.id);
+    setNewAt(null); await load();
+    if (r.subido && r.r?.id) selectEl(r.r.id);
+    else toast('Sin señal: el elemento se sube solo cuando vuelva.');
   }
   async function uploadPlan(file, name) {
     setUploading(true);
