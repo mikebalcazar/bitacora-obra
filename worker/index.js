@@ -73,10 +73,15 @@ async function projectOfPunch(env, punchId) {
 
 // ---------- PIN ----------
 // Seis dígitos son un millón de combinaciones: se guardan derivados, nunca en
-// claro, y probar a ciegas se castiga con esperas que crecen. PBKDF2 con
-// doscientas mil vueltas hace que cada intento cueste, aquí y para quien
-// quisiera probar el millón con la base robada en la mano.
-const VUELTAS = 200000;
+// claro, y probar a ciegas se castiga con esperas que crecen. Las vueltas de
+// PBKDF2 hacen que cada intento cueste, aquí y para quien quisiera probar el
+// millón con la base robada en la mano.
+//
+// Cien mil es el techo: Cloudflare no ejecuta PBKDF2 con más y responde
+// "iteration counts above 100000 are not supported". Lo que de verdad frena a
+// quien prueba a ciegas contra el servidor no son las vueltas, son los bloqueos
+// que crecen; las vueltas son para el día que alguien se lleve la base.
+const VUELTAS = 100000;
 const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 
 async function derivaPin(pin, salt) {
