@@ -59,12 +59,17 @@ export async function compressImage(file, max = 1600, q = 0.82) {
 // archivo entre en 8 MB, y nunca se pasa a JPEG: sus manchas alrededor de cada
 // línea negra son justo lo que arruina un plano.
 export async function rasterizePlan(file) {
-  const MEDIDAS = [5000, 4000, 3200, 2600];
   const LIMITE = 8 * 1024 * 1024;
   // Safari en iPhone no dibuja lienzos de más de 16.7 millones de píxeles: se
   // queda en blanco sin avisar. Por eso el área también manda, no solo el lado.
   const AREA_MAX = 16 * 1024 * 1024;
   const pdf = file.type === 'application/pdf' || esPdf(file.name);
+  // Un PNG de 5000 px se descomprime en unos 70 MB de memoria al mostrarlo: en
+  // un celular, sumado al PDF que se dibuja encima, es lo que tumba la pestaña.
+  // El PDF no necesita que su imagen sea enorme —para leer de cerca está la capa
+  // nítida—, así que se le pide menos. Una imagen suelta no tiene esa capa y es
+  // todo lo que va a haber, por eso se le deja más.
+  const MEDIDAS = pdf ? [3600, 3000, 2600] : [4200, 3400, 2600];
   let pagina, bitmap, ancho1, alto1;
 
   if (pdf) {
