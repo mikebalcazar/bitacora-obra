@@ -59,6 +59,18 @@ jobs:
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
+      # Y se deja donde el propio sitio la pueda entregar: quien va a instalarla
+      # todavía no tiene sesión —muchas veces es alguien de obra al que le
+      # pasaron la liga— y bajarla de aquí exigiría cuenta de GitHub.
+      - name: Publicar la app en la página
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -e
+          APK=$(ls android/app/build/outputs/apk/debug/*.apk | head -1)
+          npx wrangler r2 object put bitacora-obra-files/apps/android.apk \
+            --file="$APK" --content-type=application/vnd.android.package-archive --remote
+
   windows:
     name: Windows (instalador)
     runs-on: windows-latest
@@ -97,3 +109,11 @@ jobs:
           name: bitacora-obra-windows
           path: apps/windows/salida/*.exe
           if-no-files-found: error
+
+      - name: Publicar la app en la página
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem apps/windows/salida/*.exe | Select-Object -First 1).FullName
+          npx wrangler r2 object put bitacora-obra-files/apps/windows.exe --file="$exe" --content-type=application/vnd.microsoft.portable-executable --remote

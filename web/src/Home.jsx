@@ -52,31 +52,56 @@ export default function Home() {
   );
 }
 
-// Cambiar el PIN sin salir: se pide el nuevo dos veces, y el servidor rechaza
-// los que se adivinan de una.
+// Cambiar el PIN sin salir. Igual que al darse de alta: se teclea, se pasa de
+// pantalla y se vuelve a teclear de memoria, con los números ocultos. Confirmar
+// teniendo el primero a la vista no confirma nada.
 function CambiarPin({ onClose }) {
   const { toast } = useApp();
   const [a, setA] = useState('');
   const [b, setB] = useState('');
+  const [paso, setPaso] = useState('elige');
   const [busy, setBusy] = useState(false);
   const limpio = (v) => v.replace(/\D/g, '').slice(0, 6);
 
-  async function guardar(e) {
+  async function enviar(e) {
     e.preventDefault();
-    if (a !== b) return toast('Los dos PIN no son iguales.');
+    if (paso === 'elige') { setB(''); setPaso('confirma'); return; }
+    if (a !== b) {
+      setA(''); setB(''); setPaso('elige');
+      return toast('No coincidieron. Vamos otra vez.');
+    }
     setBusy(true);
     try { await api.post('/pin', { pin: a }); toast('PIN cambiado'); onClose(); }
-    catch (x) { toast(x.message); } finally { setBusy(false); }
+    catch (x) { toast(x.message); setA(''); setB(''); setPaso('elige'); }
+    finally { setBusy(false); }
   }
 
+  const eligiendo = paso === 'elige';
   return (
     <div className="ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <form className="modal" onSubmit={guardar}>
-        <h2>Cambiar mi PIN</h2>
-        <div className="field"><label>PIN nuevo</label><input className="code" inputMode="numeric" autoFocus required value={a} onChange={(e) => setA(limpio(e.target.value))} /></div>
-        <div className="field"><label>Otra vez</label><input className="code" inputMode="numeric" required value={b} onChange={(e) => setB(limpio(e.target.value))} /></div>
-        <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>Seis dígitos. Nada de 123456 ni seis veces el mismo número.</p>
-        <div className="acts"><button type="button" className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || a.length !== 6 || b.length !== 6}>{busy ? 'Guardando…' : 'Guardar'}</button></div>
+      <form className="modal" onSubmit={enviar}>
+        <h2>{eligiendo ? 'Tu PIN nuevo' : 'Otra vez'}</h2>
+        <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>
+          {eligiendo
+            ? 'Seis dígitos. Nada de 123456 ni seis veces el mismo número.'
+            : 'Tecléalo de nuevo, de memoria. Así sabemos que te lo vas a acordar mañana.'}
+        </p>
+        <input
+          key={paso}
+          className="code"
+          type="password"
+          inputMode="numeric"
+          autoFocus
+          required
+          value={eligiendo ? a : b}
+          onChange={(e) => (eligiendo ? setA(limpio(e.target.value)) : setB(limpio(e.target.value)))}
+        />
+        <div className="acts">
+          <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+          <button className="btn primary" disabled={busy || (eligiendo ? a.length !== 6 : b.length !== 6)}>
+            {busy ? 'Guardando…' : eligiendo ? 'Continuar' : 'Guardar'}
+          </button>
+        </div>
       </form>
     </div>
   );
