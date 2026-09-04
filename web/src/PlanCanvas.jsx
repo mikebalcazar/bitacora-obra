@@ -34,10 +34,12 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
   const [falla, setFalla] = useState(false);
   const [quieto, setQuieto] = useState(0);
 
-  // Tope de la escala a la que se le pide la página al PDF. Aunque el lienzo sea
-  // chico, pdf.js trabaja sobre el tamaño de la página: pedírsela enorme también
-  // cuesta memoria. Pasado el tope se dibuja al máximo y se estira lo que falte.
-  const PAGINA_MAX = 8000;
+  // Tope de la escala a la que se le pide la página al PDF. Es un seguro, no una
+  // política: lo que tumbaba la pestaña era la imagen estirada por CSS, no
+  // pdf.js, y el lienzo donde dibuja mide lo que la pantalla pase lo que pase.
+  // Puesto bajo, la hoja del PDF salía diminuta y había que estirarla tanto que
+  // se veía igual de borrosa que la imagen: para eso, mejor no dibujarla.
+  const PAGINA_MAX = 60000;
   const punto = () => Math.min(window.devicePixelRatio || 1, 2);
 
   const fit = () => {
@@ -143,9 +145,14 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
 
     const hv = hojaVista.current;
     if (hoja.current && hv && !falla) {
+      // La hoja se dibujó con la vista `hv` y, si hubo que bajarle la escala al
+      // PDF, a un tamaño `hv.estirar` veces menor que la pantalla. Al pegarla
+      // van las dos cuentas: el estirado con que se dibujó, y cuánto se movió la
+      // vista desde entonces. Sin lo primero se pega chiquita en una esquina.
       const k = vv.s / hv.s;
+      const e = hv.estirar || 1;
       ctx.drawImage(hoja.current, 0, 0, hoja.current.width, hoja.current.height,
-        (vv.x - hv.x * k) * p, (vv.y - hv.y * k) * p, hoja.current.width * k, hoja.current.height * k);
+        (vv.x - hv.x * k) * p, (vv.y - hv.y * k) * p, hoja.current.width * e * k, hoja.current.height * e * k);
     }
   }
 
@@ -198,7 +205,7 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
       return;
     }
     if (tarea.current !== t) return;
-    hojaVista.current = vv;
+    hojaVista.current = { ...vv, estirar };
     pinta();
   }
 
