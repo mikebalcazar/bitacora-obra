@@ -1,5 +1,5 @@
 import React, { useEffect, useState, createContext, useContext } from 'react';
-import { api, setToken } from './api.js';
+import { api, setToken, alCambiarRed, vaciaFila, hayRed } from './api.js';
 import Login from './Login.jsx';
 import Home from './Home.jsx';
 import Project from './Project.jsx';
@@ -17,6 +17,17 @@ export default function App() {
   useEffect(() => { const f = () => setRoute(parseHash()); window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, []);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2800); return () => clearTimeout(t); }, [toast]);
 
+  // Estado de la señal y de lo que falta subir. Se vacía la fila al abrir la
+  // app, no solo cuando el navegador avisa que volvió la red: en obra la señal
+  // va y viene sin que nadie se entere.
+  const [red, setRed] = useState({ faltan: 0, red: hayRed() });
+  useEffect(() => {
+    const quita = alCambiarRed(setRed);
+    vaciaFila();
+    const cada = setInterval(() => { if (hayRed()) vaciaFila(); }, 60000);
+    return () => { quita(); clearInterval(cada); };
+  }, []);
+
   const ctx = {
     user,
     go: (h) => { location.hash = h; },
@@ -32,7 +43,19 @@ export default function App() {
   else if (route.page === 'admin') view = <Admin />;
   else view = <Home />;
 
-  return <Ctx.Provider value={ctx}>{view}{toast && <div className="toast">{toast}</div>}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={ctx}>
+      {view}
+      {(!red.red || red.faltan > 0) && (
+        <div className={'senal' + (red.red ? ' subiendo' : '')} onClick={() => vaciaFila()}>
+          {!red.red && <span>Sin señal · lo que registres se guarda aquí</span>}
+          {red.red && red.faltan > 0 && <span>Subiendo {red.faltan} {red.faltan === 1 ? 'cambio' : 'cambios'}…</span>}
+          {!red.red && red.faltan > 0 && <b>{red.faltan} por subir</b>}
+        </div>
+      )}
+      {toast && <div className="toast">{toast}</div>}
+    </Ctx.Provider>
+  );
 }
 
 function parseHash() {

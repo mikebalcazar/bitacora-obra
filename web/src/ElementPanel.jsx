@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, fileUrl, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
+import { api, leer, escribir, fileUrl, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
 
 export default function ElementPanel({ elementId, flash, plan, staff, user, members = [], onChanged, onClose }) {
@@ -9,7 +9,7 @@ export default function ElementPanel({ elementId, flash, plan, staff, user, memb
   const [lb, setLb] = useState(null);
   const [edit, setEdit] = useState(false);
 
-  const load = () => elementId && api.get(`/elements/${elementId}`).then(setD).catch((e) => toast(e.message));
+  const load = () => elementId && leer(`/elements/${elementId}`).then(setD).catch((e) => toast(e.message));
   useEffect(() => { setD(null); load(); }, [elementId]);
   useEffect(() => { if (flash) setTab('punch'); }, [flash]);
   useEffect(() => { if (flash && d) setTimeout(() => document.querySelector(`[data-k="${flash}"]`)?.scrollIntoView({ block: 'center' }), 50); }, [flash, d]);
@@ -85,10 +85,24 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
     if (!txt.trim() && !pending.length) return;
     setBusy(true);
     try {
-      const fd = new FormData(); fd.append('kind', kind); fd.append('text', txt.trim());
-      pending.forEach((p) => fd.append('photos', p.file));
-      await api.form(`/elements/${e.id}/log`, fd);
+      const r = await escribir({
+        ruta: `/elements/${e.id}/log`,
+        campos: { kind, text: txt.trim() },
+        archivos: pending.map((p) => p.file),
+        parche: {
+          clave: `/elements/${e.id}`,
+          fn: (d) => {
+            d.log = [...(d.log || []), {
+              id: 'local-' + Date.now(), kind, text: txt.trim(), photos: [],
+              user_name: user.name, user_role: user.role, user_id: user.id,
+              created_at: new Date().toISOString(), __pendiente: true,
+            }];
+            return d;
+          },
+        },
+      });
       setTxt(''); clear(); onChanged();
+      if (!r.subido) toast('Sin señal: se sube solo cuando vuelva.');
     } catch (x) { toast(x.message); } finally { setBusy(false); }
   }
   async function delPhoto(p) { if (!confirm('¿Quitar esta foto?')) return; await api.del(`/photos/${p.id}`).catch((x) => toast(x.message)); onChanged(); }
@@ -139,17 +153,33 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff, members }) {
   async function cycle(k) {
     if (!staff) return;   // el contratista marca terminado con evidencia, no a dedo
     const next = k.status === 'pend' ? 'proc' : k.status === 'proc' ? 'ok' : 'pend';
-    await api.patch(`/punch/${k.id}`, { status: next }).catch((x) => toast(x.message)); onChanged();
+    await escribir({
+      metodo: 'PATCH', ruta: `/punch/${k.id}`, cuerpo: { status: next },
+      parche: { clave: `/elements/${e.id}`, fn: (d) => { d.punch = (d.punch || []).map((x) => x.id === k.id ? { ...x, status: next, __pendiente: true } : x); return d; } },
+    }).catch((x) => toast(x.message));
+    onChanged();
   }
   async function create() {
     if (!f.title.trim()) return;
     setBusy(true);
     try {
-      const fd = new FormData(); fd.append('title', f.title.trim()); fd.append('resp', f.resp); fd.append('due_date', f.due_date);
-      if (f.assignee_id) fd.append('assignee_id', f.assignee_id);
-      pending.forEach((p) => fd.append('photos', p.file));
-      await api.form(`/elements/${e.id}/punch`, fd);
+      const r = await escribir({
+        ruta: `/elements/${e.id}/punch`,
+        campos: { title: f.title.trim(), resp: f.resp, due_date: f.due_date, ...(f.assignee_id ? { assignee_id: f.assignee_id } : {}) },
+        archivos: pending.map((p) => p.file),
+        parche: {
+          clave: `/elements/${e.id}`,
+          fn: (d) => {
+            d.punch = [...(d.punch || []), {
+              id: 'local-' + Date.now(), title: f.title.trim(), status: 'pend', resp: f.resp,
+              due_date: f.due_date, photos: [], created_at: new Date().toISOString(), __pendiente: true,
+            }];
+            return d;
+          },
+        },
+      });
       setF({ ...f, title: '' }); clear(); setAdding(false); onChanged();
+      if (!r.subido) toast('Sin señal: el pendiente se sube solo cuando vuelva.');
     } catch (x) { toast(x.message); } finally { setBusy(false); }
   }
   async function addPhotos(k, files) {
@@ -171,7 +201,7 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff, members }) {
               <div className="st" onClick={() => cycle(k)} title="Cambiar estado">{k.status === 'ok' ? '✓' : k.status === 'proc' ? '…' : ''}</div>
               <div>
                 <div className="t">{k.title}</div>
-                <div className="sub"><span className={'pill ' + k.status}>{ST[k.status]}</span>{isLate(k) && <span className="pill late">Vencido</span>}<span>{k.status === 'ok' ? 'Resuelto ' + fmtD(k.done_at) : 'Límite ' + fmtD(k.due_date)}</span>{staff && k.assignee_name && <span>{k.assignee_name}{k.assignee_company ? ` · ${k.assignee_company}` : ''}</span>}{!k.assignee_name && k.resp && <span>{k.resp}</span>}</div>
+                <div className="sub"><span className={'pill ' + k.status}>{ST[k.status]}</span>{k.__pendiente && <span className="pill">Por subir</span>}{isLate(k) && <span className="pill late">Vencido</span>}<span>{k.status === 'ok' ? 'Resuelto ' + fmtD(k.done_at) : 'Límite ' + fmtD(k.due_date)}</span>{staff && k.assignee_name && <span>{k.assignee_name}{k.assignee_company ? ` · ${k.assignee_company}` : ''}</span>}{!k.assignee_name && k.resp && <span>{k.resp}</span>}</div>
                 <Photos photos={k.photos} setLb={setLb} onDelete={staff ? delPhoto : null} />
                 {evid === k.id ? (
                   <Evidencia k={k} onListo={() => { setEvid(null); onChanged(); }} onCancel={() => setEvid(null)} />
@@ -226,11 +256,13 @@ function Evidencia({ k, onListo, onCancel }) {
     if (!nota.trim() && !pending.length) return;
     setBusy(true);
     try {
-      const fd = new FormData();
-      fd.append('nota', nota.trim());
-      pending.forEach((p) => fd.append('photos', p.file));
-      await api.form(`/punch/${k.id}/evidencia`, fd);
+      const r = await escribir({
+        ruta: `/punch/${k.id}/evidencia`,
+        campos: { nota: nota.trim() },
+        archivos: pending.map((p) => p.file),
+      });
       clear(); onListo();
+      if (!r.subido) toast('Sin señal: tu evidencia se sube sola cuando vuelva.');
     } catch (x) { toast(x.message); } finally { setBusy(false); }
   }
 

@@ -139,6 +139,22 @@ async function sendMail(env, to, subject, html) {
   return { ok: true };
 }
 
+// ---------- operaciones repetidas ----------
+// Lo que se escribió sin señal llega con un identificador hecho en el
+// dispositivo. Si la señal se cayó justo al terminar de subir, nadie supo si
+// llegó, y al reintentar llega otra vez con el mismo identificador: se reconoce
+// y no se repite. Sin esto, una foto subida con mala señal aparecería tres
+// veces en la bitácora.
+async function yaHecha(env, opId) {
+  if (!opId) return false;
+  const r = await env.DB.prepare(`SELECT 1 FROM operaciones WHERE id = ?`).bind(opId).first();
+  return !!r;
+}
+async function apunta(env, opId) {
+  if (!opId) return;
+  await env.DB.prepare(`INSERT OR IGNORE INTO operaciones (id, cuando) VALUES (?,?)`).bind(opId, now()).run();
+}
+
 // ---------- photos ----------
 async function savePhotos(env, user, ownerType, ownerId, files) {
   const out = [];
@@ -499,10 +515,13 @@ async function api(req, env, url, path) {
     if (!pid || !(await canAccessProject(env, user, pid))) return err('sin acceso', 403);
     if (seg[2] === 'elements' && m === 'POST') {
       const b = await req.json();
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
+      if (!isStaff(user)) return err('Los elementos los levanta el supervisor.', 403);
       if (!b.name) return err('nombre requerido');
-      const id = uid();
+      const id = b.op_id && /^[0-9a-f-]{36}$/i.test(b.op_id) ? b.op_id : uid();
       await env.DB.prepare(`INSERT INTO elements (id, plan_id, code, type, name, resp, x, y, created_by) VALUES (?,?,?,?,?,?,?,?,?)`)
         .bind(id, seg[1], b.code || '', b.type || 'Otro', b.name, b.resp || '', +b.x, +b.y, user.id).run();
+      await apunta(env, b.op_id);
       return json({ ok: true, id });
     }
     if (!seg[2] && m === 'PATCH') {
@@ -556,6 +575,8 @@ async function api(req, env, url, path) {
     if (seg[2] === 'log' && m === 'POST') {
       if (!isStaff(user)) return err('El contratista sube su evidencia en el pendiente que le toca, no en la bitácora.', 403);
       const fd = await req.formData();
+      const op = String(fd.get('op_id') || '');
+      if (await yaHecha(env, op)) return json({ ok: true, repetida: true });
       const text = String(fd.get('text') || '').trim();
       const files = fd.getAll('photos');
       if (!text && !files.length) return err('texto o foto requerido');
@@ -563,11 +584,14 @@ async function api(req, env, url, path) {
       const kind = ['trabajo', 'arreglo', 'acuerdo'].includes(fd.get('kind')) ? fd.get('kind') : 'trabajo';
       await env.DB.prepare(`INSERT INTO log_entries (id, element_id, user_id, kind, text) VALUES (?,?,?,?,?)`).bind(id, eid, user.id, kind, text).run();
       const photos = await savePhotos(env, user, 'log', id, files);
+      await apunta(env, op);
       return json({ ok: true, id, photos });
     }
     if (seg[2] === 'punch' && m === 'POST') {
       if (!isStaff(user)) return err('Los pendientes los levanta el supervisor.', 403);
       const fd = await req.formData();
+      const op = String(fd.get('op_id') || '');
+      if (await yaHecha(env, op)) return json({ ok: true, repetida: true });
       const title = String(fd.get('title') || '').trim();
       if (!title) return err('título requerido');
       // A quién le toca. Tiene que ser alguien que ya esté en esta obra: si no,
@@ -581,6 +605,7 @@ async function api(req, env, url, path) {
       await env.DB.prepare(`INSERT INTO punch_items (id, element_id, title, description, resp, due_date, created_by, assignee_id) VALUES (?,?,?,?,?,?,?,?)`)
         .bind(id, eid, title, fd.get('description') || '', fd.get('resp') || '', fd.get('due_date') || null, user.id, asignado).run();
       const photos = await savePhotos(env, user, 'punch', id, fd.getAll('photos'));
+      await apunta(env, op);
       return json({ ok: true, id, photos });
     }
   }
@@ -596,6 +621,7 @@ async function api(req, env, url, path) {
       // quedó bien. El contratista tiene su propia puerta, la de evidencia.
       if (!isStaff(user)) return err('Sube tu evidencia y márcalo terminado; cerrarlo lo hace el supervisor.', 403);
       const b = await req.json();
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
       const st = ['pend', 'proc', 'ok'].includes(b.status) ? b.status : null;
       if (b.assignee_id !== undefined && b.assignee_id) {
         const ok = await env.DB.prepare(`SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?`).bind(pid, b.assignee_id).first();
@@ -606,6 +632,7 @@ async function api(req, env, url, path) {
           assignee_id = COALESCE(?, assignee_id),
           status = COALESCE(?, status), done_at = CASE WHEN ? = 'ok' THEN ? WHEN ? IS NOT NULL THEN NULL ELSE done_at END, done_by = CASE WHEN ? = 'ok' THEN ? ELSE done_by END WHERE id = ?`
       ).bind(b.title ?? null, b.description ?? null, b.resp ?? null, b.due_date ?? null, b.assignee_id ?? null, st, st, now(), st, st, user.id, kid).run();
+      await apunta(env, b.op_id);
       return json({ ok: true });
     }
     if (seg[2] === 'photos' && m === 'POST') {
@@ -622,6 +649,8 @@ async function api(req, env, url, path) {
       const k = await env.DB.prepare(`SELECT * FROM punch_items WHERE id = ?`).bind(kid).first();
       if (!k) return err('no encontrado', 404);
       const fd = await req.formData();
+      const op = String(fd.get('op_id') || '');
+      if (await yaHecha(env, op)) return json({ ok: true, repetida: true });
       const nota = String(fd.get('nota') || '').trim();
       const fotos = fd.getAll('photos').filter((f) => f instanceof File && f.size);
       if (!nota && !fotos.length) return err('Sube al menos una foto o escribe qué hiciste.');
@@ -633,6 +662,7 @@ async function api(req, env, url, path) {
       if (k.status === 'pend') {
         await env.DB.prepare(`UPDATE punch_items SET status = 'proc' WHERE id = ?`).bind(kid).run();
       }
+      await apunta(env, op);
       return json({ ok: true, photos, status: k.status === 'ok' ? 'ok' : 'proc' });
     }
     if (!seg[2] && m === 'DELETE') {

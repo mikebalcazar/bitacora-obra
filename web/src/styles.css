@@ -199,3 +199,11 @@ a{color:var(--accent)}
   .pi .photos .ph{width:30%}
   .stage .tools{flex-wrap:wrap}
 }
+
+/* Aviso de señal. Va abajo, encima de todo, y no tapa la barra de navegación
+   del celular. Se puede tocar para reintentar ahora mismo. */
+.senal{position:fixed;left:12px;right:12px;bottom:calc(70px + var(--sab));z-index:60;display:flex;gap:10px;
+  align-items:center;justify-content:center;padding:10px 14px;border-radius:12px;cursor:pointer;
+  background:#3a3f45;color:#fff;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.22)}
+.senal.subiendo{background:var(--accent)}
+.senal b{font-weight:600}
