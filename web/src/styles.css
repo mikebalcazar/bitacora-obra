@@ -184,11 +184,7 @@ a{color:var(--accent)}
 
 /* mobile */
 .mnav{display:none}
-/* Lo que solo tiene sentido en el celular, donde no hay barra lateral. */
-.solo-m{display:none}
-
 @media (max-width:900px){
-  .solo-m{display:flex}
   .app{grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(0,1fr) auto}
   .top{gap:8px;padding:0 10px}
   .top select{flex:1;max-width:none}
@@ -260,3 +256,14 @@ a{color:var(--accent)}
 .legend .dot.aro.pend{border-color:var(--pend)}
 .legend .dot.aro.proc{border-color:var(--proc)}
 .legend .dot.aro.ok{border-color:var(--ok)}
+
+/* Los interruptores de tipo viven en la barra lateral. En el celular no hay
+   barra lateral, así que ahí —y solo ahí— salen encima del plano.
+   Va con las dos clases a propósito: así gana por ser más específica y no por
+   estar más abajo, y sigue valiendo aunque alguien mueva el archivo de sitio.
+   La versión de escritorio del sitio y la app de escritorio son la misma
+   pantalla, y así se ven igual. */
+.swatches.solo-m{display:none}
+@media (max-width:900px){
+  .swatches.solo-m{display:flex}
+}
