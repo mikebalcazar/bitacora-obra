@@ -136,7 +136,7 @@ export default function Project({ id }) {
   return (
     <div className={cls}>
       <div className="top">
-        <button className="logo" onClick={() => go('/')} title="Proyectos"><i /><span>Bitácora</span></button>
+        <button className="logo" onClick={() => go('/')} title="Proyectos"><i /><span>t101pano</span></button>
         <select value={id} onChange={(e) => go(`/p/${e.target.value}`)}>
           {(projects.length ? projects : [data.project]).map((p) => <option key={p.id} value={p.id}>{p.name}{p.client ? ` · ${p.client}` : ''}</option>)}
         </select>

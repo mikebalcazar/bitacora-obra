@@ -1,6 +1,6 @@
 {
   "appId": "mx.forespot.bitacoraobra",
-  "appName": "Bitácora de Obra",
+  "appName": "t101pano",
   "webDir": "web/dist",
   "android": {
     "allowMixedContent": false

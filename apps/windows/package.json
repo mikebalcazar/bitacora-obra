@@ -2,7 +2,7 @@
   "name": "bitacora-obra-windows",
   "version": "0.1.0",
   "private": true,
-  "description": "Bitácora de Obra para Windows",
+  "description": "t101pano para Windows",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -14,7 +14,7 @@
   },
   "build": {
     "appId": "mx.forespot.bitacoraobra",
-    "productName": "Bitacora de Obra",
+    "productName": "t101pano",
     "directories": { "output": "salida" },
     "files": ["main.js", "dist/**"],
     "win": { "target": ["nsis"] },

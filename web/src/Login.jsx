@@ -109,7 +109,7 @@ export default function Login({ onLogin }) {
   return (
     <div className="center">
       <form className="login" onSubmit={alEnviar}>
-        <div className="logo"><i />Bitácora de Obra</div>
+        <div className="logo"><i />t101pano</div>
 
         {paso === 'pin' && (
           <>

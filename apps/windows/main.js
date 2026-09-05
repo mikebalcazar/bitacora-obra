@@ -21,7 +21,7 @@ function ventana() {
     minWidth: 380,
     backgroundColor: '#EEF0F2',
     autoHideMenuBar: true,
-    title: 'Bitácora de Obra',
+    title: 't101pano',
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   win.loadURL('app://bitacora/');
