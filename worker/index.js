@@ -596,6 +596,7 @@ async function api(req, env, url, path) {
       if (!isStaff(user)) return err('Los elementos los levanta el supervisor.', 403);
       if (!b.name) return err('nombre requerido');
       const id = b.op_id && /^[0-9a-f-]{36}$/i.test(b.op_id) ? b.op_id : uid();
+      // Nace en producción: todavía no hay nada entregado que corregir.
       await env.DB.prepare(`INSERT INTO elements (id, plan_id, code, type, name, resp, x, y, created_by) VALUES (?,?,?,?,?,?,?,?,?)`)
         .bind(id, seg[1], b.code || '', b.type || 'Otro', b.name, b.resp || '', +b.x, +b.y, user.id).run();
       await apunta(env, b.op_id);
@@ -649,6 +650,23 @@ async function api(req, env, url, path) {
       await env.DB.prepare(`DELETE FROM elements WHERE id = ?`).bind(eid).run();
       return json({ ok: true });
     }
+    // Entregar el ítem, o devolverlo a producción si se entregó por error.
+    // Quién y cuándo quedan escritos: esa fecha es la que después nadie recuerda.
+    if (seg[2] === 'fase' && m === 'POST') {
+      if (!isStaff(user)) return err('Entregar un ítem es del supervisor.', 403);
+      const b = await req.json();
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
+      const fase = b.fase === 'punchlist' ? 'punchlist' : 'produccion';
+      if (fase === 'produccion') {
+        // Devolver a producción no borra los pendientes que ya se levantaron: se
+        // quedan ahí, y vuelven a la vista en cuanto se entregue otra vez.
+        await env.DB.prepare(`UPDATE elements SET fase = 'produccion', entregado_en = NULL, entregado_por = NULL WHERE id = ?`).bind(eid).run();
+      } else {
+        await env.DB.prepare(`UPDATE elements SET fase = 'punchlist', entregado_en = ?, entregado_por = ? WHERE id = ?`).bind(now(), user.id, eid).run();
+      }
+      await apunta(env, b.op_id);
+      return json({ ok: true, fase });
+    }
     if (seg[2] === 'log' && m === 'POST') {
       if (!isStaff(user)) return err('El contratista sube su evidencia en el pendiente que le toca, no en la bitácora.', 403);
       const fd = await req.formData();
@@ -666,6 +684,10 @@ async function api(req, env, url, path) {
     }
     if (seg[2] === 'punch' && m === 'POST') {
       if (!isStaff(user)) return err('Los pendientes los levanta el supervisor.', 403);
+      const el = await env.DB.prepare(`SELECT fase FROM elements WHERE id = ?`).bind(eid).first();
+      if (el && el.fase !== 'punchlist') {
+        return err('Este ítem sigue en producción. Entrégalo y entonces se le levantan pendientes.', 409, { falta_entregar: true });
+      }
       const fd = await req.formData();
       const op = String(fd.get('op_id') || '');
       if (await yaHecha(env, op)) return json({ ok: true, repetida: true });

@@ -222,3 +222,17 @@ a{color:var(--accent)}
    el celular se toca con el pulgar. */
 .saltar{width:100%;margin:2px 0 6px;padding:8px 10px;font-size:13px;border:1px solid var(--line);
   border-radius:9px;background:var(--surface2);color:var(--ink)}
+
+/* La fase del ítem, en la cabecera de su panel y en el plano. */
+.pill.fase{font-weight:600}
+.pill.fase.produccion{background:var(--accent-soft);color:var(--accent)}
+.pill.fase.punchlist{background:var(--ok-soft);color:var(--ok)}
+
+/* El pin de un ítem que sigue en producción va hueco: se ve que está ahí y se
+   distingue de un vistazo del que ya se entregó, sin gastar otro color —los
+   tres de estado ya están tomados por el punchlist—. */
+.pin.prod{background:#fff;color:var(--pin);border-color:var(--pin);box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.pin.prod.pend{color:var(--pend);border-color:var(--pend)}
+.pin.prod.proc{color:var(--proc);border-color:var(--proc)}
+.pin.prod.ok{color:var(--ok);border-color:var(--ok)}
+.legend .dot.hueco{background:#fff;border:2px solid var(--pin);width:12px;height:12px}

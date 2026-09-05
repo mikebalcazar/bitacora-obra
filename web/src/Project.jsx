@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { api, leer, escribir, hayRed, fileUrl, elStatus, fmtD, isLate, rasterizePlan } from './api.js';
+import { api, leer, escribir, hayRed, fileUrl, elStatus, FASES, fmtD, isLate, rasterizePlan } from './api.js';
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
 import ElementPanel from './ElementPanel.jsx';
 import { buildReport, REPORT_CSS } from './report.js';
 
-const TYPES = ['Mueble', 'Instalación', 'Acabado', 'Herrería', 'Carpintería', 'Domótica', 'Otro'];
+const TYPES = ['Mueble', 'Puerta', 'Instalación', 'Acabado', 'Herrería', 'Carpintería', 'Domótica', 'Otro'];
 
 export default function Project({ id }) {
   const { user, go, logout, toast } = useApp();
@@ -18,6 +18,8 @@ export default function Project({ id }) {
   const [adding, setAdding] = useState(false);
   const [newAt, setNewAt] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [tipo, setTipo] = useState('');   // '' = todos los tipos
+  const [fase, setFase] = useState('');   // '' = las dos fases
   const [drawer, setDrawer] = useState(false);
   const [openItems, setOpenItems] = useState(null);
   const [mview, setMview] = useState('plan'); // móvil: plan | pend | elem
@@ -57,7 +59,19 @@ export default function Project({ id }) {
 
   const plan = data?.plans.find((p) => p.id === planId) || null;
   const elements = useMemo(() => (data ? data.elements.filter((e) => e.plan_id === planId) : []), [data, planId]);
-  const shown = filterOpen ? elements.filter((e) => e.n_pend + e.n_proc > 0) : elements;
+  // Los tipos que se pueden elegir salen de la lista de siempre más los que de
+  // verdad hay en la obra: un ítem viejo con un tipo que ya no está en la lista
+  // seguiría siendo invisible en el filtro, y desaparecer del plano sin que
+  // nadie sepa por qué es peor que no filtrar.
+  const tipos = useMemo(() => {
+    const hay = new Set((data?.elements || []).map((e) => e.type).filter(Boolean));
+    return [...new Set([...TYPES.filter((t) => hay.has(t)), ...hay])];
+  }, [data]);
+  const shown = elements
+    .filter((e) => !tipo || e.type === tipo)
+    .filter((e) => !fase || (e.fase || 'produccion') === fase)
+    .filter((e) => !filterOpen || e.n_pend + e.n_proc > 0);
+  const enFase = (f) => elements.filter((e) => (e.fase || 'produccion') === f).length;
   const openTotal = data ? data.elements.reduce((a, e) => a + e.n_pend + e.n_proc, 0) : 0;
   const lateTotal = openItems ? openItems.filter(isLate).length : null;
 
@@ -142,16 +156,28 @@ export default function Project({ id }) {
           <div className="eyebrow">Resumen del plano</div>
           <div className="stats">
             <div className="stat"><b>{elements.length}</b><span>ítems</span></div>
-            <div className="stat"><b>{elements.reduce((a, e) => a + e.n_log, 0)}</b><span>registros</span></div>
+            <div className="stat"><b>{enFase('produccion')}</b><span>en producción</span></div>
             <div className="stat"><b>{elements.reduce((a, e) => a + e.n_pend + e.n_proc, 0)}</b><span>pendientes</span></div>
             <div className="stat"><b>{data.elements.length}</b><span>en la obra</span></div>
           </div>
         </section>
         <section>
           <div className="eyebrow">Color del pin</div>
-          <div className="legend"><span><i className="dot pend" />Con pendientes</span><span><i className="dot proc" />En proceso</span><span><i className="dot ok" />Resuelto</span><span><i className="dot" />Sin punchlist</span></div>
+          <div className="legend"><span><i className="dot pend" />Con pendientes</span><span><i className="dot proc" />En proceso</span><span><i className="dot ok" />Resuelto</span><span><i className="dot" />Sin punchlist</span><span><i className="dot hueco" />En producción</span></div>
         </section>
         <section>
+          {tipos.length > 1 && (
+            <>
+              <button className={'item' + (!tipo ? ' on' : '')} onClick={() => setTipo('')}>Todos los tipos <small>{elements.length}</small></button>
+              {tipos.map((t) => (
+                <button key={t} className={'item' + (tipo === t ? ' on' : '')} onClick={() => setTipo(tipo === t ? '' : t)}>
+                  {t} <small>{elements.filter((e) => e.type === t).length}</small>
+                </button>
+              ))}
+            </>
+          )}
+          <button className={'item' + (fase === 'produccion' ? ' on' : '')} onClick={() => setFase(fase === 'produccion' ? '' : 'produccion')}>En producción <small>{enFase('produccion')}</small></button>
+          <button className={'item' + (fase === 'punchlist' ? ' on' : '')} onClick={() => setFase(fase === 'punchlist' ? '' : 'punchlist')}>Entregados <small>{enFase('punchlist')}</small></button>
           <button className={'item' + (filterOpen ? ' on' : '')} onClick={() => setFilterOpen(!filterOpen)}>Sólo pines con pendientes <small>{elements.filter((e) => e.n_pend + e.n_proc > 0).length}</small></button>
           <button className={'item' + (drawer ? ' on' : '')} onClick={() => setDrawer(!drawer)}>Ver lista de pendientes <small>{openTotal}</small></button>
           {staff && <button className="item" onClick={() => go('/admin')}>Usuarios y accesos</button>}
@@ -163,8 +189,24 @@ export default function Project({ id }) {
           {plan && <span className="btn sm" style={{ fontWeight: 500 }}>{plan.name}{plan.file_name ? ` — ${plan.file_name}` : ''}</span>}
           {data.plans.length > 1 && <select className="btn sm" style={{ width: 'auto' }} value={planId || ''} onChange={(e) => { setPlanId(e.target.value); setSel(null); }}>{data.plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
           <div className="spacer" />
+          {tipos.length > 1 && (
+            <select className={'btn sm' + (tipo ? ' on' : '')} style={{ width: 'auto' }} value={tipo} onChange={(ev) => setTipo(ev.target.value)} title="Ver solo un tipo de ítem">
+              <option value="">Todos los tipos</option>
+              {tipos.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          )}
+          <select className={'btn sm' + (fase ? ' on' : '')} style={{ width: 'auto' }} value={fase} onChange={(ev) => setFase(ev.target.value)} title="Ver una sola fase">
+            <option value="">Las dos fases</option>
+            {Object.entries(FASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
           <button className={'btn sm' + (filterOpen ? ' on' : '')} onClick={() => setFilterOpen(!filterOpen)} title="Sólo pines con pendientes">Pendientes {filterOpen ? '●' : '○'}</button>
         </div>
+        {(tipo || fase || filterOpen) && !adding && (
+          <div className="hint">
+            Viendo {shown.length} de {elements.length} ítems{tipo ? ` · solo ${tipo}` : ''}{fase ? ` · ${FASES[fase]}` : ''}{filterOpen ? ' · solo con pendientes' : ''}
+            <button className="btn sm" onClick={() => { setTipo(''); setFase(''); setFilterOpen(false); }}>Ver todos</button>
+          </div>
+        )}
         {adding && <div className="hint">Toca el plano donde va el ítem · <button className="btn sm" onClick={() => setAdding(false)}>Cancelar</button></div>}
         {plan ? (
           <PlanCanvas plan={plan} elements={shown} sel={sel} flash={flash} adding={adding} onPick={(eid) => selectEl(eid)} onClick={onPlanClick} />

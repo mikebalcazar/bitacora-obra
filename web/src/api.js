@@ -160,6 +160,10 @@ export const ST = { pend: 'Pendiente', proc: 'En proceso', ok: 'Resuelto' };
 
 // Los tres roles, con el nombre que se usa en obra.
 export const ROLES = { admin: 'Dueño', int: 'Supervisor', con: 'Contratista' };
+
+// Las dos fases por las que pasa un ítem. Producción es mientras se hace;
+// punchlist empieza el día que se entrega y hay algo que corregir.
+export const FASES = { produccion: 'Producción', punchlist: 'Punchlist' };
 export const esDueno = (u) => u?.role === 'admin';
 export const esContratista = (u) => u?.role === 'con';
 export const dirige = (u) => u?.role === 'admin' || u?.role === 'int';
