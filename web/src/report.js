@@ -51,7 +51,7 @@ export async function buildReport({ project, plans, elements, logs, punch, user,
   if (type !== 'punch') {
     const byEl = groupBy(L, 'element_id');
     idx += `<h3>Bitácora <span>${Object.keys(byEl).length} ítems · ${L.length} registros</span></h3>
-    <div class="sum"><span><b>${L.length}</b> registros</span><span><b>${L.filter((m) => m.kind === 'acuerdo').length}</b> acuerdos</span><span><b>${L.filter((m) => m.kind === 'arreglo').length}</b> arreglos</span><span><b>${L.reduce((a, m) => a + m.photos.length, 0)}</b> fotos</span></div>
+    <div class="sum"><span><b>${L.length}</b> registros</span><span><b>${new Set(L.map((m) => m.element_code)).size}</b> ítems</span><span><b>${L.reduce((a, m) => a + m.photos.length, 0)}</b> fotos</span></div>
     <table><thead><tr><th>Ítem</th><th>Plano</th><th>Registros</th><th>Último</th></tr></thead><tbody>${Object.values(byEl).map((ms) => `<tr><td><b>${esc(ms[0].element_code)}</b> ${esc(ms[0].element_name)}</td><td>${esc(ms[0].plan_name)}</td><td>${ms.length}</td><td>${fmtD(ms[ms.length - 1].created_at)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Sin registros en el periodo.</td></tr>'}</tbody></table>`;
   }
   if (type !== 'bitacora') {
@@ -70,10 +70,10 @@ export async function buildReport({ project, plans, elements, logs, punch, user,
     pages.push(`${head}<h2 class="ft"><span class="num">${esc(m0.element_code)}</span>${esc(m0.element_name)}</h2>
       <div class="ficha"><div class="fields">
         <div><label>Tipo</label>${esc(m0.element_type)}</div><div><label>Responsable</label>${esc(m0.element_resp)}</div><div><label>Registros</label>${ms.length}</div>
-        <div><label>Plano</label>${esc(m0.plan_name)}</div><div><label>Periodo</label>${fmtD(ms[0].created_at)} — ${fmtD(ms[ms.length - 1].created_at)}</div><div><label>Acuerdos</label>${ms.filter((m) => m.kind === 'acuerdo').length}</div>
+        <div><label>Plano</label>${esc(m0.plan_name)}</div><div><label>Periodo</label>${fmtD(ms[0].created_at)} — ${fmtD(ms[ms.length - 1].created_at)}</div><div><label>Registros</label>${ms.length}</div>
       </div><div class="sheetcrop"><label>Ubicación · ${esc(m0.plan_file || m0.plan_name)}</label>${c ? `<img class="crop" src="${c}" alt="">` : ''}</div></div>
       <label class="sec">Historial</label>
-      ${ms.map((m) => `<div class="entry"><div class="et"><time>${fmtD(m.created_at)} · ${fmtT(m.created_at)}</time><b>${esc(m.user_name)}</b><span>${ROLES[m.user_role] || 'Supervisor'}</span><span class="pill ${m.kind === 'acuerdo' ? 'acu' : 'gen'}">${m.kind}</span></div><p>${esc(m.text)}</p>${m.photos.length ? `<div class="big">${m.photos.map(fig).join('')}</div>` : ''}</div>`).join('')}
+      ${ms.map((m) => `<div class="entry"><div class="et"><time>${fmtD(m.created_at)} · ${fmtT(m.created_at)}</time><b>${esc(m.user_name)}</b><span>${ROLES[m.user_role] || 'Supervisor'}</span></div><p>${esc(m.text)}</p>${m.photos.length ? `<div class="big">${m.photos.map(fig).join('')}</div>` : ''}</div>`).join('')}
       ${foot}`);
   }
   // Fichas punchlist: una por detalle

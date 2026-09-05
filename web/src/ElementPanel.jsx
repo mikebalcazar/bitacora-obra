@@ -98,7 +98,6 @@ function PendingStrip({ pending, remove }) {
 function Log({ e, log, onChanged, setLb, user, staff }) {
   const { toast } = useApp();
   const [txt, setTxt] = useState('');
-  const [kind, setKind] = useState('trabajo');
   const [busy, setBusy] = useState(false);
   const { pending, add, clear, remove } = usePending();
   const bodyRef = useRef(null);
@@ -110,13 +109,13 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
     try {
       const r = await escribir({
         ruta: `/elements/${e.id}/log`,
-        campos: { kind, text: txt.trim() },
+        campos: { text: txt.trim() },
         archivos: pending.map((p) => p.file),
         parche: {
           clave: `/elements/${e.id}`,
           fn: (d) => {
             d.log = [...(d.log || []), {
-              id: 'local-' + Date.now(), kind, text: txt.trim(), photos: [],
+              id: 'local-' + Date.now(), text: txt.trim(), photos: [],
               user_name: user.name, user_role: user.role, user_id: user.id,
               created_at: new Date().toISOString(), __pendiente: true,
             }];
@@ -144,7 +143,7 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
                 <div className={'avatar av' + (m.user_role === 'con' ? ' con' : '')}>{ini(m.user_name)}</div>
                 <div>
                   <div className="who"><b>{m.user_name}</b><span className="role">{ROLES[m.user_role] || 'Supervisor'}</span><time>{fmtT(m.created_at)}</time></div>
-                  <div className={'txt' + (m.kind === 'acuerdo' ? ' acuerdo' : '')}><span className="kind">{m.kind}</span>{m.text}<Photos photos={m.photos} setLb={setLb} onDelete={staff || m.user_id === user.id ? delPhoto : null} /></div>
+                  <div className="txt">{m.text}<Photos photos={m.photos} setLb={setLb} onDelete={staff || m.user_id === user.id ? delPhoto : null} /></div>
                 </div>
               </div>
             </React.Fragment>
@@ -153,8 +152,7 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
       </div>
       <div className="compose">
         <div className="row">
-          <select value={kind} onChange={(ev) => setKind(ev.target.value)}><option value="trabajo">Trabajo</option><option value="arreglo">Arreglo</option><option value="acuerdo">Acuerdo</option></select>
-          <textarea rows={2} value={txt} onChange={(ev) => setTxt(ev.target.value)} placeholder="Registrar trabajo, arreglo o acuerdo…" onKeyDown={(ev) => { if (ev.key === 'Enter' && !ev.shiftKey && window.innerWidth > 900) { ev.preventDefault(); send(); } }} />
+          <textarea rows={2} value={txt} onChange={(ev) => setTxt(ev.target.value)} placeholder="Escribe lo que pasó en este ítem…" onKeyDown={(ev) => { if (ev.key === 'Enter' && !ev.shiftKey && window.innerWidth > 900) { ev.preventDefault(); send(); } }} />
         </div>
         <PendingStrip pending={pending} remove={remove} />
         <div className="row"><PhotoInput onFiles={add} /><div className="spacer" /><button className="btn primary sm" disabled={busy || (!txt.trim() && !pending.length)} onClick={send}>{busy ? 'Guardando…' : 'Registrar'}</button></div>
