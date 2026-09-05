@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, leer, escribir, fileUrl, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
+import { api, leer, escribir, fileUrl, FASES, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
 
 export default function ElementPanel({ elementId, flash, plan, staff, user, members = [], todos = [], onIr, onChanged, onClose }) {
@@ -19,6 +19,18 @@ export default function ElementPanel({ elementId, flash, plan, staff, user, memb
   const { element: e, log, punch } = d;
   const open = punch.filter((k) => k.status !== 'ok').length;
   const changed = () => { load(); onChanged(); };
+
+  // Entregar es un acto, no un detalle: se pregunta antes, y al devolver a
+  // producción se avisa que los pendientes no se borran, solo se guardan.
+  async function entregar(a) {
+    const yendo = a === 'punchlist';
+    const aviso = yendo
+      ? `¿Dar por entregado ${e.code || e.name}? A partir de ahí se le levantan pendientes.`
+      : `¿Regresar ${e.code || e.name} a producción? Los pendientes que ya tiene no se borran: vuelven a la vista cuando se entregue otra vez.`;
+    if (!confirm(aviso)) return;
+    await escribir({ ruta: `/elements/${e.id}/fase`, cuerpo: { fase: a } }).catch((x) => toast(x.message));
+    changed();
+  }
 
   return (
     <aside className="panel">
@@ -53,13 +65,18 @@ export default function ElementPanel({ elementId, flash, plan, staff, user, memb
           </select>
         )}
         <h2>{e.name}</h2>
-        <div className="meta">{e.resp && <span>Resp. <b style={{ fontWeight: 500, color: 'var(--ink2)' }}>{e.resp}</b></span>}<span>{e.plan_name}</span><span>Creado {fmtD(e.created_at)}</span></div>
+        <div className="meta">
+          <span className={'pill fase ' + e.fase}>{FASES[e.fase] || 'Producción'}</span>
+          {e.resp && <span>Resp. <b style={{ fontWeight: 500, color: 'var(--ink2)' }}>{e.resp}</b></span>}
+          <span>{e.plan_name}</span>
+          <span>{e.fase === 'punchlist' && e.entregado_en ? `Entregado ${fmtD(e.entregado_en)}` : `Creado ${fmtD(e.created_at)}`}</span>
+        </div>
         <div className="tabs">
           {staff && <button className={'tab' + (tab === 'log' ? ' on' : '')} onClick={() => setTab('log')}>Bitácora <span className="n">{log.length}</span></button>}
           <button className={'tab' + (tab === 'punch' ? ' on' : '')} onClick={() => setTab('punch')}>{staff ? 'Punchlist' : 'Lo que me toca'} <span className="n">{open}/{punch.length}</span></button>
         </div>
       </div>
-      {tab === 'log' && staff ? <Log e={e} log={log} onChanged={changed} setLb={setLb} user={user} staff={staff} /> : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} members={members} />}
+      {tab === 'log' && staff ? <Log e={e} log={log} onChanged={changed} setLb={setLb} user={user} staff={staff} /> : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} members={members} onEntregar={entregar} />}
       {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
       {edit && <EditElement e={e} onClose={() => setEdit(false)} onChanged={() => { changed(); }} onDeleted={() => { onChanged(); onClose(); }} />}
     </aside>
@@ -161,7 +178,7 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
   );
 }
 
-function Punch({ e, punch, flash, onChanged, setLb, user, staff, members }) {
+function Punch({ e, punch, flash, onChanged, setLb, user, staff, members, onEntregar }) {
   const { toast } = useApp();
   const [f, setF] = useState({ title: '', resp: e.resp || '', due_date: todayISO(3), assignee_id: '' });
   const [evid, setEvid] = useState(null);          // el pendiente que se está dando por terminado
@@ -211,9 +228,29 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff, members }) {
   async function delPhoto(p) { if (!confirm('¿Quitar esta foto?')) return; await api.del(`/photos/${p.id}`).catch((x) => toast(x.message)); onChanged(); }
   async function del(k) { if (!confirm('¿Borrar este detalle?')) return; await api.del(`/punch/${k.id}`).catch((x) => toast(x.message)); onChanged(); }
 
+  // En producción no hay punchlist: todavía no se ha entregado nada que
+  // corregir. En vez de una lista vacía sin explicación, se dice por qué y se
+  // ofrece el único paso que la abre.
+  if (e.fase !== 'punchlist') {
+    return (
+      <div className="body">
+        <div className="empty">
+          <h3>Sigue en producción</h3>
+          Mientras se fabrica o se instala, lo que pasa se escribe en el muro del ítem.
+          Los pendientes se levantan cuando ya está entregado y hay algo que corregir.
+          {!!punch.length && <div style={{ marginTop: 10 }}>Tiene {punch.length} {punch.length === 1 ? 'pendiente guardado' : 'pendientes guardados'} de antes; vuelven a la vista al entregarlo.</div>}
+        </div>
+        {staff && onEntregar && <button className="btn primary block" onClick={() => onEntregar('punchlist')}>Dar por entregado</button>}
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="body">
+        {staff && onEntregar && (
+          <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => onEntregar('produccion')}>Regresar a producción</button>
+        )}
         {tot > 0 && <div className="plsum"><span>{ok}/{tot} resueltos</span><div className="bar"><i style={{ width: `${(ok / tot) * 100}%`, background: 'var(--ok)' }} /><i style={{ width: `${(pr / tot) * 100}%`, background: 'var(--proc)' }} /></div></div>}
         <div className="pl">
           {!punch.length && <div className="empty"><h3>Sin pendientes</h3>{staff ? 'Este ítem no tiene detalles abiertos.' : 'Aquí no tienes nada asignado.'}</div>}

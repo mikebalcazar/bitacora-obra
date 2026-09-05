@@ -271,7 +271,7 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
         {elements.map((e) => {
           const n = e.n_pend + e.n_proc;
           return (
-            <div key={e.id} className={'pin ' + elStatus(e) + (e.id === sel ? ' sel' : '') + (flash && e.id === sel ? ' flash' : '')}
+            <div key={e.id} className={'pin ' + elStatus(e) + ((e.fase || 'produccion') === 'produccion' ? ' prod' : '') + (e.id === sel ? ' sel' : '') + (flash && e.id === sel ? ' flash' : '')}
               style={{ left: e.x * plan.width, top: e.y * plan.height, transform: `translate(-50%,-50%) scale(${1 / v.s})` }}
               onPointerDown={(ev) => ev.stopPropagation()} onClick={(ev) => { ev.stopPropagation(); if (!adding) onPick(e.id); }} title={`${e.code} · ${e.name}`}>
               {n || ''}<span>{e.code}</span>

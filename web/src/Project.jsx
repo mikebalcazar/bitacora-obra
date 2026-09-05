@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { api, leer, escribir, hayRed, fileUrl, elStatus, fmtD, isLate, rasterizePlan } from './api.js';
+import { api, leer, escribir, hayRed, fileUrl, elStatus, FASES, fmtD, isLate, rasterizePlan } from './api.js';
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
 import ElementPanel from './ElementPanel.jsx';
@@ -19,6 +19,7 @@ export default function Project({ id }) {
   const [newAt, setNewAt] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [tipo, setTipo] = useState('');   // '' = todos los tipos
+  const [fase, setFase] = useState('');   // '' = las dos fases
   const [drawer, setDrawer] = useState(false);
   const [openItems, setOpenItems] = useState(null);
   const [mview, setMview] = useState('plan'); // móvil: plan | pend | elem
@@ -68,7 +69,9 @@ export default function Project({ id }) {
   }, [data]);
   const shown = elements
     .filter((e) => !tipo || e.type === tipo)
+    .filter((e) => !fase || (e.fase || 'produccion') === fase)
     .filter((e) => !filterOpen || e.n_pend + e.n_proc > 0);
+  const enFase = (f) => elements.filter((e) => (e.fase || 'produccion') === f).length;
   const openTotal = data ? data.elements.reduce((a, e) => a + e.n_pend + e.n_proc, 0) : 0;
   const lateTotal = openItems ? openItems.filter(isLate).length : null;
 
@@ -153,14 +156,14 @@ export default function Project({ id }) {
           <div className="eyebrow">Resumen del plano</div>
           <div className="stats">
             <div className="stat"><b>{elements.length}</b><span>ítems</span></div>
-            <div className="stat"><b>{elements.reduce((a, e) => a + e.n_log, 0)}</b><span>registros</span></div>
+            <div className="stat"><b>{enFase('produccion')}</b><span>en producción</span></div>
             <div className="stat"><b>{elements.reduce((a, e) => a + e.n_pend + e.n_proc, 0)}</b><span>pendientes</span></div>
             <div className="stat"><b>{data.elements.length}</b><span>en la obra</span></div>
           </div>
         </section>
         <section>
           <div className="eyebrow">Color del pin</div>
-          <div className="legend"><span><i className="dot pend" />Con pendientes</span><span><i className="dot proc" />En proceso</span><span><i className="dot ok" />Resuelto</span><span><i className="dot" />Sin punchlist</span></div>
+          <div className="legend"><span><i className="dot pend" />Con pendientes</span><span><i className="dot proc" />En proceso</span><span><i className="dot ok" />Resuelto</span><span><i className="dot" />Sin punchlist</span><span><i className="dot hueco" />En producción</span></div>
         </section>
         <section>
           {tipos.length > 1 && (
@@ -173,6 +176,8 @@ export default function Project({ id }) {
               ))}
             </>
           )}
+          <button className={'item' + (fase === 'produccion' ? ' on' : '')} onClick={() => setFase(fase === 'produccion' ? '' : 'produccion')}>En producción <small>{enFase('produccion')}</small></button>
+          <button className={'item' + (fase === 'punchlist' ? ' on' : '')} onClick={() => setFase(fase === 'punchlist' ? '' : 'punchlist')}>Entregados <small>{enFase('punchlist')}</small></button>
           <button className={'item' + (filterOpen ? ' on' : '')} onClick={() => setFilterOpen(!filterOpen)}>Sólo pines con pendientes <small>{elements.filter((e) => e.n_pend + e.n_proc > 0).length}</small></button>
           <button className={'item' + (drawer ? ' on' : '')} onClick={() => setDrawer(!drawer)}>Ver lista de pendientes <small>{openTotal}</small></button>
           {staff && <button className="item" onClick={() => go('/admin')}>Usuarios y accesos</button>}
@@ -190,12 +195,16 @@ export default function Project({ id }) {
               {tipos.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           )}
+          <select className={'btn sm' + (fase ? ' on' : '')} style={{ width: 'auto' }} value={fase} onChange={(ev) => setFase(ev.target.value)} title="Ver una sola fase">
+            <option value="">Las dos fases</option>
+            {Object.entries(FASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
           <button className={'btn sm' + (filterOpen ? ' on' : '')} onClick={() => setFilterOpen(!filterOpen)} title="Sólo pines con pendientes">Pendientes {filterOpen ? '●' : '○'}</button>
         </div>
-        {(tipo || filterOpen) && !adding && (
+        {(tipo || fase || filterOpen) && !adding && (
           <div className="hint">
-            Viendo {shown.length} de {elements.length} ítems{tipo ? ` · solo ${tipo}` : ''}{filterOpen ? ' · solo con pendientes' : ''}
-            <button className="btn sm" onClick={() => { setTipo(''); setFilterOpen(false); }}>Ver todos</button>
+            Viendo {shown.length} de {elements.length} ítems{tipo ? ` · solo ${tipo}` : ''}{fase ? ` · ${FASES[fase]}` : ''}{filterOpen ? ' · solo con pendientes' : ''}
+            <button className="btn sm" onClick={() => { setTipo(''); setFase(''); setFilterOpen(false); }}>Ver todos</button>
           </div>
         )}
         {adding && <div className="hint">Toca el plano donde va el ítem · <button className="btn sm" onClick={() => setAdding(false)}>Cancelar</button></div>}
