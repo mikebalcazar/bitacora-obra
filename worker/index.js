@@ -1,4 +1,4 @@
-// Bitácora de Obra — Cloudflare Worker (API + assets)
+// t101pano — Cloudflare Worker (API + assets)
 // Bindings: DB (D1), FILES (R2), ASSETS (static). Vars: MAIL_FROM, APP_NAME, DEV. Secrets: RESEND_API_KEY
 
 const JSON_H = { 'content-type': 'application/json; charset=utf-8' };
@@ -143,7 +143,7 @@ async function sendMail(env, to, subject, html) {
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: env.MAIL_FROM || 'Bitácora de Obra <onboarding@resend.dev>', to: [to], subject, html }),
+    body: JSON.stringify({ from: env.MAIL_FROM || 't101pano <onboarding@resend.dev>', to: [to], subject, html }),
   });
   if (!r.ok) throw new Error('mail: ' + (await r.text()));
   return { ok: true };
@@ -246,8 +246,8 @@ export default {
 // sesión, y muchas veces es alguien de obra al que le pasaron la liga. Son los
 // mismos archivos que arma GitHub, guardados en R2 al terminar de armarlos.
 const APPS = {
-  'android.apk': { llave: 'apps/android.apk', tipo: 'application/vnd.android.package-archive', nombre: 'Bitacora de Obra.apk' },
-  'windows.exe': { llave: 'apps/windows.exe', tipo: 'application/vnd.microsoft.portable-executable', nombre: 'Bitacora de Obra.exe' },
+  'android.apk': { llave: 'apps/android.apk', tipo: 'application/vnd.android.package-archive', nombre: 't101pano.apk' },
+  'windows.exe': { llave: 'apps/windows.exe', tipo: 'application/vnd.microsoft.portable-executable', nombre: 't101pano.exe' },
 };
 
 async function entregaApp(env, cual) {
@@ -293,7 +293,7 @@ async function api(req, env, url, path) {
     return json({ apps: salida });
   }
 
-  if (seg[0] === 'salud' && m === 'GET') return json({ ok: true, app: env.APP_NAME || 'Bitácora de Obra', hora: now() });
+  if (seg[0] === 'salud' && m === 'GET') return json({ ok: true, app: env.APP_NAME || 't101pano', hora: now() });
 
   // ----- auth -----
   // Abre sesión y la devuelve firmada en cookie, y también como token suelto:
@@ -371,7 +371,7 @@ async function api(req, env, url, path) {
       if (!user.active) return err('Usuario inactivo', 403);
       const code = String(Math.floor(100000 + Math.random() * 900000));
       await env.DB.prepare(`INSERT OR REPLACE INTO login_codes (email, code, expires_at, attempts) VALUES (?,?,?,0)`).bind(e, code, plusMin(10)).run();
-      const mail = await sendMail(env, e, `${code} — tu código de acceso`, `<p>Tu código para entrar a <b>${env.APP_NAME || 'Bitácora de Obra'}</b>:</p><p style="font-size:28px;letter-spacing:6px"><b>${code}</b></p><p>Vence en 10 minutos.</p>`);
+      const mail = await sendMail(env, e, `${code} — tu código de acceso`, `<p>Tu código para entrar a <b>${env.APP_NAME || 't101pano'}</b>:</p><p style="font-size:28px;letter-spacing:6px"><b>${code}</b></p><p>Vence en 10 minutos.</p>`);
       return json({ ok: true, ...(mail.dev && env.DEV ? { dev_code: code } : {}) });
     }
     if (seg[1] === 'verify' && m === 'POST') {

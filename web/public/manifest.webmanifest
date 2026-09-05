@@ -1,7 +1,7 @@
 {
-  "name": "Bitácora de Obra",
-  "short_name": "Bitácora",
-  "description": "Bitácora por elemento y punchlist sobre plano — FORESPOT",
+  "name": "t101pano",
+  "short_name": "t101pano",
+  "description": "Bitácora por ítem y punchlist sobre plano — FORESPOT",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

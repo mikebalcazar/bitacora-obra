@@ -1,4 +1,4 @@
-# Las apps de Android y Windows
+# Las apps de t101pano para Android y Windows
 
 Son la misma aplicación de siempre, empaquetada. No hay un segundo código que
 mantener: las dos llevan adentro lo que sale de `npm run build`, y hablan con el
