@@ -96,6 +96,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path apps/windows/dist | Out-Null
           Copy-Item -Recurse -Force web/dist/* apps/windows/dist/
+          if (-not (Test-Path apps/windows/build/icon.ico)) { throw "Falta el icono: el instalador saldria con el de Electron." }
         shell: pwsh
 
       - name: Armar el instalador

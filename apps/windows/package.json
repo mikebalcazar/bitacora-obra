@@ -1,5 +1,5 @@
 {
-  "name": "bitacora-obra-windows",
+  "name": "t101pano-windows",
   "version": "0.1.0",
   "private": true,
   "description": "t101pano para Windows",
@@ -15,9 +15,30 @@
   "build": {
     "appId": "mx.forespot.bitacoraobra",
     "productName": "t101pano",
-    "directories": { "output": "salida" },
-    "files": ["main.js", "dist/**"],
-    "win": { "target": ["nsis"] },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "perMachine": false }
+    "directories": {
+      "output": "salida",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "dist/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "shortcutName": "t101pano",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "t101pano-instalador-${version}.${ext}"
+    }
   }
 }
