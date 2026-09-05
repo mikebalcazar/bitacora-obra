@@ -184,7 +184,11 @@ a{color:var(--accent)}
 
 /* mobile */
 .mnav{display:none}
+/* Lo que solo tiene sentido en el celular, donde no hay barra lateral. */
+.solo-m{display:none}
+
 @media (max-width:900px){
+  .solo-m{display:flex}
   .app{grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(0,1fr) auto}
   .top{gap:8px;padding:0 10px}
   .top select{flex:1;max-width:none}

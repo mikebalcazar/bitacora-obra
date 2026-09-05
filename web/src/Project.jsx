@@ -190,7 +190,11 @@ export default function Project({ id }) {
           {plan && <span className="btn sm" style={{ fontWeight: 500 }}>{plan.name}{plan.file_name ? ` — ${plan.file_name}` : ''}</span>}
           {data.plans.length > 1 && <select className="btn sm" style={{ width: 'auto' }} value={planId || ''} onChange={(e) => { setPlanId(e.target.value); setSel(null); }}>{data.plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
           <div className="spacer" />
-          <div className="swatches">
+          {/* En escritorio los interruptores viven en la barra lateral, a la
+              vista siempre; repetirlos aquí arriba era decir dos veces lo
+              mismo y quitarle aire al plano. En el celular no hay barra
+              lateral, así que aquí es donde tienen que estar. */}
+          <div className="swatches solo-m">
             {tipos.map((t) => (
               <button key={t} className={'swatch' + (apagados.has(t) ? ' off' : '')} onClick={() => prende(t)}
                 style={{ ['--tinte']: colorTipo(t) }} title={apagados.has(t) ? `Mostrar ${t}` : `Ocultar ${t}`}>
