@@ -164,6 +164,19 @@ export const ROLES = { admin: 'Dueño', int: 'Supervisor', con: 'Contratista' };
 // Las dos fases por las que pasa un ítem. Producción es mientras se hace;
 // punchlist empieza el día que se entrega y hay algo que corregir.
 export const FASES = { produccion: 'Producción', punchlist: 'Punchlist' };
+
+// Los tipos de ítem y su color. El color es lo que hace legible un plano lleno:
+// de un vistazo se ve dónde están las puertas y dónde los muebles, sin leer una
+// sola etiqueta. Son tres tonos bien separados entre sí y separados también de
+// los tres del estado —rojo, ámbar y verde—, que viven en el aro del pin.
+export const TIPOS = [
+  { clave: 'Mueble',  color: '#2C5AA0' },
+  { clave: 'Puerta',  color: '#B4622A' },
+  { clave: 'Acabado', color: '#4B7F52' },
+];
+// Un ítem viejo con un tipo que ya no está en la lista no desaparece: se pinta
+// del azul marino de siempre y se puede prender y apagar como los demás.
+export const colorTipo = (t) => (TIPOS.find((x) => x.clave === t) || {}).color || '#1C3557';
 export const esDueno = (u) => u?.role === 'admin';
 export const esContratista = (u) => u?.role === 'con';
 export const dirige = (u) => u?.role === 'admin' || u?.role === 'int';
