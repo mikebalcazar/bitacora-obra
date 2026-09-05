@@ -92,8 +92,11 @@ a{color:var(--accent)}
 .hoja{position:absolute;left:0;top:0;z-index:0;background:var(--surface2)}
 /* Solo los pines se mueven con CSS: son cuatro nodos chicos, no una textura. */
 .world{position:absolute;left:0;top:0;transform-origin:0 0;z-index:2;will-change:transform}
-.pin{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:var(--pin);border:2px solid #fff;color:#fff;font-size:11px;font-weight:600;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer}
-.pin.pend{background:var(--pend)}.pin.proc{background:var(--proc)}.pin.ok{background:var(--ok)}
+.pin{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:var(--pin);
+  border:3px solid #fff;color:#fff;font-size:11px;font-weight:600;display:grid;place-items:center;
+  box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer}
+/* El aro dice cómo va el punchlist; el relleno, de qué tipo es el ítem. */
+.pin.pend{border-color:var(--pend)}.pin.proc{border-color:var(--proc)}.pin.ok{border-color:var(--ok)}
 .pin.sel{outline:3px solid var(--accent);outline-offset:2px}
 .pin.flash{animation:flash 1.2s ease-out 3}
 @keyframes flash{0%{box-shadow:0 0 0 0 rgba(63,95,133,.9)}100%{box-shadow:0 0 0 22px rgba(63,95,133,0)}}
@@ -231,8 +234,25 @@ a{color:var(--accent)}
 /* El pin de un ítem que sigue en producción va hueco: se ve que está ahí y se
    distingue de un vistazo del que ya se entregó, sin gastar otro color —los
    tres de estado ya están tomados por el punchlist—. */
-.pin.prod{background:#fff;color:var(--pin);border-color:var(--pin);box-shadow:0 2px 6px rgba(0,0,0,.2)}
-.pin.prod.pend{color:var(--pend);border-color:var(--pend)}
-.pin.prod.proc{color:var(--proc);border-color:var(--proc)}
-.pin.prod.ok{color:var(--ok);border-color:var(--ok)}
+/* En producción el pin va hueco: el color del tipo se ve en el borde y en el
+   número, y se distingue a un metro del que ya se entregó. */
+.pin.prod{border-color:var(--tinte);box-shadow:0 2px 6px rgba(0,0,0,.2)}
 .legend .dot.hueco{background:#fff;border:2px solid var(--pin);width:12px;height:12px}
+
+/* Interruptores de tipo. Cada uno prende y apaga su tipo en el plano: apagado
+   se ve claramente apagado —descolorido y tachado por la opacidad— para que
+   nadie crea que su tipo se borró de la obra. */
+.swatches{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.swatch{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12.5px;font-weight:500;
+  padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);
+  color:var(--ink);cursor:pointer;white-space:nowrap}
+.swatch i{width:11px;height:11px;border-radius:50%;background:var(--tinte);flex:none}
+.swatch small{color:var(--ink3);font-variant-numeric:tabular-nums}
+.swatch.off{opacity:.42;background:var(--surface2)}
+.swatch.off i{background:transparent;border:2px solid var(--tinte)}
+.swatch.fila{width:100%;justify-content:flex-start;border-radius:9px}
+.swatch.fila small{margin-left:auto}
+.legend .dot.aro{background:#fff;border:3px solid var(--pin);width:13px;height:13px}
+.legend .dot.aro.pend{border-color:var(--pend)}
+.legend .dot.aro.proc{border-color:var(--proc)}
+.legend .dot.aro.ok{border-color:var(--ok)}

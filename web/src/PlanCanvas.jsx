@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { fileUrl, elStatus } from './api.js';
+import { fileUrl, elStatus, colorTipo } from './api.js';
 import { pdfjs, esPdf } from './pdf.js';
 
 // Plano + pines. Pan (arrastrar), zoom (rueda / pinch), tap para elegir.
@@ -270,9 +270,18 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
       <div className="world" style={{ transform: `translate(${v.x}px,${v.y}px) scale(${v.s})` }}>
         {elements.map((e) => {
           const n = e.n_pend + e.n_proc;
+          // El relleno dice de qué tipo es; el aro, cómo va su punchlist. Un
+          // ítem en producción va hueco: todavía no hay nada entregado.
+          const tinte = colorTipo(e.type);
+          const enProd = (e.fase || 'produccion') === 'produccion';
           return (
-            <div key={e.id} className={'pin ' + elStatus(e) + ((e.fase || 'produccion') === 'produccion' ? ' prod' : '') + (e.id === sel ? ' sel' : '') + (flash && e.id === sel ? ' flash' : '')}
-              style={{ left: e.x * plan.width, top: e.y * plan.height, transform: `translate(-50%,-50%) scale(${1 / v.s})` }}
+            <div key={e.id} className={'pin ' + elStatus(e) + (enProd ? ' prod' : '') + (e.id === sel ? ' sel' : '') + (flash && e.id === sel ? ' flash' : '')}
+              style={{
+                left: e.x * plan.width, top: e.y * plan.height, transform: `translate(-50%,-50%) scale(${1 / v.s})`,
+                background: enProd ? '#fff' : tinte,
+                color: enProd ? tinte : '#fff',
+                ['--tinte']: tinte,
+              }}
               onPointerDown={(ev) => ev.stopPropagation()} onClick={(ev) => { ev.stopPropagation(); if (!adding) onPick(e.id); }} title={`${e.code} · ${e.name}`}>
               {n || ''}<span>{e.code}</span>
             </div>
