@@ -10,6 +10,14 @@ const { pathToFileURL } = require('node:url');
 
 const RAIZ = path.join(__dirname, 'dist');
 
+// Cómo se llama la aplicación para Windows: en la barra de tareas, en el
+// administrador de tareas y en los menús. Sin esto toma el nombre del paquete,
+// que es otra cosa. El identificador se queda como estaba —es la dirección con
+// la que Windows la reconoce— para que una versión nueva reemplace a la vieja
+// en vez de instalarse al lado.
+app.setName('t101pano');
+app.setAppUserModelId('mx.forespot.bitacoraobra');
+
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
