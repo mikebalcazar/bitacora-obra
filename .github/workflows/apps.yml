@@ -145,8 +145,8 @@ jobs:
       - name: Traer los encabezados del WebView
         shell: pwsh
         run: |
-          nuget install Microsoft.Web.WebView2 -Version 1.0.2903.40 -OutputDirectory paquetes -ExcludeVersion
-          nuget install Microsoft.Windows.ImplementationLibrary -Version 1.0.240803.1 -OutputDirectory paquetes -ExcludeVersion
+          nuget install Microsoft.Web.WebView2 -OutputDirectory paquetes -ExcludeVersion
+          nuget install Microsoft.Windows.ImplementationLibrary -OutputDirectory paquetes -ExcludeVersion
 
       - name: Meter la aplicación web dentro del ejecutable
         shell: pwsh

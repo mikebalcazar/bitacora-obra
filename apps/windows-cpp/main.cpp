@@ -10,7 +10,13 @@
 // archivo: se copia a una USB y funciona, sin carpeta al lado que alguien pueda
 // borrar por accidente.
 
+// Windows 10 en adelante: es lo que pide el WebView, y sin decirlo aquí no se
+// declaran las funciones de resolución de pantalla que se usan más abajo.
+#define WINVER 0x0A00
+#define _WIN32_WINNT 0x0A00
+
 #include <windows.h>
+#include <shlobj.h>
 #include <shlwapi.h>
 #include <wrl.h>
 #include <wil/com.h>
