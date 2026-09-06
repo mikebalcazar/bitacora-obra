@@ -136,7 +136,12 @@ export default function Project({ id }) {
   return (
     <div className={cls}>
       <div className="top">
-        <button className="logo" onClick={() => go('/')} title="Proyectos"><i /><span>t101pano</span></button>
+        {/* La casa manda al menú de obras. Antes ese trabajo lo hacía el nombre
+            de la aplicación, que nadie pica porque parece un rótulo, no un
+            botón; y en el celular quedaba reducido a un punto de color. */}
+        <button className="casa" onClick={() => go('/')} title="Ir a mis obras" aria-label="Ir a mis obras"
+          dangerouslySetInnerHTML={{ __html: ICO.casa }} />
+        <span className="marca hide-m">t101pano</span>
         <select value={id} onChange={(e) => go(`/p/${e.target.value}`)}>
           {(projects.length ? projects : [data.project]).map((p) => <option key={p.id} value={p.id}>{p.name}{p.client ? ` · ${p.client}` : ''}</option>)}
         </select>
@@ -253,6 +258,7 @@ export default function Project({ id }) {
 }
 
 const ICO = {
+  casa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/></svg>',
   plan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16M3 12h18"/></svg>',
   list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg>',
   elem: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
