@@ -171,6 +171,7 @@ export default function Login({ onLogin }) {
           {apps['android.apk'] && <a className="btn sm" href={`${BASE}/descargas/android.apk`}>Android <small className="muted">{pesa(apps['android.apk'].tamano)}</small></a>}
           {apps['windows.exe'] && <a className="btn sm" href={`${BASE}/descargas/windows.exe`}>Windows <small className="muted">{pesa(apps['windows.exe'].tamano)}</small></a>}
           {apps['windows-nativo.exe'] && <a className="btn sm" href={`${BASE}/descargas/windows-nativo.exe`}>Windows nativo <small className="muted">{pesa(apps['windows-nativo.exe'].tamano)}</small></a>}
+          {apps['piloto.zip'] && <a className="btn sm" href={`${BASE}/descargas/piloto.zip`}>Piloto C++ <small className="muted">{pesa(apps['piloto.zip'].tamano)}</small></a>}
         </div>
       )}
     </div>

@@ -250,6 +250,7 @@ const APPS = {
   'android.apk': { llave: 'apps/android.apk', tipo: 'application/vnd.android.package-archive', nombre: 't101pano.apk' },
   'windows.exe': { llave: 'apps/windows.exe', tipo: 'application/vnd.microsoft.portable-executable', nombre: 't101pano.exe' },
   'windows-nativo.exe': { llave: 'apps/windows-nativo.exe', tipo: 'application/vnd.microsoft.portable-executable', nombre: 't101pano (nativo).exe' },
+  'piloto.zip': { llave: 'apps/piloto.zip', tipo: 'application/zip', nombre: 't101pano piloto nativo.zip' },
 };
 
 async function entregaApp(env, cual) {
