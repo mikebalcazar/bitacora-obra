@@ -189,3 +189,54 @@ jobs:
         shell: pwsh
         run: |
           npx wrangler r2 object put bitacora-obra-files/apps/windows-nativo.exe --file=t101pano-nativo.exe --content-type=application/vnd.microsoft.portable-executable --remote
+
+  windows-piloto:
+    name: Windows piloto nativo (C++ puro)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # PDFium es el que dibuja el plano. Son las mismas entrañas que usa Chrome
+      # para ver PDFs, sueltas: no hace falta navegador para tenerlas.
+      - name: Traer PDFium
+        shell: pwsh
+        run: |
+          $url = "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-win-x64.tgz"
+          Invoke-WebRequest -Uri $url -OutFile pdfium.tgz
+          New-Item -ItemType Directory -Force -Path pdfium | Out-Null
+          tar -xzf pdfium.tgz -C pdfium
+          Get-ChildItem -Recurse pdfium -Include *.lib,*.dll | Select-Object FullName
+
+      - name: Compilar
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSDIR=%%i
+          call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat"
+          copy apps\windows\build\icon.ico apps\windows-nativo\icono.ico
+          rc /nologo /fo apps\windows-nativo\recursos.res /i apps\windows-nativo apps\windows-nativo\recursos.rc
+          cl /nologo /std:c++17 /EHsc /O2 /MD /DUNICODE /D_UNICODE ^
+             /I pdfium\include /I apps\windows-nativo ^
+             apps\windows-nativo\main.cpp apps\windows-nativo\red.cpp apps\windows-nativo\json.cpp apps\windows-nativo\plano.cpp ^
+             apps\windows-nativo\recursos.res ^
+             /Fe:t101pano-piloto.exe ^
+             /link /SUBSYSTEM:WINDOWS pdfium\lib\pdfium.dll.lib ^
+             user32.lib gdi32.lib winhttp.lib psapi.lib shell32.lib
+
+      - name: Empaquetar
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path piloto | Out-Null
+          Copy-Item t101pano-piloto.exe piloto/
+          Copy-Item (Get-ChildItem -Recurse pdfium -Filter pdfium.dll | Select-Object -First 1).FullName piloto/
+          $exe = Get-Item t101pano-piloto.exe
+          $dll = Get-Item piloto/pdfium.dll
+          "### Piloto nativo" >> $env:GITHUB_STEP_SUMMARY
+          "- Programa: {0:N2} MB" -f ($exe.Length / 1MB) >> $env:GITHUB_STEP_SUMMARY
+          "- PDFium: {0:N1} MB" -f ($dll.Length / 1MB) >> $env:GITHUB_STEP_SUMMARY
+          Compress-Archive -Path piloto/* -DestinationPath t101pano-piloto.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t101pano-piloto-nativo
+          path: t101pano-piloto.zip
+          if-no-files-found: error
