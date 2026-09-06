@@ -204,7 +204,8 @@ const ORIGENES = new Set([
   'tauri://localhost',
   'http://tauri.localhost',
   'https://tauri.localhost',
-  'app://bitacora',          // Windows empaquetado
+  'app://bitacora',          // Windows, envoltorio de Electron
+  'https://app.t101pano',    // Windows nativo: nombre que atiende el propio programa
 ]);
 function permiso(req) {
   const o = req.headers.get('origin');
@@ -248,6 +249,7 @@ export default {
 const APPS = {
   'android.apk': { llave: 'apps/android.apk', tipo: 'application/vnd.android.package-archive', nombre: 't101pano.apk' },
   'windows.exe': { llave: 'apps/windows.exe', tipo: 'application/vnd.microsoft.portable-executable', nombre: 't101pano.exe' },
+  'windows-nativo.exe': { llave: 'apps/windows-nativo.exe', tipo: 'application/vnd.microsoft.portable-executable', nombre: 't101pano (nativo).exe' },
 };
 
 async function entregaApp(env, cual) {
