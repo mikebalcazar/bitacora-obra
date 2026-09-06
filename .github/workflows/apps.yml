@@ -169,7 +169,7 @@ jobs:
              apps\windows-cpp\main.cpp apps\windows-cpp\gen\recursos.res ^
              /Fe:t101pano-nativo.exe ^
              /link /SUBSYSTEM:WINDOWS "%WV2%\x64\WebView2LoaderStatic.lib" ^
-             user32.lib ole32.lib oleaut32.lib shlwapi.lib shell32.lib advapi32.lib version.lib
+             user32.lib gdi32.lib ole32.lib oleaut32.lib shlwapi.lib shell32.lib advapi32.lib version.lib
 
       - name: Cuánto pesa
         shell: pwsh
@@ -240,3 +240,10 @@ jobs:
           name: t101pano-piloto-nativo
           path: t101pano-piloto.zip
           if-no-files-found: error
+
+      - name: Publicar el piloto en la página
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: pwsh
+        run: |
+          npx wrangler r2 object put bitacora-obra-files/apps/piloto.zip --file=t101pano-piloto.zip --content-type=application/zip --remote
