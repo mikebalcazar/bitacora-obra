@@ -214,7 +214,7 @@ jobs:
           call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat"
           copy apps\windows\build\icon.ico apps\windows-nativo\icono.ico
           rc /nologo /fo apps\windows-nativo\recursos.res /i apps\windows-nativo apps\windows-nativo\recursos.rc
-          cl /nologo /std:c++17 /EHsc /O2 /MD /DUNICODE /D_UNICODE ^
+          cl /nologo /std:c++17 /EHsc /O2 /MD /utf-8 /DUNICODE /D_UNICODE ^
              /I pdfium\include /I apps\windows-nativo ^
              apps\windows-nativo\main.cpp apps\windows-nativo\red.cpp apps\windows-nativo\json.cpp apps\windows-nativo\plano.cpp ^
              apps\windows-nativo\recursos.res ^

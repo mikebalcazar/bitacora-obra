@@ -8,6 +8,7 @@ static FPDF_DOCUMENT g_doc = nullptr;
 static FPDF_PAGE g_pagina = nullptr;
 static std::vector<unsigned char> g_datos;   // PDFium no copia: los bytes tienen que seguir vivos
 static bool g_iniciado = false;
+static Dibujo g_guardado;
 
 bool abre(const std::vector<unsigned char>& pdf) {
     cierra();
@@ -26,6 +27,7 @@ bool abre(const std::vector<unsigned char>& pdf) {
 }
 
 void cierra() {
+    g_guardado = Dibujo{};
     if (g_pagina) { FPDF_ClosePage(g_pagina); g_pagina = nullptr; }
     if (g_doc) { FPDF_CloseDocument(g_doc); g_doc = nullptr; }
     g_datos.clear();
@@ -35,9 +37,11 @@ bool abierto() { return g_pagina != nullptr; }
 double ancho() { return g_pagina ? FPDF_GetPageWidth(g_pagina) : 0; }
 double alto() { return g_pagina ? FPDF_GetPageHeight(g_pagina) : 0; }
 
-Dibujo dibuja(int anchoVentana, int altoVentana, double desplazaX, double desplazaY, double escala) {
+const Dibujo& guardado() { return g_guardado; }
+
+const Dibujo& rasteriza(int anchoVentana, int altoVentana, double desplazaX, double desplazaY, double escala) {
     Dibujo d;
-    if (!g_pagina || anchoVentana <= 0 || altoVentana <= 0) return d;
+    if (!g_pagina || anchoVentana <= 0 || altoVentana <= 0) { g_guardado = d; return g_guardado; }
 
     auto t0 = std::chrono::steady_clock::now();
 
@@ -47,7 +51,7 @@ Dibujo dibuja(int anchoVentana, int altoVentana, double desplazaX, double despla
 
     FPDF_BITMAP bmp = FPDFBitmap_CreateEx(anchoVentana, altoVentana, FPDFBitmap_BGRA,
                                           d.pixeles.data(), anchoVentana * 4);
-    if (!bmp) { d.pixeles.clear(); d.ancho = d.alto = 0; return d; }
+    if (!bmp) { d.pixeles.clear(); d.ancho = d.alto = 0; g_guardado = d; return g_guardado; }
     FPDFBitmap_FillRect(bmp, 0, 0, anchoVentana, altoVentana, 0xFFFFFFFF);
 
     // La página entera se dibuja a la escala pedida, corrida a donde toque; lo
@@ -59,7 +63,12 @@ Dibujo dibuja(int anchoVentana, int altoVentana, double desplazaX, double despla
     FPDFBitmap_Destroy(bmp);
 
     d.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-    return d;
+    d.desplazaX = desplazaX;
+    d.desplazaY = desplazaY;
+    d.escala = escala;
+    d.vale = true;
+    g_guardado = std::move(d);
+    return g_guardado;
 }
 
 }  // namespace plano

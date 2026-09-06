@@ -45,7 +45,8 @@ struct Estado {
     bool arrastrando = false;
     POINT dedo{};
 
-    double msDibujo = 0, msPrimerPlano = 0;
+    double msDibujo = 0, msPrimerPlano = 0, msEstirado = 0;
+    bool moviendo = false;      // la mano está encima: se estira lo ya dibujado
     size_t memoriaMB = 0;
     std::atomic<bool> trabajando{false};
 };
@@ -74,6 +75,14 @@ size_t memoriaAhora() {
 }
 
 void repinta() { InvalidateRect(g_ventana, nullptr, FALSE); }
+
+// Redibujar nítido cuesta cientos de milisegundos, así que se pide para cuando
+// la vista lleve un momento quieta. Cada movimiento vuelve a aplazar la cita: no
+// tiene caso rasterizar una vista que ya cambió.
+const UINT RELOJ_NITIDO = 1;
+void pideNitido() {
+    SetTimer(g_ventana, RELOJ_NITIDO, 160, nullptr);
+}
 
 // Entrar, buscar la primera obra con plano y bajarlo. Va en su propio hilo: si
 // se hiciera en el de la ventana, la aplicación se quedaría tiesa mientras baja
@@ -171,20 +180,38 @@ void pintaAcceso(HDC dc, RECT rc) {
 
 void pintaPlano(HDC dc, RECT rc) {
     int w = rc.right, h = rc.bottom;
-    auto d = plano::dibuja(w, h, g.desplazaX, g.desplazaY, g.escala);
-    g.msDibujo = d.ms;
+    auto reloj = std::chrono::steady_clock::now();
 
-    if (d.ancho > 0) {
+    // La primera vez hay que rasterizar; de ahí en adelante se usa lo guardado y
+    // se vuelve a rasterizar solo cuando la vista se queda quieta.
+    const plano::Dibujo* d = &plano::guardado();
+    if (!d->vale || d->ancho != w || d->alto != h) {
+        d = &plano::rasteriza(w, h, g.desplazaX, g.desplazaY, g.escala);
+        g.msDibujo = d->ms;
+    }
+
+    if (d->ancho > 0) {
+        // Lo guardado se dibujó con otra vista: se corre y se estira la
+        // diferencia. Copiar píxeles cuesta microsegundos; rasterizar, cientos
+        // de milisegundos. Ahí está toda la diferencia entre fluido y roto.
+        double k = g.escala / d->escala;
+        int dx = (int)(g.desplazaX - d->desplazaX * k);
+        int dy = (int)(g.desplazaY - d->desplazaY * k);
+        int dw = (int)(d->ancho * k);
+        int dh = (int)(d->alto * k);
+
         BITMAPINFO bi{};
         bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
-        bi.bmiHeader.biWidth = d.ancho;
-        bi.bmiHeader.biHeight = -d.alto;      // de arriba abajo
+        bi.bmiHeader.biWidth = d->ancho;
+        bi.bmiHeader.biHeight = -d->alto;      // de arriba abajo
         bi.bmiHeader.biPlanes = 1;
         bi.bmiHeader.biBitCount = 32;
         bi.bmiHeader.biCompression = BI_RGB;
-        StretchDIBits(dc, 0, 0, d.ancho, d.alto, 0, 0, d.ancho, d.alto,
-                      d.pixeles.data(), &bi, DIB_RGB_COLORS, SRCCOPY);
+        SetStretchBltMode(dc, HALFTONE);
+        StretchDIBits(dc, dx, dy, dw, dh, 0, 0, d->ancho, d->alto,
+                      d->pixeles.data(), &bi, DIB_RGB_COLORS, SRCCOPY);
     }
+    g.msEstirado = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - reloj).count();
 
     // Los pines, encima. El relleno dice el tipo en la web; aquí, en el piloto,
     // el aro dice el estado y el hueco la fase, que es lo que se compara.
@@ -206,17 +233,21 @@ void pintaPlano(HDC dc, RECT rc) {
     }
 
     // El medidor. Es el motivo de este piloto, así que va siempre a la vista.
-    RECT caja{ 12, 12, 330, 108 };
+    RECT caja{ 12, 12, 430, 108 };
     HBRUSH fondo = CreateSolidBrush(RGB(20, 28, 38));
     FillRect(dc, &caja, fondo);
     DeleteObject(fondo);
-    wchar_t linea[160];
-    swprintf_s(linea, L"Dibujado: %.1f ms  (%.0f cuadros/s)", g.msDibujo, g.msDibujo > 0 ? 1000.0 / g.msDibujo : 0);
+    wchar_t linea[200];
+    // Mover cuesta esto, y es lo que se siente al arrastrar el plano.
+    swprintf_s(linea, L"Al mover: %.1f ms  (%.0f cuadros/s)", g.msEstirado,
+               g.msEstirado > 0.01 ? min(1000.0 / g.msEstirado, 999.0) : 999.0);
     dibujaTexto(dc, 24, 20, linea, 18, RGB(255, 255, 255), true);
-    swprintf_s(linea, L"Memoria: %zu MB", g.memoriaMB);
+    // Y rasterizar el PDF cuesta esto otro, una vez, al soltar.
+    swprintf_s(linea, L"Rasterizar el PDF: %.0f ms (al soltar)", g.msDibujo);
     dibujaTexto(dc, 24, 46, linea, 18, RGB(200, 210, 220));
-    swprintf_s(linea, L"Plano en pantalla: %.0f ms · %d pines", g.msPrimerPlano, (int)g.pines.size());
-    dibujaTexto(dc, 24, 72, linea, 18, RGB(200, 210, 220));
+    swprintf_s(linea, L"Memoria: %zu MB · Plano en pantalla: %.0f ms · %d pines",
+               g.memoriaMB, g.msPrimerPlano, (int)g.pines.size());
+    dibujaTexto(dc, 24, 72, linea, 17, RGB(200, 210, 220));
 }
 
 LRESULT CALLBACK Proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -252,6 +283,7 @@ LRESULT CALLBACK Proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 g.desplazaY += y - g.dedo.y;
                 g.dedo = { x, y };
                 repinta();
+                pideNitido();
             }
             return 0;
         case WM_LBUTTONUP:
@@ -269,8 +301,21 @@ LRESULT CALLBACK Proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g.desplazaY = p.y - (p.y - g.desplazaY) * k;
             g.escala = nueva;
             repinta();
+            pideNitido();
             return 0;
         }
+        case WM_TIMER:
+            if (wp == RELOJ_NITIDO) {
+                KillTimer(hwnd, RELOJ_NITIDO);
+                if (g.pantalla == Pantalla::Plano) {
+                    RECT rc; GetClientRect(hwnd, &rc);
+                    auto& d = plano::rasteriza(rc.right, rc.bottom, g.desplazaX, g.desplazaY, g.escala);
+                    g.msDibujo = d.ms;
+                    repinta();
+                }
+            }
+            return 0;
+
         case WM_PAINT: {
             PAINTSTRUCT ps;
             HDC dc = BeginPaint(hwnd, &ps);
