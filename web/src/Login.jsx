@@ -170,6 +170,7 @@ export default function Login({ onLogin }) {
           <span className="muted">Instálala en tu equipo:</span>
           {apps['android.apk'] && <a className="btn sm" href={`${BASE}/descargas/android.apk`}>Android <small className="muted">{pesa(apps['android.apk'].tamano)}</small></a>}
           {apps['windows.exe'] && <a className="btn sm" href={`${BASE}/descargas/windows.exe`}>Windows <small className="muted">{pesa(apps['windows.exe'].tamano)}</small></a>}
+          {apps['windows-nativo.exe'] && <a className="btn sm" href={`${BASE}/descargas/windows-nativo.exe`}>Windows nativo <small className="muted">{pesa(apps['windows-nativo.exe'].tamano)}</small></a>}
         </div>
       )}
     </div>
