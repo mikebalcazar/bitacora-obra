@@ -192,7 +192,21 @@ a{color:var(--accent)}
 .card .n{font-size:22px;font-weight:600;color:var(--pend)}
 .card .n.zero{color:var(--ok)}
 
-/* ── el proceso del ítem ────────────────────────────────────────────────── */
+/* ── el proceso del ítem, pegado al fondo del panel ─────────────────────── */
+/* Va debajo de donde se escribe porque no es una cosa que se hace con el ítem,
+   es lo que el ítem es: se lee de reojo y se abre sólo para palomear. */
+.barproc{flex:none;border-top:1px solid var(--line);background:var(--surface2)}
+.barproc .resumen{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:9px 16px calc(9px + var(--sab));min-height:46px}
+.barproc .resumen:hover{background:var(--surface)}
+.barproc .pipe{width:92px;flex:none}
+.barproc .donde{flex:1;min-width:0;font-size:13px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.barproc .donde b{font-weight:600;color:var(--ink)}
+.barproc .cuantas{font-size:12px;color:var(--ink3);font-variant-numeric:tabular-nums;flex:none}
+.barproc .flecha{font-size:10px;color:var(--ink3);flex:none}
+.barproc.abierta{background:var(--surface)}
+.barproc .proc{max-height:min(46vh,340px);overflow:auto;padding:10px 12px;border-bottom:1px solid var(--line2);
+  -webkit-overflow-scrolling:touch}
 .proc{display:flex;flex-direction:column;gap:6px}
 .pstep{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;
   background:var(--surface);text-align:left;width:100%}
@@ -211,7 +225,8 @@ a{color:var(--accent)}
 .pstep:disabled{opacity:.6}
 
 /* ── la obra en lista ───────────────────────────────────────────────────── */
-.lista{position:absolute;inset:0;overflow:auto;background:var(--bg);padding:56px 14px calc(14px + var(--sab))}
+.lista{position:absolute;inset:0;overflow:auto;background:var(--bg);padding:56px 14px calc(14px + var(--sab));
+  touch-action:pan-y;-webkit-overflow-scrolling:touch}
 .embudo{display:flex;gap:8px;margin-bottom:12px}
 .ecol{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 10px;position:relative;overflow:hidden}
 .ecol b{display:block;font-size:20px;font-weight:600;line-height:1.1}
@@ -241,6 +256,14 @@ a{color:var(--accent)}
 .pct span{font-variant-numeric:tabular-nums;font-weight:500}
 .pct small{display:block;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pend{width:120px;flex:none;text-align:right}
+
+/* Sobre el plano las herramientas flotan, porque debajo hay dibujo que tapar lo
+   menos posible. Sobre la lista no: flotando le caían encima al embudo en
+   cuanto la barra se partía en dos renglones, que en el celular es siempre.
+   Aquí la lista manda y la barra ocupa su lugar. */
+.stage.enlista{display:flex;flex-direction:column}
+.stage.enlista .tools{position:static;flex:none;flex-wrap:wrap;padding:12px 12px 0;row-gap:8px}
+.stage.enlista .lista{position:static;inset:auto;flex:1;min-height:0;padding-top:12px}
 
 /* Plano o lista: la misma obra, dos preguntas distintas. */
 .segm{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;

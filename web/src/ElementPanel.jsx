@@ -5,24 +5,21 @@ import { useApp } from './App.jsx';
 export default function ElementPanel({ elementId, flash, plan, staff, user, members = [], todos = [], onIr, onChanged, onClose }) {
   const { toast } = useApp();
   const [d, setD] = useState(null);
-  // La pestaña de entrada depende de en qué va el ítem: mientras se fabrica, lo
-  // que se viene a ver es el avance; ya entregado, la bitácora. Se decide con
-  // los datos en la mano, así que empieza en nada.
-  const [tab, setTab] = useState(null);
+  const [tab, setTab] = useState(!staff || flash ? 'punch' : 'log');
+  // El proceso no es una pestaña: es el estado del ítem, y se lee de reojo
+  // mientras se escribe en la bitácora. Vive en una barra abajo que se abre
+  // cuando hay que palomear algo.
+  const [proc, setProc] = useState(false);
   const [lb, setLb] = useState(null);
   const [edit, setEdit] = useState(false);
 
   const load = () => elementId && leer(`/elements/${elementId}`).then(setD).catch((e) => toast(e.message));
-  useEffect(() => { setD(null); setTab(null); load(); }, [elementId]);
+  useEffect(() => { setD(null); setProc(false); load(); }, [elementId]);
   useEffect(() => { if (flash) setTab('punch'); }, [flash]);
-  useEffect(() => {
-    if (!d || tab) return;
-    setTab(!staff ? 'punch' : d.element.fase === 'punchlist' ? 'log' : 'proceso');
-  }, [d]);
   useEffect(() => { if (flash && d) setTimeout(() => document.querySelector(`[data-k="${flash}"]`)?.scrollIntoView({ block: 'center' }), 50); }, [flash, d]);
 
   if (!elementId) return <aside className="panel"><div className="empty"><h3>{staff ? 'Selecciona un ítem' : 'Selecciona un pendiente'}</h3>Toca un pin del plano{staff ? ' o crea uno con + Ítem' : '. Solo salen los pines donde tienes algo asignado.'}</div></aside>;
-  if (!d || !tab) return <aside className="panel"><div className="spin" /></aside>;
+  if (!d) return <aside className="panel"><div className="spin" /></aside>;
   const { element: e, log, punch, etapas = [], hechas = [] } = d;
   const nEtapas = etapas.filter((x) => hechas.some((h) => h.etapa === x.clave)).length;
   const open = punch.filter((k) => k.status !== 'ok').length;
@@ -80,14 +77,17 @@ export default function ElementPanel({ elementId, flash, plan, staff, user, memb
           <span>{e.fase === 'punchlist' && e.entregado_en ? `Entregado ${fmtD(e.entregado_en)}` : `Creado ${fmtD(e.created_at)}`}</span>
         </div>
         <div className="tabs">
-          {staff && <button className={'tab' + (tab === 'proceso' ? ' on' : '')} onClick={() => setTab('proceso')}>Proceso <span className="n">{nEtapas}/{etapas.length}</span></button>}
           {staff && <button className={'tab' + (tab === 'log' ? ' on' : '')} onClick={() => setTab('log')}>Bitácora <span className="n">{log.length}</span></button>}
           <button className={'tab' + (tab === 'punch' ? ' on' : '')} onClick={() => setTab('punch')}>{staff ? 'Punchlist' : 'Lo que me toca'} <span className="n">{open}/{punch.length}</span></button>
         </div>
       </div>
-      {tab === 'proceso' && staff ? <Proceso e={e} etapas={etapas} hechas={hechas} onChanged={changed} />
-        : tab === 'log' && staff ? <Log e={e} log={log} onChanged={changed} setLb={setLb} user={user} staff={staff} />
-        : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} members={members} onEntregar={entregar} onVerProceso={() => setTab('proceso')} />}
+      {tab === 'log' && staff
+        ? <Log e={e} log={log} onChanged={changed} setLb={setLb} user={user} staff={staff} />
+        : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} members={members} onEntregar={entregar} onVerProceso={() => setProc(true)} />}
+      {staff && !!etapas.length && (
+        <BarraProceso e={e} etapas={etapas} hechas={hechas} n={nEtapas}
+          abierta={proc} onAbrir={() => setProc(!proc)} onChanged={changed} />
+      )}
       {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
       {edit && <EditElement e={e} onClose={() => setEdit(false)} onChanged={() => { changed(); }} onDeleted={() => { onChanged(); onClose(); }} />}
     </aside>
@@ -189,18 +189,24 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
   );
 }
 
-// El camino del ítem antes de entregarse: una casilla por etapa.
+// El camino del ítem antes de entregarse, en una barra pegada al fondo del
+// panel: en qué etapa va, siempre a la vista, debajo de donde se escribe.
+//
+// No es una pestaña porque no es una de las cosas que se hacen con un ítem: es
+// lo que el ítem es en este momento. Como pestaña había que acordarse de ir a
+// verla; aquí se lee de reojo mientras se escribe en la bitácora, y se abre
+// nada más cuando hay algo que palomear.
 //
 // Se puede palomear cualquier etapa, no solo la siguiente, y palomearla da por
 // cumplidas las anteriores; despalomear una tira las que vienen después. Es la
-// única forma de que "3 de 4" quiera decir algo: un camino con huecos no se
+// única forma de que "3 de 5" quiera decir algo: un camino con huecos no se
 // puede resumir en un número, y ese número es justo lo que se va a leer en la
 // lista general sin abrir un solo ítem.
-function Proceso({ e, etapas, hechas, onChanged }) {
+function BarraProceso({ e, etapas, hechas, n, abierta, onAbrir, onChanged }) {
   const { toast } = useApp();
   const [busy, setBusy] = useState('');
   const hecha = new Map(hechas.map((h) => [h.etapa, h]));
-  const n = etapas.filter((x) => hecha.has(x.clave)).length;
+  const falta = etapas[n];                       // la etapa que toca ahora
 
   async function marca(etapa, valor) {
     const i = etapas.findIndex((x) => x.clave === etapa.clave);
@@ -240,31 +246,35 @@ function Proceso({ e, etapas, hechas, onChanged }) {
   }
 
   return (
-    <div className="body">
-      <div className="plsum">
-        <span>{n}/{etapas.length} etapas</span>
-        <div className="bar neutra"><i style={{ width: `${etapas.length ? (n / etapas.length) * 100 : 0}%`, background: 'var(--accent)' }} /></div>
-      </div>
-      <div className="proc">
-        {etapas.map((x, i) => {
-          const h = hecha.get(x.clave);
-          const sig = !h && i === n;   // la que toca ahora
-          return (
-            <button key={x.clave} className={'pstep' + (h ? ' ok' : '') + (sig ? ' sig' : '') + (x.abre_punchlist ? ' bisagra' : '')}
-              disabled={busy === x.clave} onClick={() => marca(x, !h)}>
-              <i className="caja">{h ? '✓' : ''}</i>
-              <div>
-                <div className="t">{x.nombre}{!!x.abre_punchlist && <span className="pill acu">abre punchlist</span>}</div>
-                <div className="sub">
-                  {h ? <>Cumplida {fmtD(h.hecha_en)}{h.hecha_por_nombre ? ` · ${h.hecha_por_nombre}` : ''}</>
-                     : sig ? 'Es la que sigue' : 'Pendiente'}
+    <div className={'barproc' + (abierta ? ' abierta' : '')}>
+      {abierta && (
+        <div className="proc">
+          {etapas.map((x, i) => {
+            const h = hecha.get(x.clave);
+            const sig = !h && i === n;
+            return (
+              <button key={x.clave} className={'pstep' + (h ? ' ok' : '') + (sig ? ' sig' : '') + (x.abre_punchlist ? ' bisagra' : '')}
+                disabled={busy === x.clave} onClick={() => marca(x, !h)}>
+                <i className="caja">{h ? '✓' : ''}</i>
+                <div>
+                  <div className="t">{x.nombre}{!!x.abre_punchlist && <span className="pill acu">abre punchlist</span>}</div>
+                  <div className="sub">
+                    {h ? <>Cumplida {fmtD(h.hecha_en)}{h.hecha_por_nombre ? ` · ${h.hecha_por_nombre}` : ''}</>
+                       : sig ? 'Es la que sigue' : 'Pendiente'}
+                  </div>
                 </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      {!etapas.length && <div className="empty"><h3>Sin etapas</h3>Todavía no hay etapas configuradas para el proceso.</div>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <button className="resumen" onClick={onAbrir} aria-expanded={abierta}
+        title={abierta ? 'Cerrar el proceso' : 'Abrir el proceso para palomear'}>
+        <span className="pipe">{etapas.map((x, i) => <i key={x.clave} className={(i < n ? 'ok' : '') + (x.abre_punchlist ? ' bisagra' : '')} />)}</span>
+        <span className="donde">{falta ? <><b>Sigue:</b> {falta.nombre}</> : <b>Entregado</b>}</span>
+        <span className="cuantas">{n}/{etapas.length}</span>
+        <span className="flecha">{abierta ? '▾' : '▴'}</span>
+      </button>
     </div>
   );
 }
