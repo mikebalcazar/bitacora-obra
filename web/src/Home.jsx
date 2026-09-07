@@ -23,7 +23,7 @@ export default function Home() {
   return (
     <div className="home">
       <div className="row">
-        <Marca alto={19} color="var(--ink)" />
+        <Marca alto={19} />
         <div className="spacer" />
         {staff && <button className="btn sm" onClick={() => go('/admin')}>Usuarios y accesos</button>}
         <button className="btn sm" onClick={() => setPin(true)}>Mi PIN</button>

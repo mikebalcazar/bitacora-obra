@@ -45,6 +45,9 @@ jobs:
           set -e
           npm i --no-save @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7
           npx cap add android
+          # `cap add` rehace el proyecto en cada corrida, así que el ícono se
+          # copia encima: si no, la app sale con el de Capacitor.
+          cp -r apps/android/res/. android/app/src/main/res/
           npx cap sync android
 
       - name: Armar el .apk

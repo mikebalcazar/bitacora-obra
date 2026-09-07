@@ -1,6 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#0A0C10"/>
-  <circle cx="256" cy="190" r="74" fill="none" stroke="#4A90E2" stroke-width="26"/>
-  <text x="256" y="404" text-anchor="middle" fill="#4A90E2"
-        font-family="'DejaVu Sans','Segoe UI',system-ui,sans-serif" font-weight="700" font-size="150">101</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#0381c2"/><g><path d="M247.857,435.325A179.510,179.510 0 1 1 353.242,406.890" fill="none" stroke="#ffffff" stroke-width="21.9"/><g transform="translate(104.877,388.989) scale(0.185998,-0.185998)" fill="#ffffff"><path d="M818 220Q1250 220 1250 719Q1250 1210 818 1210Q375 1210 375 719Q375 220 818 220ZM100 713Q100 1440 818 1440Q1525 1440 1525 713Q1525 115 1080 7L1312 -263L1103 -422L778 -10Q132 -10 100 713Z"/></g></g></svg>

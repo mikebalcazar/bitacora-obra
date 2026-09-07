@@ -4,7 +4,7 @@ web/dist
 .dev.vars
 *.log
 wrangler.local.toml
-android
-ios
+/android
+/ios
 apps/windows/dist
 apps/windows/salida
