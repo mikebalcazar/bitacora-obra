@@ -142,7 +142,7 @@ export default function Project({ id }) {
             botón; y en el celular quedaba reducido a un punto de color. */}
         <button className="casa" onClick={() => go('/')} title="Ir a mis obras" aria-label="Ir a mis obras"
           dangerouslySetInnerHTML={{ __html: ICO.casa }} />
-        <span className="marca hide-m"><Marca alto={17} color="var(--ink)" /></span>
+        <span className="marca hide-m"><Marca alto={17} /></span>
         <select value={id} onChange={(e) => go(`/p/${e.target.value}`)}>
           {(projects.length ? projects : [data.project]).map((p) => <option key={p.id} value={p.id}>{p.name}{p.client ? ` · ${p.client}` : ''}</option>)}
         </select>

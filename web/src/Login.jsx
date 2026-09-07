@@ -110,7 +110,7 @@ export default function Login({ onLogin }) {
   return (
     <div className="center">
       <form className="login" onSubmit={alEnviar}>
-        <Marca alto={30} color="var(--ink)" />
+        <Marca alto={30} />
 
         {paso === 'pin' && (
           <>

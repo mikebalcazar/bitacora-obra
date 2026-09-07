@@ -5,6 +5,9 @@
   --plan-bg:#E6E8EB;
   --pend:#D33A2F; --proc:#D99A12; --ok:#2E8B57; --pend-soft:#FBE3E1; --proc-soft:#FBF0D3; --ok-soft:#DDF1E4;
   --int:#2C5AA0; --con:#7B4EA3;
+  /* El azul de taller101. El logotipo va siempre en este azul sobre blanco o
+     en blanco sobre este azul; nunca en negro ni en el azul de la interfaz. */
+  --marca:#0381c2;
   /* El pin de un elemento sin pendientes. Era el gris del texto secundario, que
      sobre un plano —que es gris— casi no se veía. Azul marino: se distingue del
      plano y no se confunde con los tres colores de estado. */
@@ -59,7 +62,7 @@ a{color:var(--accent)}
 /* app shell */
 .app{display:grid;grid-template-columns:240px minmax(0,1fr) 400px;grid-template-rows:52px minmax(0,1fr);height:100%;width:100%;overflow:hidden;padding-top:var(--sat)}
 .top{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--line);min-height:52px}
-.top .marca{font-size:15px;font-weight:600;white-space:nowrap;color:var(--ink)}
+.top .marca{font-size:15px;font-weight:600;white-space:nowrap;color:var(--marca)}
 /* El botón de casa: lo primero de la barra, del tamaño que se toca con el pulgar
    sin apuntar. Es la salida de emergencia de cualquier pantalla, así que se ve
    igual en todas y no se esconde en el celular. */
