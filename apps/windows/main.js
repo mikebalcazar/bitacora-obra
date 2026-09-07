@@ -15,7 +15,7 @@ const RAIZ = path.join(__dirname, 'dist');
 // que es otra cosa. El identificador se queda como estaba —es la dirección con
 // la que Windows la reconoce— para que una versión nueva reemplace a la vieja
 // en vez de instalarse al lado.
-app.setName('t101pano');
+app.setName('quell101');
 app.setAppUserModelId('mx.forespot.bitacoraobra');
 
 protocol.registerSchemesAsPrivileged([
@@ -29,7 +29,7 @@ function ventana() {
     minWidth: 380,
     backgroundColor: '#EEF0F2',
     autoHideMenuBar: true,
-    title: 't101pano',
+    title: 'quell101',
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   win.loadURL('app://bitacora/');

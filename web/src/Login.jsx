@@ -109,7 +109,7 @@ export default function Login({ onLogin }) {
   return (
     <div className="center">
       <form className="login" onSubmit={alEnviar}>
-        <div className="logo"><i />t101pano</div>
+        <div className="logo"><i />quell101</div>
 
         {paso === 'pin' && (
           <>

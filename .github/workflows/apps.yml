@@ -167,20 +167,20 @@ jobs:
           cl /nologo /std:c++17 /EHsc /O2 /MT /DUNICODE /D_UNICODE ^
              /I "%WV2%\include" /I "%WIL%" /I apps\windows-cpp\gen /I apps\windows-cpp ^
              apps\windows-cpp\main.cpp apps\windows-cpp\gen\recursos.res ^
-             /Fe:t101pano-nativo.exe ^
+             /Fe:quell101-nativo.exe ^
              /link /SUBSYSTEM:WINDOWS "%WV2%\x64\WebView2LoaderStatic.lib" ^
              user32.lib gdi32.lib ole32.lib oleaut32.lib shlwapi.lib shell32.lib advapi32.lib version.lib
 
       - name: Cuánto pesa
         shell: pwsh
         run: |
-          $exe = Get-Item t101pano-nativo.exe
+          $exe = Get-Item quell101-nativo.exe
           "### Windows nativo: {0:N1} MB" -f ($exe.Length / 1MB) >> $env:GITHUB_STEP_SUMMARY
 
       - uses: actions/upload-artifact@v4
         with:
-          name: t101pano-windows-nativo
-          path: t101pano-nativo.exe
+          name: quell101-windows-nativo
+          path: quell101-nativo.exe
           if-no-files-found: error
 
       - name: Publicar la app en la página
@@ -188,7 +188,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         shell: pwsh
         run: |
-          npx wrangler r2 object put bitacora-obra-files/apps/windows-nativo.exe --file=t101pano-nativo.exe --content-type=application/vnd.microsoft.portable-executable --remote
+          npx wrangler r2 object put bitacora-obra-files/apps/windows-nativo.exe --file=quell101-nativo.exe --content-type=application/vnd.microsoft.portable-executable --remote
 
   windows-piloto:
     name: Windows piloto nativo (C++ puro)
@@ -218,7 +218,7 @@ jobs:
              /I pdfium\include /I apps\windows-nativo ^
              apps\windows-nativo\main.cpp apps\windows-nativo\red.cpp apps\windows-nativo\json.cpp apps\windows-nativo\plano.cpp ^
              apps\windows-nativo\recursos.res ^
-             /Fe:t101pano-piloto.exe ^
+             /Fe:quell101-piloto.exe ^
              /link /SUBSYSTEM:WINDOWS pdfium\lib\pdfium.dll.lib ^
              user32.lib gdi32.lib winhttp.lib psapi.lib shell32.lib
 
@@ -226,19 +226,19 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path piloto | Out-Null
-          Copy-Item t101pano-piloto.exe piloto/
+          Copy-Item quell101-piloto.exe piloto/
           Copy-Item (Get-ChildItem -Recurse pdfium -Filter pdfium.dll | Select-Object -First 1).FullName piloto/
-          $exe = Get-Item t101pano-piloto.exe
+          $exe = Get-Item quell101-piloto.exe
           $dll = Get-Item piloto/pdfium.dll
           "### Piloto nativo" >> $env:GITHUB_STEP_SUMMARY
           "- Programa: {0:N2} MB" -f ($exe.Length / 1MB) >> $env:GITHUB_STEP_SUMMARY
           "- PDFium: {0:N1} MB" -f ($dll.Length / 1MB) >> $env:GITHUB_STEP_SUMMARY
-          Compress-Archive -Path piloto/* -DestinationPath t101pano-piloto.zip -Force
+          Compress-Archive -Path piloto/* -DestinationPath quell101-piloto.zip -Force
 
       - uses: actions/upload-artifact@v4
         with:
-          name: t101pano-piloto-nativo
-          path: t101pano-piloto.zip
+          name: quell101-piloto-nativo
+          path: quell101-piloto.zip
           if-no-files-found: error
 
       - name: Publicar el piloto en la página
@@ -246,4 +246,4 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         shell: pwsh
         run: |
-          npx wrangler r2 object put bitacora-obra-files/apps/piloto.zip --file=t101pano-piloto.zip --content-type=application/zip --remote
+          npx wrangler r2 object put bitacora-obra-files/apps/piloto.zip --file=quell101-piloto.zip --content-type=application/zip --remote

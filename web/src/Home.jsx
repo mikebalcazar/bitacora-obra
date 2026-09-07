@@ -22,7 +22,7 @@ export default function Home() {
   return (
     <div className="home">
       <div className="row">
-        <div className="row" style={{ gap: 10, fontWeight: 600, fontSize: 15 }}><i className="dot" style={{ background: 'var(--accent)' }} />t101pano</div>
+        <div className="row" style={{ gap: 10, fontWeight: 600, fontSize: 15 }}><i className="dot" style={{ background: 'var(--accent)' }} />quell101</div>
         <div className="spacer" />
         {staff && <button className="btn sm" onClick={() => go('/admin')}>Usuarios y accesos</button>}
         <button className="btn sm" onClick={() => setPin(true)}>Mi PIN</button>

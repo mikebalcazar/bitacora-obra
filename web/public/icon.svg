@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#1C3557"/>
-  <text x="256" y="300" text-anchor="middle" fill="#fff"
-        font-family="'DejaVu Sans','Segoe UI',system-ui,sans-serif" font-weight="700" font-size="232"
-        letter-spacing="-4">t101</text>
-  <circle cx="256" cy="396" r="30" fill="#D33A2F"/>
+  <rect width="512" height="512" rx="112" fill="#0A0C10"/>
+  <circle cx="256" cy="190" r="74" fill="none" stroke="#4A90E2" stroke-width="26"/>
+  <text x="256" y="404" text-anchor="middle" fill="#4A90E2"
+        font-family="'DejaVu Sans','Segoe UI',system-ui,sans-serif" font-weight="700" font-size="150">101</text>
 </svg>
