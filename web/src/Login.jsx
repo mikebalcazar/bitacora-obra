@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, setToken, empaquetada, BASE } from './api.js';
+import Marca from './Marca.jsx';
 
 // El campo de dígitos vive AFUERA de la pantalla, a propósito. Definido adentro,
 // React lo trata como un componente nuevo en cada tecleo: lo destruye, lo vuelve
@@ -109,7 +110,7 @@ export default function Login({ onLogin }) {
   return (
     <div className="center">
       <form className="login" onSubmit={alEnviar}>
-        <div className="logo"><i />quell101</div>
+        <Marca alto={30} color="var(--ink)" />
 
         {paso === 'pin' && (
           <>
