@@ -31,7 +31,11 @@ export default function Project({ id }) {
   const [vista, setVista] = useState('plan');   // plan | lista
   const [uploading, setUploading] = useState(false);
   const [report, setReport] = useState(false);
-  const [editPlan, setEditPlan] = useState(false);
+  const [editPlan, setEditPlan] = useState(null);
+  // La hoja de planos. En el celular no hay barra lateral, así que sin esto un
+  // proyecto se quedaba con el primer plano para siempre: no había por dónde
+  // subir el segundo ni cómo cambiar de uno a otro.
+  const [planos, setPlanos] = useState(false);
   const [repView, setRepView] = useState(null);
   useEffect(() => { const f = (e) => setRepView(e.detail); window.addEventListener('bo:report', f); return () => window.removeEventListener('bo:report', f); }, []);
 
@@ -166,7 +170,7 @@ export default function Project({ id }) {
           <div className="eyebrow">Planos</div>
           {data.plans.map((p) => <button key={p.id} className={'item' + (p.id === planId ? ' on' : '')} onClick={() => { setPlanId(p.id); setSel(null); }}><span>{p.name}</span><small>{data.elements.filter((e) => e.plan_id === p.id).length} ítems</small></button>)}
           {staff && <label className="btn sm" style={{ justifyContent: 'flex-start' }}>{uploading ? 'Procesando…' : '+ Subir plano (PDF / imagen)'}<input type="file" accept="application/pdf,image/*" hidden disabled={uploading} onChange={(e) => e.target.files[0] && uploadPlan(e.target.files[0])} /></label>}
-          {staff && plan && <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => setEditPlan(true)}>Renombrar / borrar plano</button>}
+          {staff && plan && <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => setEditPlan(plan)}>Renombrar / borrar plano</button>}
         </section>
         <section>
           <div className="eyebrow">Resumen del plano</div>
@@ -207,8 +211,18 @@ export default function Project({ id }) {
             <button className={vista === 'plan' ? 'on' : ''} onClick={() => setVista('plan')}>Plano</button>
             <button className={vista === 'lista' ? 'on' : ''} onClick={() => { setVista('lista'); setDrawer(false); setMview('plan'); }}>Lista</button>
           </div>
-          {vista === 'plan' && plan && <span className="btn sm hide-m" style={{ fontWeight: 500 }}>{plan.name}{plan.file_name ? ` — ${plan.file_name}` : ''}</span>}
-          {vista === 'plan' && data.plans.length > 1 && <select className="btn sm" style={{ width: 'auto' }} value={planId || ''} onChange={(e) => { setPlanId(e.target.value); setSel(null); }}>{data.plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+          {/* El nombre del plano era un rótulo muerto y el cambio de plano un
+              menú que solo aparecía si ya había dos. Ahora es un botón, siempre,
+              y detrás está todo lo de planos: cuáles hay, cuál se ve, subir uno
+              más, renombrar o borrar. En el celular es la única puerta. */}
+          {vista === 'plan' && (
+            <button className="btn sm planos" onClick={() => setPlanos(true)} title="Planos del proyecto">
+              <i dangerouslySetInnerHTML={{ __html: ICO.capas }} />
+              <b>{plan ? plan.name : 'Sin planos'}</b>
+              {data.plans.length > 1 && <small>{data.plans.findIndex((p) => p.id === planId) + 1}/{data.plans.length}</small>}
+              <span className="flecha">▾</span>
+            </button>
+          )}
           <div className="spacer" />
           {/* En escritorio los interruptores viven en la barra lateral, a la
               vista siempre; repetirlos aquí arriba era decir dos veces lo
@@ -271,7 +285,14 @@ export default function Project({ id }) {
       {newAt && <NewElementModal n={data.elements.length + 1} members={data.members} onCancel={() => setNewAt(null)} onOk={createElement} />}
       {report && <ReportModal hasSel={!!sel} onCancel={() => setReport(false)} onOk={generateReport} />}
       {repView && <ReportView {...repView} onClose={() => setRepView(null)} />}
-      {editPlan && plan && <EditPlanModal plan={plan} onClose={() => setEditPlan(false)} onChanged={load} />}
+      {editPlan && <EditPlanModal plan={editPlan} onClose={() => setEditPlan(null)} onChanged={load} />}
+      {planos && (
+        <PlanosModal plans={data.plans} elements={data.elements} planId={planId} staff={staff} uploading={uploading}
+          onElegir={(pid) => { setPlanId(pid); setSel(null); setPlanos(false); }}
+          onSubir={(f) => { setPlanos(false); uploadPlan(f); }}
+          onEditar={(p) => { setPlanos(false); setEditPlan(p); }}
+          onClose={() => setPlanos(false)} />
+      )}
     </div>
   );
 }
@@ -279,6 +300,7 @@ export default function Project({ id }) {
 const ICO = {
   casa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/></svg>',
   plan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16M3 12h18"/></svg>',
+  capas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
   tabla: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M9 10v9"/></svg>',
   list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg>',
   elem: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
@@ -379,6 +401,46 @@ function ReportModal({ hasSel, onCancel, onOk }) {
         <div className="field"><label>Para (nombre del destinatario, opcional)</label><input value={o.dest} onChange={(e) => setO({ ...o, dest: e.target.value })} placeholder="Arq. Rodríguez — Constructora" /></div>
         <div className="acts"><button type="button" className="btn" onClick={onCancel}>Cancelar</button><button className="btn primary">Generar</button></div>
       </form>
+    </div>
+  );
+}
+
+// Los planos de la obra, en una hoja.
+//
+// Un proyecto casi nunca es un solo plano: es una planta por piso, o una zona
+// por frente de trabajo. Se ven de uno en uno —dos plantas encimadas no se
+// leen— así que esto es un selector, no una galería. Y es el único lugar desde
+// donde se sube el segundo plano: en el celular no hay barra lateral, y sin
+// esta hoja el proyecto se quedaba con el primero para siempre.
+function PlanosModal({ plans, elements, planId, staff, uploading, onElegir, onSubir, onEditar, onClose }) {
+  return (
+    <div className="ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal hoja">
+        <h2>Planos <small className="muted">{plans.length}</small></h2>
+        <div className="planlist">
+          {!plans.length && <div className="empty">Este proyecto todavía no tiene planos.</div>}
+          {plans.map((p) => {
+            const n = elements.filter((e) => e.plan_id === p.id).length;
+            return (
+              <div key={p.id} className={'planrow' + (p.id === planId ? ' on' : '')}>
+                <button className="cual" onClick={() => onElegir(p.id)}>
+                  <div className="t">{p.name}</div>
+                  <div className="s">{n} {n === 1 ? 'ítem' : 'ítems'}{p.file_name ? ` · ${p.file_name}` : ''}</div>
+                </button>
+                {staff && <button className="btn sm" onClick={() => onEditar(p)} title="Renombrar o borrar">Editar</button>}
+              </div>
+            );
+          })}
+        </div>
+        {staff && (
+          <label className="btn primary block">
+            {uploading ? 'Procesando…' : '+ Subir otro plano (PDF o imagen)'}
+            <input type="file" accept="application/pdf,image/*" hidden disabled={uploading}
+              onChange={(e) => e.target.files[0] && onSubir(e.target.files[0])} />
+          </label>
+        )}
+        <div className="acts"><button className="btn" onClick={onClose}>Cerrar</button></div>
+      </div>
     </div>
   );
 }
