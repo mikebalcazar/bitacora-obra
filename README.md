@@ -1,9 +1,9 @@
-# t101pano
+# quell101
 
 Bitácora por ítem + punchlist sobre plano, con fotos y reportes. FORESPOT.
 
 El nombre que se ve —en la pantalla, en la app instalada, en los correos— es
-**t101pano**, en minúsculas. Por dentro, el repositorio, el Worker, la base y el
+**quell101**, en minúsculas. Por dentro, el repositorio, el Worker, la base y el
 almacén siguen llamándose `bitacora-obra`: son direcciones, no rótulos, y
 cambiarlas crearía recursos nuevos y vacíos, con la obra guardada en los viejos.
 

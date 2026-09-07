@@ -1,4 +1,4 @@
-# t101pano nativo para Windows
+# quell101 nativo para Windows
 
 La misma aplicación, en una ventana de Windows escrita en C++ que usa el WebView
 del sistema —el motor de Edge, que ya viene instalado— en vez de traer su propio

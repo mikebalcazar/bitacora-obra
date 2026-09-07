@@ -14,8 +14,8 @@ not_found_handling = "single-page-application"
 run_worker_first = ["/api/*", "/files/*", "/descargas/*"]
 
 [vars]
-APP_NAME = "t101pano"
-MAIL_FROM = "t101pano <bitacora@envios.taller101.mx>"
+APP_NAME = "quell101"
+MAIL_FROM = "quell101 <bitacora@envios.taller101.mx>"
 DEV = ""
 
 [[d1_databases]]

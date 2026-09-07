@@ -1,4 +1,4 @@
-# Piloto nativo de t101pano
+# Piloto nativo de quell101
 
 Esto no es un envoltorio: no hay navegador. La ventana es de Windows, el plano lo
 dibuja PDFium —las mismas entrañas que usa Chrome para ver PDFs, sueltas— y los
