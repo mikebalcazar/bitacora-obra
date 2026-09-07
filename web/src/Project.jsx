@@ -3,6 +3,7 @@ import { api, leer, escribir, hayRed, fileUrl, elStatus, FASES, TIPOS, colorTipo
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
 import ElementPanel from './ElementPanel.jsx';
+import Marca from './Marca.jsx';
 import { buildReport, REPORT_CSS } from './report.js';
 
 const TYPES = TIPOS.map((t) => t.clave);
@@ -141,7 +142,7 @@ export default function Project({ id }) {
             botón; y en el celular quedaba reducido a un punto de color. */}
         <button className="casa" onClick={() => go('/')} title="Ir a mis obras" aria-label="Ir a mis obras"
           dangerouslySetInnerHTML={{ __html: ICO.casa }} />
-        <span className="marca hide-m">quell101</span>
+        <span className="marca hide-m"><Marca alto={17} color="var(--ink)" /></span>
         <select value={id} onChange={(e) => go(`/p/${e.target.value}`)}>
           {(projects.length ? projects : [data.project]).map((p) => <option key={p.id} value={p.id}>{p.name}{p.client ? ` · ${p.client}` : ''}</option>)}
         </select>
