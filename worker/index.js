@@ -71,6 +71,56 @@ async function projectOfPunch(env, punchId) {
   return r ? r.project_id : null;
 }
 
+// ---------- etapas ----------
+// El camino que recorre un ítem antes de entregarse. La lista vive en la base y
+// no aquí porque todavía no está decidida: agregar una etapa es un INSERT.
+async function catalogoEtapas(env) {
+  const { results } = await env.DB.prepare(`SELECT clave, nombre, orden, abre_punchlist FROM etapas WHERE activa = 1 ORDER BY orden`).all();
+  return results;
+}
+
+// Marcar una etapa marca también todas las anteriores, y desmarcarla desmarca
+// todas las que siguen. El avance de un ítem es un número —tres de cuatro— y
+// eso sólo se sostiene si el camino no tiene huecos: nadie fleta lo que no ha
+// comprado, y si resulta que no se había comprado, tampoco había salido.
+async function marcaEtapa(env, user, eid, clave, hecha) {
+  const etapas = await catalogoEtapas(env);
+  const i = etapas.findIndex((x) => x.clave === clave);
+  if (i < 0) return { error: 'etapa desconocida' };
+  const tocadas = hecha ? etapas.slice(0, i + 1) : etapas.slice(i);
+  const q = hecha
+    ? etapas.slice(0, i + 1).map((x) =>
+        env.DB.prepare(`INSERT OR IGNORE INTO element_etapas (element_id, etapa, hecha_en, hecha_por) VALUES (?,?,?,?)`).bind(eid, x.clave, now(), user.id))
+    : etapas.slice(i).map((x) =>
+        env.DB.prepare(`DELETE FROM element_etapas WHERE element_id = ? AND etapa = ?`).bind(eid, x.clave));
+  if (q.length) await env.DB.batch(q);
+
+  // La etapa que abre el punchlist es la bisagra del ítem: al cruzarla cambia
+  // de fase, y queda escrito quién la cruzó y cuándo.
+  const bisagra = tocadas.find((x) => x.abre_punchlist);
+  if (bisagra) {
+    if (hecha) await env.DB.prepare(`UPDATE elements SET fase = 'punchlist', entregado_en = ?, entregado_por = ? WHERE id = ?`).bind(now(), user.id, eid).run();
+    // Volver atrás no borra los pendientes que ya se levantaron: se quedan
+    // guardados y vuelven a la vista en cuanto se entregue otra vez.
+    else await env.DB.prepare(`UPDATE elements SET fase = 'produccion', entregado_en = NULL, entregado_por = NULL WHERE id = ?`).bind(eid).run();
+  }
+  return { ok: true };
+}
+
+// Las etapas cumplidas de un puñado de ítems, en una sola consulta.
+async function etapasDe(env, ids) {
+  if (!ids.length) return {};
+  const marcas = ids.map(() => '?').join(',');
+  const { results } = await env.DB.prepare(
+    `SELECT ee.element_id, ee.etapa, ee.hecha_en, u.name AS hecha_por_nombre
+       FROM element_etapas ee JOIN etapas t ON t.clave = ee.etapa AND t.activa = 1
+       LEFT JOIN users u ON u.id = ee.hecha_por
+      WHERE ee.element_id IN (${marcas}) ORDER BY t.orden`).bind(...ids).all();
+  const out = {};
+  for (const r of results) (out[r.element_id] = out[r.element_id] || []).push(r);
+  return out;
+}
+
 // ---------- PIN ----------
 // Seis dígitos son un millón de combinaciones: se guardan derivados, nunca en
 // claro, y probar a ciegas se castiga con esperas que crecen. Las vueltas de
@@ -502,6 +552,7 @@ async function api(req, env, url, path) {
                (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id AND k.assignee_id=? AND k.status='pend') AS n_pend,
                (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id AND k.assignee_id=? AND k.status='proc') AS n_proc,
                (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id AND k.assignee_id=?) AS n_total,
+               (SELECT COUNT(*) FROM element_etapas ee JOIN etapas t ON t.clave=ee.etapa AND t.activa=1 WHERE ee.element_id=e.id) AS n_etapas,
                0 AS n_log
              FROM elements e JOIN plans p ON p.id = e.plan_id
              WHERE p.project_id = ? AND EXISTS (SELECT 1 FROM punch_items k WHERE k.element_id=e.id AND k.assignee_id=?)
@@ -512,6 +563,7 @@ async function api(req, env, url, path) {
                (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id AND k.status='pend') AS n_pend,
                (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id AND k.status='proc') AS n_proc,
                (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id) AS n_total,
+               (SELECT COUNT(*) FROM element_etapas ee JOIN etapas t ON t.clave=ee.etapa AND t.activa=1 WHERE ee.element_id=e.id) AS n_etapas,
                (SELECT COUNT(*) FROM log_entries l WHERE l.element_id=e.id) AS n_log
              FROM elements e JOIN plans p ON p.id = e.plan_id WHERE p.project_id = ? ORDER BY e.code`
           ).bind(pid).all();
@@ -519,7 +571,7 @@ async function api(req, env, url, path) {
       const { results: members } = mio
         ? { results: [] }
         : await env.DB.prepare(`SELECT u.id, u.name, u.email, u.role, u.company FROM project_members pm JOIN users u ON u.id = pm.user_id WHERE pm.project_id = ?`).bind(pid).all();
-      return json({ project, plans, elements, members });
+      return json({ project, plans, elements, members, etapas: await catalogoEtapas(env) });
     }
     if (!seg[2] && m === 'PATCH') {
       if (!isStaff(user)) return err('sin permiso', 403);
@@ -642,7 +694,8 @@ async function api(req, env, url, path) {
       const kp = await photosFor(env, 'punch', punch.map((k) => k.id));
       log.forEach((l) => (l.photos = lp[l.id] || []));
       punch.forEach((k) => (k.photos = kp[k.id] || []));
-      return json({ element, log, punch });
+      const etapas = await catalogoEtapas(env);
+      return json({ element, log, punch, etapas, hechas: (await etapasDe(env, [eid]))[eid] || [] });
     }
     if (!seg[2] && m === 'PATCH') {
       if (!isStaff(user)) return err('El contratista no edita elementos.', 403);
@@ -656,20 +709,29 @@ async function api(req, env, url, path) {
       await env.DB.prepare(`DELETE FROM elements WHERE id = ?`).bind(eid).run();
       return json({ ok: true });
     }
-    // Entregar el ítem, o devolverlo a producción si se entregó por error.
-    // Quién y cuándo quedan escritos: esa fecha es la que después nadie recuerda.
+    // Palomear o despalomear una etapa del proceso del ítem.
+    if (seg[2] === 'etapas' && m === 'POST') {
+      if (!isStaff(user)) return err('El avance del ítem lo lleva el supervisor.', 403);
+      const b = await req.json();
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
+      const r = await marcaEtapa(env, user, eid, String(b.clave || ''), !!b.hecha);
+      if (r.error) return err(r.error, 400);
+      await apunta(env, b.op_id);
+      return json({ ok: true });
+    }
+    // Entregar el ítem, o devolverlo a producción si se entregó por error. Es
+    // la etapa que abre el punchlist, así que pasa por el mismo camino que las
+    // demás: entregar da por cumplidas las anteriores —lo entregado se compró,
+    // se fletó y se instaló— y devolverlo a producción las deja como estaban.
     if (seg[2] === 'fase' && m === 'POST') {
       if (!isStaff(user)) return err('Entregar un ítem es del supervisor.', 403);
       const b = await req.json();
       if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
       const fase = b.fase === 'punchlist' ? 'punchlist' : 'produccion';
-      if (fase === 'produccion') {
-        // Devolver a producción no borra los pendientes que ya se levantaron: se
-        // quedan ahí, y vuelven a la vista en cuanto se entregue otra vez.
-        await env.DB.prepare(`UPDATE elements SET fase = 'produccion', entregado_en = NULL, entregado_por = NULL WHERE id = ?`).bind(eid).run();
-      } else {
-        await env.DB.prepare(`UPDATE elements SET fase = 'punchlist', entregado_en = ?, entregado_por = ? WHERE id = ?`).bind(now(), user.id, eid).run();
-      }
+      const bisagra = (await catalogoEtapas(env)).find((x) => x.abre_punchlist);
+      if (!bisagra) return err('no hay etapa de entrega configurada', 500);
+      const r = await marcaEtapa(env, user, eid, bisagra.clave, fase === 'punchlist');
+      if (r.error) return err(r.error, 400);
       await apunta(env, b.op_id);
       return json({ ok: true, fase });
     }

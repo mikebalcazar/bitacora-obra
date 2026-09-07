@@ -5,18 +5,26 @@ import { useApp } from './App.jsx';
 export default function ElementPanel({ elementId, flash, plan, staff, user, members = [], todos = [], onIr, onChanged, onClose }) {
   const { toast } = useApp();
   const [d, setD] = useState(null);
-  const [tab, setTab] = useState(!staff || flash ? 'punch' : 'log');
+  // La pestaña de entrada depende de en qué va el ítem: mientras se fabrica, lo
+  // que se viene a ver es el avance; ya entregado, la bitácora. Se decide con
+  // los datos en la mano, así que empieza en nada.
+  const [tab, setTab] = useState(null);
   const [lb, setLb] = useState(null);
   const [edit, setEdit] = useState(false);
 
   const load = () => elementId && leer(`/elements/${elementId}`).then(setD).catch((e) => toast(e.message));
-  useEffect(() => { setD(null); load(); }, [elementId]);
+  useEffect(() => { setD(null); setTab(null); load(); }, [elementId]);
   useEffect(() => { if (flash) setTab('punch'); }, [flash]);
+  useEffect(() => {
+    if (!d || tab) return;
+    setTab(!staff ? 'punch' : d.element.fase === 'punchlist' ? 'log' : 'proceso');
+  }, [d]);
   useEffect(() => { if (flash && d) setTimeout(() => document.querySelector(`[data-k="${flash}"]`)?.scrollIntoView({ block: 'center' }), 50); }, [flash, d]);
 
   if (!elementId) return <aside className="panel"><div className="empty"><h3>{staff ? 'Selecciona un ítem' : 'Selecciona un pendiente'}</h3>Toca un pin del plano{staff ? ' o crea uno con + Ítem' : '. Solo salen los pines donde tienes algo asignado.'}</div></aside>;
-  if (!d) return <aside className="panel"><div className="spin" /></aside>;
-  const { element: e, log, punch } = d;
+  if (!d || !tab) return <aside className="panel"><div className="spin" /></aside>;
+  const { element: e, log, punch, etapas = [], hechas = [] } = d;
+  const nEtapas = etapas.filter((x) => hechas.some((h) => h.etapa === x.clave)).length;
   const open = punch.filter((k) => k.status !== 'ok').length;
   const changed = () => { load(); onChanged(); };
 
@@ -72,11 +80,14 @@ export default function ElementPanel({ elementId, flash, plan, staff, user, memb
           <span>{e.fase === 'punchlist' && e.entregado_en ? `Entregado ${fmtD(e.entregado_en)}` : `Creado ${fmtD(e.created_at)}`}</span>
         </div>
         <div className="tabs">
+          {staff && <button className={'tab' + (tab === 'proceso' ? ' on' : '')} onClick={() => setTab('proceso')}>Proceso <span className="n">{nEtapas}/{etapas.length}</span></button>}
           {staff && <button className={'tab' + (tab === 'log' ? ' on' : '')} onClick={() => setTab('log')}>Bitácora <span className="n">{log.length}</span></button>}
           <button className={'tab' + (tab === 'punch' ? ' on' : '')} onClick={() => setTab('punch')}>{staff ? 'Punchlist' : 'Lo que me toca'} <span className="n">{open}/{punch.length}</span></button>
         </div>
       </div>
-      {tab === 'log' && staff ? <Log e={e} log={log} onChanged={changed} setLb={setLb} user={user} staff={staff} /> : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} members={members} onEntregar={entregar} />}
+      {tab === 'proceso' && staff ? <Proceso e={e} etapas={etapas} hechas={hechas} onChanged={changed} />
+        : tab === 'log' && staff ? <Log e={e} log={log} onChanged={changed} setLb={setLb} user={user} staff={staff} />
+        : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} members={members} onEntregar={entregar} onVerProceso={() => setTab('proceso')} />}
       {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
       {edit && <EditElement e={e} onClose={() => setEdit(false)} onChanged={() => { changed(); }} onDeleted={() => { onChanged(); onClose(); }} />}
     </aside>
@@ -178,7 +189,87 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
   );
 }
 
-function Punch({ e, punch, flash, onChanged, setLb, user, staff, members, onEntregar }) {
+// El camino del ítem antes de entregarse: una casilla por etapa.
+//
+// Se puede palomear cualquier etapa, no solo la siguiente, y palomearla da por
+// cumplidas las anteriores; despalomear una tira las que vienen después. Es la
+// única forma de que "3 de 4" quiera decir algo: un camino con huecos no se
+// puede resumir en un número, y ese número es justo lo que se va a leer en la
+// lista general sin abrir un solo ítem.
+function Proceso({ e, etapas, hechas, onChanged }) {
+  const { toast } = useApp();
+  const [busy, setBusy] = useState('');
+  const hecha = new Map(hechas.map((h) => [h.etapa, h]));
+  const n = etapas.filter((x) => hecha.has(x.clave)).length;
+
+  async function marca(etapa, valor) {
+    const i = etapas.findIndex((x) => x.clave === etapa.clave);
+    const arrastra = valor
+      ? etapas.slice(0, i).filter((x) => !hecha.has(x.clave))
+      : etapas.slice(i + 1).filter((x) => hecha.has(x.clave));
+    const nombres = arrastra.map((x) => x.nombre).join(', ');
+    if (arrastra.length && !confirm(valor
+      ? `Palomear ${etapa.nombre} da también por cumplida${arrastra.length > 1 ? 's' : ''} ${nombres}. ¿Seguir?`
+      : `Quitar ${etapa.nombre} deja pendiente${arrastra.length > 1 ? 's' : ''} también ${nombres}. ¿Seguir?`)) return;
+    // Entregar es la bisagra del ítem: de un lado se fabrica, del otro se
+    // corrige. Se pregunta aparte aunque no arrastre a nadie.
+    if (etapa.abre_punchlist && !arrastra.length && !confirm(valor
+      ? `¿Dar por entregado ${e.code || e.name}? A partir de ahí se le levantan pendientes.`
+      : `¿Regresar ${e.code || e.name} a producción? Los pendientes que ya tiene no se borran: vuelven a la vista cuando se entregue otra vez.`)) return;
+    setBusy(etapa.clave);
+    try {
+      await escribir({
+        ruta: `/elements/${e.id}/etapas`, cuerpo: { clave: etapa.clave, hecha: valor },
+        parche: {
+          clave: `/elements/${e.id}`,
+          fn: (d) => {
+            const toca = new Set((valor ? etapas.slice(0, i + 1) : etapas.slice(i)).map((x) => x.clave));
+            const resto = (d.hechas || []).filter((h) => !toca.has(h.etapa));
+            const ahora = new Date().toISOString();
+            d.hechas = valor ? [...resto, ...[...toca].map((c) => ({ etapa: c, hecha_en: ahora }))] : resto;
+            const bisagra = etapas.find((x) => x.abre_punchlist);
+            if (bisagra && toca.has(bisagra.clave)) {
+              d.element = { ...d.element, fase: valor ? 'punchlist' : 'produccion', entregado_en: valor ? ahora : null };
+            }
+            return d;
+          },
+        },
+      });
+      onChanged();
+    } catch (x) { toast(x.message); } finally { setBusy(''); }
+  }
+
+  return (
+    <div className="body">
+      <div className="plsum">
+        <span>{n}/{etapas.length} etapas</span>
+        <div className="bar neutra"><i style={{ width: `${etapas.length ? (n / etapas.length) * 100 : 0}%`, background: 'var(--accent)' }} /></div>
+      </div>
+      <div className="proc">
+        {etapas.map((x, i) => {
+          const h = hecha.get(x.clave);
+          const sig = !h && i === n;   // la que toca ahora
+          return (
+            <button key={x.clave} className={'pstep' + (h ? ' ok' : '') + (sig ? ' sig' : '') + (x.abre_punchlist ? ' bisagra' : '')}
+              disabled={busy === x.clave} onClick={() => marca(x, !h)}>
+              <i className="caja">{h ? '✓' : ''}</i>
+              <div>
+                <div className="t">{x.nombre}{!!x.abre_punchlist && <span className="pill acu">abre punchlist</span>}</div>
+                <div className="sub">
+                  {h ? <>Cumplida {fmtD(h.hecha_en)}{h.hecha_por_nombre ? ` · ${h.hecha_por_nombre}` : ''}</>
+                     : sig ? 'Es la que sigue' : 'Pendiente'}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {!etapas.length && <div className="empty"><h3>Sin etapas</h3>Todavía no hay etapas configuradas para el proceso.</div>}
+    </div>
+  );
+}
+
+function Punch({ e, punch, flash, onChanged, setLb, user, staff, members, onEntregar, onVerProceso }) {
   const { toast } = useApp();
   const [f, setF] = useState({ title: '', resp: e.resp || '', due_date: todayISO(3), assignee_id: '' });
   const [evid, setEvid] = useState(null);          // el pendiente que se está dando por terminado
@@ -240,7 +331,7 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff, members, onEntr
           Los pendientes se levantan cuando ya está entregado y hay algo que corregir.
           {!!punch.length && <div style={{ marginTop: 10 }}>Tiene {punch.length} {punch.length === 1 ? 'pendiente guardado' : 'pendientes guardados'} de antes; vuelven a la vista al entregarlo.</div>}
         </div>
-        {staff && onEntregar && <button className="btn primary block" onClick={() => onEntregar('punchlist')}>Dar por entregado</button>}
+        {staff && onVerProceso && <button className="btn primary block" onClick={onVerProceso}>Ver el proceso del ítem</button>}
       </div>
     );
   }
