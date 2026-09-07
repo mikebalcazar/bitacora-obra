@@ -177,6 +177,15 @@ export const TIPOS = [
 // Un ítem viejo con un tipo que ya no está en la lista no desaparece: se pinta
 // del azul marino de siempre y se puede prender y apagar como los demás.
 export const colorTipo = (t) => (TIPOS.find((x) => x.clave === t) || {}).color || '#1C3557';
+// El avance de un ítem por su proceso, como fracción de las etapas activas. El
+// catálogo lo manda el servidor —las etapas viven en la base, no aquí— así que
+// el total cambia solo el día que se agregue una.
+export const avance = (e, etapas = []) => {
+  const total = etapas.length;
+  const hechas = Math.min(e?.n_etapas || 0, total);
+  return { hechas, total, pct: total ? Math.round((hechas / total) * 100) : 0 };
+};
+
 export const esDueno = (u) => u?.role === 'admin';
 export const esContratista = (u) => u?.role === 'con';
 export const dirige = (u) => u?.role === 'admin' || u?.role === 'int';

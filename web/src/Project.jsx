@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { api, leer, escribir, hayRed, fileUrl, elStatus, FASES, TIPOS, colorTipo, fmtD, isLate, rasterizePlan } from './api.js';
+import { api, leer, escribir, hayRed, fileUrl, elStatus, FASES, TIPOS, colorTipo, fmtD, isLate, rasterizePlan, avance } from './api.js';
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
 import ElementPanel from './ElementPanel.jsx';
@@ -25,6 +25,10 @@ export default function Project({ id }) {
   const [drawer, setDrawer] = useState(false);
   const [openItems, setOpenItems] = useState(null);
   const [mview, setMview] = useState('plan'); // móvil: plan | pend | elem
+  // El plano contesta "dónde"; la lista contesta "cómo van". Son la misma obra
+  // vista de dos maneras y comparten los mismos filtros, así que apagar un tipo
+  // en una lo apaga en la otra.
+  const [vista, setVista] = useState('plan');   // plan | lista
   const [uploading, setUploading] = useState(false);
   const [report, setReport] = useState(false);
   const [editPlan, setEditPlan] = useState(false);
@@ -69,9 +73,14 @@ export default function Project({ id }) {
     const hay = new Set((data?.elements || []).map((e) => e.type || 'Otro'));
     return [...new Set([...TYPES, ...hay])];
   }, [data]);
-  const shown = elements
+  const filtra = (lista) => lista
     .filter((e) => !apagados.has(e.type || 'Otro'))
     .filter((e) => !fase || (e.fase || 'produccion') === fase);
+  const shown = filtra(elements);
+  // La lista es de toda la obra y no de un plano: un ítem se atora en compras
+  // sin que importe en qué hoja está dibujado.
+  const listados = useMemo(() => filtra(data?.elements || []), [data, apagados, fase]);
+  const etapas = data?.etapas || [];
   const enFase = (f) => elements.filter((e) => (e.fase || 'produccion') === f).length;
   const prende = (t) => setApagados((s0) => { const n = new Set(s0); n.has(t) ? n.delete(t) : n.add(t); return n; });
   const openTotal = data ? data.elements.reduce((a, e) => a + e.n_pend + e.n_proc, 0) : 0;
@@ -193,8 +202,12 @@ export default function Project({ id }) {
 
       <main className="stage">
         <div className="tools">
-          {plan && <span className="btn sm" style={{ fontWeight: 500 }}>{plan.name}{plan.file_name ? ` — ${plan.file_name}` : ''}</span>}
-          {data.plans.length > 1 && <select className="btn sm" style={{ width: 'auto' }} value={planId || ''} onChange={(e) => { setPlanId(e.target.value); setSel(null); }}>{data.plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+          <div className="segm">
+            <button className={vista === 'plan' ? 'on' : ''} onClick={() => setVista('plan')}>Plano</button>
+            <button className={vista === 'lista' ? 'on' : ''} onClick={() => { setVista('lista'); setDrawer(false); setMview('plan'); }}>Lista</button>
+          </div>
+          {vista === 'plan' && plan && <span className="btn sm hide-m" style={{ fontWeight: 500 }}>{plan.name}{plan.file_name ? ` — ${plan.file_name}` : ''}</span>}
+          {vista === 'plan' && data.plans.length > 1 && <select className="btn sm" style={{ width: 'auto' }} value={planId || ''} onChange={(e) => { setPlanId(e.target.value); setSel(null); }}>{data.plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
           <div className="spacer" />
           {/* En escritorio los interruptores viven en la barra lateral, a la
               vista siempre; repetirlos aquí arriba era decir dos veces lo
@@ -215,12 +228,15 @@ export default function Project({ id }) {
         </div>
         {(apagados.size > 0 || fase) && !adding && (
           <div className="hint">
-            Viendo {shown.length} de {elements.length} ítems{apagados.size ? ` · sin ${[...apagados].join(', ').toLowerCase()}` : ''}{fase ? ` · ${FASES[fase]}` : ''}
+            Viendo {vista === 'lista' ? listados.length : shown.length} de {vista === 'lista' ? data.elements.length : elements.length} ítems{apagados.size ? ` · sin ${[...apagados].join(', ').toLowerCase()}` : ''}{fase ? ` · ${FASES[fase]}` : ''}
             <button className="btn sm" onClick={() => { setApagados(new Set()); setFase(''); }}>Ver todos</button>
           </div>
         )}
         {adding && <div className="hint">Toca el plano donde va el ítem · <button className="btn sm" onClick={() => setAdding(false)}>Cancelar</button></div>}
-        {plan ? (
+        {vista === 'lista' ? (
+          <Lista items={listados} etapas={etapas} plans={data.plans} sel={sel}
+            onIr={(e) => { selectEl(e.id, { planId: e.plan_id }); if (window.innerWidth <= 900) setMview('elem'); }} />
+        ) : plan ? (
           <PlanCanvas plan={plan} elements={shown} sel={sel} flash={flash} adding={adding} onPick={(eid) => selectEl(eid)} onClick={onPlanClick} />
         ) : (
           <div className="center" style={{ position: 'absolute', inset: 0 }}>
@@ -265,6 +281,67 @@ const ICO = {
   elem: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
   doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/></svg>',
 };
+
+// La obra entera en una lista: qué es cada ítem, en qué etapa va y qué le falta.
+//
+// El plano contesta dónde está cada cosa; para saber cómo van hay que picar pin
+// por pin. Aquí se ve de un jalón, y arriba el embudo dice cuántos ítems han
+// pasado cada etapa: ahí es donde se nota que catorce se atoraron en flete.
+function Lista({ items, etapas, plans, sel, onIr }) {
+  const nombrePlan = (id) => (plans.find((p) => p.id === id) || {}).name || '';
+  // Cuántos ítems llevan cumplida cada etapa. Como el camino no tiene huecos,
+  // basta con comparar contra el número de etapas que lleva cada uno.
+  const embudo = etapas.map((x, i) => ({ ...x, n: items.filter((e) => (e.n_etapas || 0) > i).length }));
+  const orden = [...items].sort((a, b) => (a.code || '').localeCompare(b.code || '', 'es', { numeric: true }) || a.name.localeCompare(b.name, 'es'));
+
+  return (
+    <div className="lista">
+      {!!etapas.length && (
+        <div className="embudo">
+          {embudo.map((x) => (
+            <div key={x.clave} className={'ecol' + (x.abre_punchlist ? ' bisagra' : '')}>
+              <b>{x.n}</b>
+              <span>{x.nombre}</span>
+              <i style={{ width: items.length ? `${(x.n / items.length) * 100}%` : 0 }} />
+            </div>
+          ))}
+          <div className="ecol total"><b>{items.length}</b><span>ítems</span></div>
+        </div>
+      )}
+      {!orden.length && <div className="empty"><h3>Sin ítems</h3>Ninguno cumple con los filtros de arriba.</div>}
+      {orden.map((e) => {
+        const av = avance(e, etapas);
+        const abiertos = (e.n_pend || 0) + (e.n_proc || 0);
+        const etapaActual = av.hechas >= av.total ? 'Entregado' : (etapas[av.hechas] || {}).nombre || '—';
+        return (
+          <button key={e.id} className={'lrow' + (e.id === sel ? ' on' : '')} onClick={() => onIr(e)}>
+            <i className="tipo" style={{ background: colorTipo(e.type || 'Otro') }} title={e.type} />
+            <div className="id">
+              <div className="t">{e.code ? <b>{e.code}</b> : null} {e.name}</div>
+              <div className="s">{e.type || 'Otro'} · {nombrePlan(e.plan_id)}{e.resp ? ` · ${e.resp}` : ''}</div>
+            </div>
+            <div className="pipe" title={`${av.hechas} de ${av.total} etapas`}>
+              {etapas.map((x, i) => (
+                <i key={x.clave} className={(i < av.hechas ? 'ok' : '') + (x.abre_punchlist ? ' bisagra' : '')} />
+              ))}
+            </div>
+            <div className="pct">
+              <span>{av.pct}%</span>
+              <small>{etapaActual}</small>
+            </div>
+            <div className="pend">
+              {(e.fase || 'produccion') === 'punchlist'
+                ? (e.n_total
+                    ? <span className={'pill ' + (e.n_pend ? 'pend' : e.n_proc ? 'proc' : 'ok')}>{abiertos ? `${abiertos} abierto${abiertos > 1 ? 's' : ''}` : 'Todo resuelto'}</span>
+                    : <span className="pill gen">Sin pendientes</span>)
+                : <span className="pill gen">En producción</span>}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function NewElementModal({ n, members, onCancel, onOk }) {
   const [f, setF] = useState({ code: `E-${String(n).padStart(2, '0')}`, type: 'Mueble', name: '', resp: '' });

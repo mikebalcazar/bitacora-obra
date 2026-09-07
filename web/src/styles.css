@@ -161,6 +161,9 @@ a{color:var(--accent)}
 .pi.flash{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .plsum{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--ink2)}
 .bar{flex:1;height:6px;border-radius:3px;background:var(--pend-soft);overflow:hidden;display:flex}
+/* Lo que falta de un punchlist es rojo claro porque falta arreglarlo; lo que
+   falta de un proceso solo es futuro. Gris. */
+.bar.neutra{background:var(--line2)}
 .bar i{display:block;height:100%}
 .newpi{border:1px dashed var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--surface2)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
@@ -188,6 +191,62 @@ a{color:var(--accent)}
 .card h3{font-size:16px}
 .card .n{font-size:22px;font-weight:600;color:var(--pend)}
 .card .n.zero{color:var(--ok)}
+
+/* ── el proceso del ítem ────────────────────────────────────────────────── */
+.proc{display:flex;flex-direction:column;gap:6px}
+.pstep{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;
+  background:var(--surface);text-align:left;width:100%}
+.pstep:hover{border-color:var(--accent)}
+.pstep .caja{width:20px;height:20px;flex:none;border:1.5px solid var(--line);border-radius:6px;display:grid;place-items:center;
+  font-size:12px;font-weight:700;color:transparent;background:var(--surface2)}
+.pstep .t{font-weight:500;display:flex;align-items:center;gap:6px}
+.pstep .sub{font-size:12px;color:var(--ink3)}
+/* La que toca ahora se señala sola: en una lista de casillas todas iguales,
+   saber cuál sigue es el único dato que hace falta para actuar. */
+.pstep.sig{border-color:var(--accent);background:var(--accent-soft)}
+.pstep.sig .caja{border-color:var(--accent)}
+.pstep.ok .caja{background:var(--ok);border-color:var(--ok);color:#fff}
+.pstep.ok .t{color:var(--ink2)}
+.pstep.bisagra{border-left:3px solid var(--accent)}
+.pstep:disabled{opacity:.6}
+
+/* ── la obra en lista ───────────────────────────────────────────────────── */
+.lista{position:absolute;inset:0;overflow:auto;background:var(--bg);padding:56px 14px calc(14px + var(--sab))}
+.embudo{display:flex;gap:8px;margin-bottom:12px}
+.ecol{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 10px;position:relative;overflow:hidden}
+.ecol b{display:block;font-size:20px;font-weight:600;line-height:1.1}
+.ecol span{font-size:11.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.ecol i{position:absolute;left:0;bottom:0;height:3px;background:var(--accent);display:block}
+.ecol.bisagra i{background:var(--ok)}
+.ecol.total{background:var(--surface2)}
+.ecol.total i{display:none}
+.lrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--surface);
+  border:1px solid var(--line);border-top-width:0;padding:9px 10px}
+.lrow:first-of-type{border-top-width:1px;border-radius:10px 10px 0 0}
+.lrow:last-child{border-radius:0 0 10px 10px}
+.lrow:hover{background:var(--surface2)}
+.lrow.on{background:var(--accent-soft);border-color:var(--accent)}
+.lrow .tipo{width:4px;align-self:stretch;border-radius:2px;flex:none}
+.lrow .id{flex:1;min-width:0}
+.lrow .id .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow .id .s{font-size:12px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Una barra partida en tantos tramos como etapas: el ojo cuenta los tramos
+   llenos sin leer el número, y el número está al lado para cuando sí hace falta. */
+.pipe{display:flex;gap:2px;width:120px;flex:none}
+.pipe i{flex:1;height:8px;border-radius:2px;background:var(--line2)}
+.pipe i.ok{background:var(--accent)}
+.pipe i.bisagra{border-radius:2px 4px 4px 2px}
+.pipe i.ok.bisagra{background:var(--ok)}
+.pct{width:78px;flex:none;text-align:right}
+.pct span{font-variant-numeric:tabular-nums;font-weight:500}
+.pct small{display:block;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pend{width:120px;flex:none;text-align:right}
+
+/* Plano o lista: la misma obra, dos preguntas distintas. */
+.segm{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;
+  box-shadow:0 2px 8px rgba(20,28,38,.08)}
+.segm button{padding:7px 12px;font-size:13px;font-weight:500;color:var(--ink2);min-height:36px}
+.segm button.on{background:var(--accent);color:var(--accent-ink)}
 
 /* mobile */
 .mnav{display:none}
@@ -272,4 +331,19 @@ a{color:var(--accent)}
 .swatches.solo-m{display:none}
 @media (max-width:900px){
   .swatches.solo-m{display:flex}
+}
+
+/* En el celular la fila de la lista se parte en dos renglones: el nombre
+   completo arriba, el avance abajo. Apretar cinco columnas en 360 px deja el
+   nombre en tres letras, que es justo lo que se venía a leer. */
+@media (max-width:700px){
+  .lista{padding-top:52px}
+  .embudo{overflow-x:auto;padding-bottom:2px}
+  .ecol{min-width:88px;flex:none}
+  .lrow{flex-wrap:wrap;row-gap:6px}
+  .lrow .id{flex:1 0 60%}
+  .lrow .pipe{width:auto;flex:1 0 40%;order:3}
+  .lrow .pct{order:4;width:auto;text-align:left;flex:0 0 84px}
+  .lrow .pend{order:5;width:auto;flex:1;text-align:right}
+  .lrow .pend .pill{white-space:nowrap}
 }
