@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { api, leer, escribir, hayRed, fileUrl, elStatus, FASES, TIPOS, colorTipo, fmtD, isLate, rasterizePlan, avance } from './api.js';
+import { api, leer, escribir, hayRed, fileUrl, FASES, TIPOS, colorTipo, fmtD, isLate, rasterizePlan, avance } from './api.js';
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
 import ElementPanel from './ElementPanel.jsx';
@@ -185,9 +185,7 @@ export default function Project({ id }) {
           <div className="eyebrow">Cómo leer un pin</div>
           <div className="legend">
             <span><i className="dot" style={{ background: colorTipo('Mueble') }} />El relleno es el tipo</span>
-            <span><i className="dot aro pend" />Aro rojo: con pendientes</span>
-            <span><i className="dot aro proc" />Aro ámbar: en proceso</span>
-            <span><i className="dot aro ok" />Aro verde: todo resuelto</span>
+            <span><i className="dot aro pend" />Aro rojo: punchlist sin cerrar</span>
             <span><i className="dot hueco" />Hueco: en producción</span>
           </div>
         </section>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { fileUrl, elStatus, colorTipo } from './api.js';
+import { fileUrl, colorTipo } from './api.js';
 import { pdfjs, esPdf } from './pdf.js';
 
 // Plano + pines. Pan (arrastrar), zoom (rueda / pinch), tap para elegir.
@@ -269,13 +269,20 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
       <canvas ref={lienzo} className="hoja" style={{ width: tam.w, height: tam.h }} />
       <div className="world" style={{ transform: `translate(${v.x}px,${v.y}px) scale(${v.s})` }}>
         {elements.map((e) => {
-          const n = e.n_pend + e.n_proc;
-          // El relleno dice de qué tipo es; el aro, cómo va su punchlist. Un
-          // ítem en producción va hueco: todavía no hay nada entregado.
+          // El relleno dice de qué tipo es; el aro rojo, que tiene punchlist sin
+          // cerrar. Un ítem en producción va hueco: todavía no hay nada
+          // entregado que corregir.
+          //
+          // El pin no lleva número adentro. Lo llevaba, y con un dígito el pin
+          // se estiraba a 120 px de ancho: el texto abre una columna en la
+          // rejilla que se pasa por alto el ancho fijo, y quedaba un óvalo. En
+          // un plano lleno el pin es una marca de posición, no una etiqueta:
+          // cuántos pendientes son se lee al abrirlo.
+          const abierto = (e.n_pend || 0) + (e.n_proc || 0) > 0;
           const tinte = colorTipo(e.type);
           const enProd = (e.fase || 'produccion') === 'produccion';
           return (
-            <div key={e.id} className={'pin ' + elStatus(e) + (enProd ? ' prod' : '') + (e.id === sel ? ' sel' : '') + (flash && e.id === sel ? ' flash' : '')}
+            <div key={e.id} className={'pin' + (abierto ? ' abierto' : '') + (enProd ? ' prod' : '') + (e.id === sel ? ' sel' : '') + (flash && e.id === sel ? ' flash' : '')}
               style={{
                 left: e.x * plan.width, top: e.y * plan.height, transform: `translate(-50%,-50%) scale(${1 / v.s})`,
                 background: enProd ? '#fff' : tinte,
@@ -283,7 +290,7 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
                 ['--tinte']: tinte,
               }}
               onPointerDown={(ev) => ev.stopPropagation()} onClick={(ev) => { ev.stopPropagation(); if (!adding) onPick(e.id); }} title={`${e.code} · ${e.name}`}>
-              {n || ''}<span>{e.code}</span>
+              <span>{e.code}</span>
             </div>
           );
         })}
