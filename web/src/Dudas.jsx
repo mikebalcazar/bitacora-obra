@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { leer, escribir, fmtD, fmtT, ini, ROLES } from './api.js';
+import { leer, escribir, fmtD, fmtT, ini, ROLES, fileUrl } from './api.js';
 import { useApp } from './App.jsx';
+import { Photos, usePending, PhotoInput, PendingStrip } from './Fotos.jsx';
 
 // Las dudas de la obra.
 //
@@ -17,17 +18,19 @@ export default function Dudas({ pid, staff, user, onIr }) {
   const [texto, setTexto] = useState('');
   const [busy, setBusy] = useState(false);
   const [verCerradas, setVerCerradas] = useState(false);
+  const [lb, setLb] = useState(null);
+  const { pending, add, clear, remove } = usePending();
 
   const load = () => leer(`/projects/${pid}/dudas`).then((r) => setDudas(r.dudas)).catch((e) => toast(e.message));
   useEffect(() => { setDudas(null); load(); }, [pid]);
 
   async function preguntar() {
     const t = texto.trim();
-    if (!t) return;
+    if (!t && !pending.length) return;
     setBusy(true);
     try {
-      const r = await escribir({ ruta: `/projects/${pid}/dudas`, cuerpo: { texto: t } });
-      setTexto('');
+      const r = await escribir({ ruta: `/projects/${pid}/dudas`, campos: { texto: t }, archivos: pending.map((p) => p.file) });
+      setTexto(''); clear();
       if (!r.subido) toast('Sin señal: la duda se manda sola cuando vuelva.');
       load();
     } catch (e) { toast(e.message); } finally { setBusy(false); }
@@ -43,12 +46,14 @@ export default function Dudas({ pid, staff, user, onIr }) {
       <div className="preguntar">
         <textarea rows={2} value={texto} onChange={(e) => setTexto(e.target.value)}
           placeholder={staff ? 'Levanta una duda de esta obra…' : '¿Qué necesitas preguntarle al supervisor?'} />
-        <div className="row">
+        <PendingStrip pending={pending} remove={remove} />
+        <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+          <PhotoInput onFiles={add} />
           <span className="muted" style={{ fontSize: 12 }}>
             {staff ? 'Se le va a la fila de dudas de la obra.' : 'Le llega al supervisor de la obra.'}
           </span>
           <div className="spacer" />
-          <button className="btn primary sm" disabled={busy || !texto.trim()} onClick={preguntar}>
+          <button className="btn primary sm" disabled={busy || (!texto.trim() && !pending.length)} onClick={preguntar}>
             {busy ? 'Mandando…' : 'Preguntar'}
           </button>
         </div>
@@ -60,25 +65,27 @@ export default function Dudas({ pid, staff, user, onIr }) {
       {!abiertas.length && !cerradas.length && (
         <div className="empty"><h3>Sin dudas</h3>{staff ? 'Nadie ha preguntado nada en esta obra.' : 'Aquí van a quedar tus preguntas y lo que te contesten.'}</div>
       )}
-      {abiertas.map((d) => <Duda key={d.id} d={d} staff={staff} user={user} onCambio={load} onIr={onIr} />)}
+      {abiertas.map((d) => <Duda key={d.id} d={d} staff={staff} user={user} onCambio={load} onIr={onIr} setLb={setLb} />)}
 
       {!!cerradas.length && (
         <>
           <button className="btn sm" onClick={() => setVerCerradas(!verCerradas)}>
             {verCerradas ? 'Ocultar' : 'Ver'} {cerradas.length} {cerradas.length === 1 ? 'resuelta' : 'resueltas'}
           </button>
-          {verCerradas && cerradas.map((d) => <Duda key={d.id} d={d} staff={staff} user={user} onCambio={load} onIr={onIr} />)}
+          {verCerradas && cerradas.map((d) => <Duda key={d.id} d={d} staff={staff} user={user} onCambio={load} onIr={onIr} setLb={setLb} />)}
         </>
       )}
+      {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
     </div>
   );
 }
 
-function Duda({ d, staff, user, onCambio, onIr }) {
+function Duda({ d, staff, user, onCambio, onIr, setLb }) {
   const { toast } = useApp();
   const [resp, setResp] = useState('');
   const [busy, setBusy] = useState(false);
   const [abierto, setAbierto] = useState(false);
+  const { pending, add, clear, remove } = usePending();
   const cerrada = d.estado !== 'abierta';
   // Contesta quien dirige la obra, y también quien preguntó: media respuesta
   // casi siempre necesita una aclaración de vuelta.
@@ -86,11 +93,11 @@ function Duda({ d, staff, user, onCambio, onIr }) {
 
   async function responder() {
     const t = resp.trim();
-    if (!t) return;
+    if (!t && !pending.length) return;
     setBusy(true);
     try {
-      await escribir({ ruta: `/dudas/${d.id}/respuestas`, cuerpo: { texto: t } });
-      setResp(''); setAbierto(false); onCambio();
+      await escribir({ ruta: `/dudas/${d.id}/respuestas`, campos: { texto: t }, archivos: pending.map((p) => p.file) });
+      setResp(''); clear(); setAbierto(false); onCambio();
     } catch (e) { toast(e.message); } finally { setBusy(false); }
   }
   async function cerrar(estado) {
@@ -111,7 +118,8 @@ function Duda({ d, staff, user, onCambio, onIr }) {
           ? <span className="pill ok">Resuelta{d.resuelta_por_nombre ? ` · ${d.resuelta_por_nombre}` : ''}</span>
           : <span className="pill pend">Esperando</span>}
       </div>
-      <div className="pregunta">{d.texto}</div>
+      {d.texto && <div className="pregunta">{d.texto}</div>}
+      <Photos photos={d.photos} setLb={setLb} />
       {d.element_id && (
         <button className="btn sm liga" onClick={() => onIr && onIr(d.element_id, d.plan_id)}>
           Sobre {d.element_code ? `${d.element_code} · ` : ''}{d.element_name}
@@ -121,7 +129,8 @@ function Duda({ d, staff, user, onCambio, onIr }) {
       {d.respuestas.map((r) => (
         <div key={r.id} className="respuesta">
           <div className="min"><b>{r.quien}</b><span className="role">{ROLES[r.quien_rol] || ''}</span><time>{fmtD(r.created_at)} {fmtT(r.created_at)}</time></div>
-          <div>{r.texto}</div>
+          {r.texto && <div>{r.texto}</div>}
+          <Photos photos={r.photos} setLb={setLb} />
         </div>
       ))}
 
@@ -133,10 +142,12 @@ function Duda({ d, staff, user, onCambio, onIr }) {
       {abierto && (
         <div className="responder">
           <textarea rows={2} autoFocus value={resp} onChange={(e) => setResp(e.target.value)} placeholder="Contesta…" />
-          <div className="row">
-            <button className="btn sm" onClick={() => { setAbierto(false); setResp(''); }}>Cancelar</button>
+          <PendingStrip pending={pending} remove={remove} />
+          <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            <PhotoInput onFiles={add} />
+            <button className="btn sm" onClick={() => { setAbierto(false); setResp(''); clear(); }}>Cancelar</button>
             <div className="spacer" />
-            <button className="btn primary sm" disabled={busy || !resp.trim()} onClick={responder}>{busy ? 'Enviando…' : 'Enviar'}</button>
+            <button className="btn primary sm" disabled={busy || (!resp.trim() && !pending.length)} onClick={responder}>{busy ? 'Enviando…' : 'Enviar'}</button>
           </div>
         </div>
       )}

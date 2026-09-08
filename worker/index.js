@@ -39,6 +39,38 @@ async function getUser(req, env) {
 const isStaff = (u) => u && (u.role === 'admin' || u.role === 'int');
 const esDueno = (u) => u && u.role === 'admin';
 
+// El correo de invitación. Dar de alta a alguien y no avisarle no es invitar:
+// la persona no sabe que existe la aplicación, ni que su correo ya es su
+// llave. Aquí se le dice a qué obra entró, qué va a poder hacer, y el único
+// camino para entrar la primera vez: su correo, un código de seis dígitos, y
+// el PIN que se pone ahí mismo.
+//
+// La dirección del sitio sale de la propia petición y no de una variable de
+// configuración: el Worker ya sabe dónde vive, y una variable más es una
+// variable que algún día va a quedar apuntando a otro lado.
+async function invita(env, req, quien, obra, rol) {
+  const sitio = new URL(req.url).origin;
+  const app = env.APP_NAME || 'quell101';
+  const puede = rol === 'tra'
+    ? 'Vas a poder ver la obra completa —planos, ítems, bitácora y punchlist— y levantar dudas para el supervisor. No vas a poder editar nada.'
+    : 'Vas a ver los pendientes que traigan tu nombre, subir la evidencia de que quedaron y levantar dudas para el supervisor.';
+  const html = `
+    <p>Hola${quien.name ? ' ' + quien.name : ''},</p>
+    <p>Te dieron acceso a la obra <b>${obra.name}</b>${obra.client ? ` (${obra.client})` : ''} en <b>${app}</b>.</p>
+    <p>${puede}</p>
+    <p><b>Para entrar la primera vez:</b></p>
+    <ol>
+      <li>Abre <a href="${sitio}">${sitio}</a></li>
+      <li>Escribe este correo: <b>${quien.email}</b></li>
+      <li>Te llega un código de 6 dígitos y con él creas tu PIN.</li>
+    </ol>
+    <p>De ahí en adelante entras con tu correo y tu PIN, sin esperar ningún código.</p>`;
+  // Que no se caiga el alta por un correo que no salió: la persona ya quedó
+  // agregada, y el correo se le puede volver a mandar.
+  try { await sendMail(env, quien.email, `Te dieron acceso a ${obra.name} en ${app}`, html); return { ok: true }; }
+  catch (e) { return { ok: false, error: String(e.message || e) }; }
+}
+
 // Qué es esta persona en esta obra. Quien la dirige lo es en todas; a los demás
 // se lo dice su membresía, obra por obra: la misma persona es contratista en
 // una —donde solo le tocan sus pendientes— y trabajador en otra —donde anda
@@ -606,10 +638,19 @@ async function api(req, env, url, path) {
       if (!isStaff(user)) return err('sin permiso', 403);
       const b = await req.json();
       const rol = ROLES_OBRA.includes(b.rol) ? b.rol : 'con';
+      // Si ya estaba, esto es cambiarle el rol y no invitarlo: el correo sale
+      // una sola vez, la primera. Si no, cada ajuste sería un correo más.
+      const yaEstaba = await env.DB.prepare(`SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?`).bind(pid, b.user_id).first();
       await env.DB.prepare(
         `INSERT INTO project_members (project_id, user_id, rol) VALUES (?,?,?)
          ON CONFLICT (project_id, user_id) DO UPDATE SET rol = excluded.rol`).bind(pid, b.user_id, rol).run();
-      return json({ ok: true, rol });
+      let aviso = null;
+      if (!yaEstaba) {
+        const quien = await env.DB.prepare(`SELECT id, email, name FROM users WHERE id = ?`).bind(b.user_id).first();
+        const obra = await env.DB.prepare(`SELECT name, client FROM projects WHERE id = ?`).bind(pid).first();
+        if (quien && obra) { const r = await invita(env, req, quien, obra, rol); if (!r.ok) aviso = r.error; }
+      }
+      return json({ ok: true, rol, invitado: !yaEstaba, aviso });
     }
     if (seg[2] === 'members' && m === 'DELETE' && seg[3]) {
       if (!isStaff(user)) return err('sin permiso', 403);
@@ -659,23 +700,32 @@ async function api(req, env, url, path) {
         for (const r of results) (porDuda[r.duda_id] = porDuda[r.duda_id] || []).push(r);
       }
       dudas.forEach((d) => (d.respuestas = porDuda[d.id] || []));
+      const fd = await photosFor(env, 'duda', ids);
+      const fr = await photosFor(env, 'duda_resp', Object.values(porDuda).flat().map((r) => r.id));
+      dudas.forEach((d) => {
+        d.photos = fd[d.id] || [];
+        d.respuestas.forEach((r) => (r.photos = fr[r.id] || []));
+      });
       return json({ dudas });
     }
     // Preguntar puede cualquiera que esté en la obra, incluido quien la dirige.
     if (seg[2] === 'dudas' && m === 'POST') {
-      const b = await req.json();
-      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
-      const texto = String(b.texto || '').trim();
-      if (!texto) return err('Escribe la duda.');
+      const fd = await req.formData();
+      const op = String(fd.get('op_id') || '');
+      if (await yaHecha(env, op)) return json({ ok: true, repetida: true });
+      const texto = String(fd.get('texto') || '').trim();
+      const files = fd.getAll('photos');
+      if (!texto && !files.length) return err('Escribe la duda o manda una foto.');
       // Si la duda viene colgada de un ítem, que sea un ítem de esta obra: si no,
       // se podría preguntar sobre lo que hay en la obra de al lado.
-      let eid = b.element_id || null;
+      let eid = fd.get('element_id') || null;
       if (eid && (await projectOfElement(env, eid)) !== pid) eid = null;
       const id = uid();
       await env.DB.prepare(`INSERT INTO dudas (id, project_id, element_id, user_id, texto) VALUES (?,?,?,?,?)`)
         .bind(id, pid, eid, user.id, texto).run();
-      await apunta(env, b.op_id);
-      return json({ ok: true, id });
+      const photos = await savePhotos(env, user, 'duda', id, files);
+      await apunta(env, op);
+      return json({ ok: true, id, photos });
     }
 
     if (seg[2] === 'punch' && m === 'GET') {
@@ -854,14 +904,17 @@ async function api(req, env, url, path) {
     // casi siempre necesita una aclaración de vuelta.
     if (seg[2] === 'respuestas' && m === 'POST') {
       if (!isStaff(user) && d.user_id !== user.id) return err('Esta duda no es tuya.', 403);
-      const b = await req.json();
-      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
-      const texto = String(b.texto || '').trim();
-      if (!texto) return err('Escribe la respuesta.');
+      const fd = await req.formData();
+      const op = String(fd.get('op_id') || '');
+      if (await yaHecha(env, op)) return json({ ok: true, repetida: true });
+      const texto = String(fd.get('texto') || '').trim();
+      const files = fd.getAll('photos');
+      if (!texto && !files.length) return err('Escribe la respuesta o manda una foto.');
       const id = uid();
       await env.DB.prepare(`INSERT INTO duda_respuestas (id, duda_id, user_id, texto) VALUES (?,?,?,?)`).bind(id, seg[1], user.id, texto).run();
-      await apunta(env, b.op_id);
-      return json({ ok: true, id });
+      const photos = await savePhotos(env, user, 'duda_resp', id, files);
+      await apunta(env, op);
+      return json({ ok: true, id, photos });
     }
     // Dar por resuelta es del supervisor: quien pregunta no decide que ya le
     // contestaron bien, igual que en el punchlist cierra quien lo levantó.
