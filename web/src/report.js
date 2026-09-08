@@ -21,7 +21,7 @@ async function crop(planKey, pw, ph, x, y, code) {
     g.drawImage(img, sx, sy, cw, ch, 0, 0, W, H);
     const k = W / cw, px = (cx - sx) * k, py = (cy - sy) * k;
     g.strokeStyle = '#D33A2F'; g.lineWidth = 4; g.beginPath(); g.arc(px, py, 22, 0, Math.PI * 2); g.stroke();
-    g.fillStyle = '#D33A2F'; g.font = '600 14px Instrument Sans, sans-serif'; g.textAlign = 'center'; g.fillText(code, px, py - 30);
+    g.fillStyle = '#D33A2F'; g.font = '600 14px Cifras, Raleway, sans-serif'; g.textAlign = 'center'; g.fillText(code, px, py - 30);
     return c.toDataURL('image/jpeg', 0.85);
   } catch { return null; }
 }
