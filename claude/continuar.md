@@ -246,6 +246,10 @@ Nada que copiar, porque nada vive en el chat:
 
 ## Cómo arrancar el chat nuevo
 
+0. **Leer `OPERAR.md`**, en la raíz. Ahí está cómo se recupera el token, cómo
+   se abre y se mergea un PR, y cómo se verifica producción sin la computadora
+   de Mike. Va igual en los seis repositorios de la suite. Si un chat te está
+   pidiendo que abras GitHub o que le digas si el sitio quedó bien, no lo leyó.
 1. Crear el chat dentro del proyecto **suite101** con el repositorio
    `mikebalcazar/bitacora-obra` conectado, y pedir: *"lee
    `claude/continuar.md`"*.
