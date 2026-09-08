@@ -93,3 +93,13 @@ jobs:
           curl -fsS "$DIR/api/salud"
           echo ""
           echo "### Publicado en $DIR" >> "$GITHUB_STEP_SUMMARY"
+
+  # El chat no alcanza producción; el corredor sí. Este trabajo le pega a la
+  # dirección real y deja los números en el log, que es lo que el chat lee.
+  verificar:
+    needs: publicar
+    uses: ./.github/workflows/verificar.yml
+    with:
+      url: https://bitacora-obra.mike-929.workers.dev
+      marca: quell101
+      rutas: /api/salud

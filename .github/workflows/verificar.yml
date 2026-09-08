@@ -1,0 +1,118 @@
+# Los ojos del chat.
+#
+# El chat que desarrolla no alcanza producción: el proxy de salida le rechaza
+# *.workers.dev, *.netlify.app y api.cloudflare.com. El corredor de GitHub sí
+# tiene internet abierto. Así que la verificación se hace aquí y se escribe en
+# el log, con números; el chat lee el log por API y de ahí sale lo que se le
+# reporta a Mike.
+#
+# Dos maneras de usarlo:
+#
+#   1. Desde el workflow que publica, al final:
+#        verificar:
+#          needs: publicar
+#          uses: ./.github/workflows/verificar.yml
+#          with:
+#            url:   https://bitacora-obra.mike-929.workers.dev
+#            marca: quell101
+#            rutas: /api/salud
+#
+#   2. A mano, sin publicar nada, desde el chat:
+#        POST /repos/mikebalcazar/<REPO>/actions/workflows/verificar.yml/dispatches
+#        {"ref":"main","inputs":{"url":"https://…","marca":"quell101","rutas":"/api/salud"}}
+
+name: Verificar
+
+on:
+  workflow_call:
+    inputs:
+      url:
+        description: Dirección que tiene que responder
+        required: true
+        type: string
+      marca:
+        description: Texto que debe aparecer en la portada (vacío = no se revisa)
+        required: false
+        type: string
+        default: ''
+      rutas:
+        description: Rutas extra a comprobar, separadas por espacios
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Dirección que tiene que responder
+        required: true
+        type: string
+      marca:
+        description: Texto que debe aparecer en la portada
+        required: false
+        type: string
+        default: ''
+      rutas:
+        description: Rutas extra, separadas por espacios
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar que responda
+        env:
+          URL: ${{ inputs.url }}
+          MARCA: ${{ inputs.marca }}
+          RUTAS: ${{ inputs.rutas }}
+        run: |
+          set -u
+          fallas=0
+
+          # Sin subshell a propósito: si esto viviera dentro de $( ), el
+          # contador se perdería al terminar y todo saldría verde siempre.
+          medir () {
+            local u="$1" dest="$2" datos codigo bytes segundos
+            datos=$(curl -sS -L --max-time 30 -o "$dest" \
+                    -w '%{http_code} %{size_download} %{time_total}' "$u" 2>/dev/null) \
+                    || datos="000 0 0"
+            codigo=${datos%% *}; datos=${datos#* }
+            bytes=${datos%% *}; segundos=${datos#* }
+            echo "  $u"
+            echo "    codigo=$codigo  bytes=$bytes  segundos=$segundos"
+            if [ "$codigo" != "200" ]; then
+              echo "    FALLA: se esperaba 200"
+              fallas=$((fallas + 1))
+            fi
+          }
+
+          echo "== Portada =="
+          medir "$URL" /tmp/portada
+
+          if [ -n "$MARCA" ]; then
+            if grep -qi -- "$MARCA" /tmp/portada 2>/dev/null; then
+              echo "    marca '$MARCA': presente"
+            else
+              echo "    FALLA: no aparece '$MARCA' en la respuesta"
+              echo "    primeros 400 caracteres de lo que llegó:"
+              head -c 400 /tmp/portada 2>/dev/null || true
+              echo
+              fallas=$((fallas + 1))
+            fi
+          fi
+
+          for r in $RUTAS; do
+            echo "== $r =="
+            medir "${URL%/}${r}" /tmp/ruta
+            echo "    respuesta: $(head -c 200 /tmp/ruta 2>/dev/null)"
+          done
+
+          echo
+          if [ "$fallas" -gt 0 ]; then
+            echo "RESULTADO: $fallas comprobación(es) fallaron"
+            echo "### Verificación: $fallas fallaron en $URL" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 1
+          fi
+          echo "RESULTADO: todo verde"
+          echo "### Verificación verde en $URL" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
