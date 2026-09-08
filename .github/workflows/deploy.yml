@@ -102,4 +102,13 @@ jobs:
     with:
       url: https://bitacora-obra.mike-929.workers.dev
       marca: quell101
-      rutas: /api/salud
+      # Las cinco fuentes, una por una. Que la portada responda no dice nada de
+      # ellas: si una .woff2 se cae, la app sigue abriendo y solo se ve con otra
+      # letra -- que es justo el fallo silencioso que se quiso quitar de encima.
+      rutas: >-
+        /api/salud
+        /fonts/fira-cifras-400.woff2
+        /fonts/fira-cifras-600.woff2
+        /fonts/raleway-400.woff2
+        /fonts/raleway-600.woff2
+        /fonts/raleway-700.woff2
