@@ -60,8 +60,6 @@ on:
 jobs:
   verificar:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write        # para dejar el resultado como comentario del commit
     steps:
       - name: Verificar que responda
         id: medir
@@ -141,8 +139,15 @@ jobs:
           [ -f /tmp/salida.txt ] || echo "No hubo salida que reportar." > /tmp/salida.txt
           jq -Rs '{body: ("**Verificacion**\n\n```\n" + .[-60000:] + "\n```")}' \
             /tmp/salida.txt > /tmp/comentario.json
+          # Si el token de Actions viene de solo lectura, esto responde 403 y
+          # el chat se queda sin números: se arregla una vez en
+          # Settings -> Actions -> General -> Workflow permissions -> Read and
+          # write. No se pide con un bloque permissions: dentro de este archivo,
+          # porque un workflow llamado no puede pedir mas de lo que trae el que
+          # lo llama y el run se cae antes de arrancar (pasó, runs 37 y 38).
           curl -sS -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/$REPO/commits/$SHA/comments" \
-            -d @/tmp/comentario.json -o /dev/null -w 'comentario: %{http_code}\n'
+            -d @/tmp/comentario.json -o /tmp/respuesta.json -w 'comentario: %{http_code}\n'
+          head -c 300 /tmp/respuesta.json || true
