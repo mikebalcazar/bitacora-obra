@@ -178,11 +178,13 @@ export const TIPOS = [
 // del azul marino de siempre y se puede prender y apagar como los demás.
 export const colorTipo = (t) => (TIPOS.find((x) => x.clave === t) || {}).color || '#1C3557';
 // El mismo color, aguado. Sirve para rellenar sin tapar: un ítem en producción
-// va del color de su tipo pero clarito, y encima del plano se sigue viendo el
-// dibujo. Se calcula aquí y no con color-mix porque esto también se dibuja
-// dentro de la app de escritorio y del reporte, y ahí no se puede andar
-// suponiendo qué entiende cada motor.
-export const aguado = (hex, a = 0.25) => {
+// va del color de su tipo pero a media tinta, y encima del plano se sigue
+// viendo el dibujo. La mitad es el punto donde el pin pesa lo mismo que el
+// entregado sin taparle las líneas: a un cuarto se perdía sobre el papel.
+// Se calcula aquí y no con color-mix porque esto también se dibuja dentro de
+// la app de escritorio y del reporte, y ahí no se puede andar suponiendo qué
+// entiende cada motor.
+export const aguado = (hex, a = 0.5) => {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
   if (!m) return `rgba(28,53,87,${a})`;
   const v = parseInt(m[1], 16);

@@ -271,9 +271,9 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
         {elements.map((e) => {
           // El relleno dice de qué tipo es; el aro rojo, que tiene punchlist sin
           // cerrar. Un ítem en producción va aguado: del color de su tipo pero
-          // al 25%, para que se note que todavía no hay nada entregado sin
-          // desaparecer del plano. Relleno blanco no se veía: el plano también
-          // es blanco, y quedaba un aro suelto.
+          // a media tinta, para que se note que todavía no hay nada entregado
+          // sin desaparecer del plano. Relleno blanco no se veía: el plano
+          // también es blanco, y quedaba un aro suelto.
           //
           // El pin no lleva número adentro. Lo llevaba, y con un dígito el pin
           // se estiraba a 120 px de ancho: el texto abre una columna en la
