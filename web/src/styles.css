@@ -1,3 +1,22 @@
+/* Las fuentes viajan dentro de la aplicación. Antes venían de Google Fonts, que
+   en obra —sin señal, o con el proxy de una empresa de por medio— simplemente no
+   llega: la app se veía con la fuente del sistema y las cifras bailaban. Ahora
+   son cuatro archivos servidos por el mismo Worker, 108 KB en total, y el
+   service worker los cachea con el resto del sitio.
+   Licencias en /fonts/OFL-FiraSans.txt y /fonts/OFL-Raleway.txt (SIL OFL 1.1). */
+@font-face{font-family:"Cifras";src:url("/fonts/fira-cifras-400.woff2") format("woff2");
+  font-weight:400;font-style:normal;font-display:swap;
+  unicode-range:U+0030-0039,U+00B0,U+00B1,U+00D7,U+0025}
+@font-face{font-family:"Cifras";src:url("/fonts/fira-cifras-600.woff2") format("woff2");
+  font-weight:500 700;font-style:normal;font-display:swap;
+  unicode-range:U+0030-0039,U+00B0,U+00B1,U+00D7,U+0025}
+@font-face{font-family:"Raleway";src:url("/fonts/raleway-400.woff2") format("woff2");
+  font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Raleway";src:url("/fonts/raleway-600.woff2") format("woff2");
+  font-weight:500 600;font-style:normal;font-display:swap}
+@font-face{font-family:"Raleway";src:url("/fonts/raleway-700.woff2") format("woff2");
+  font-weight:700;font-style:normal;font-display:swap}
+
 :root{
   --bg:#EEF0F2; --surface:#FFFFFF; --surface2:#F5F6F8; --line:#D5D9DE; --line2:#E6E9ED;
   --ink:#141C26; --ink2:#4A5563; --ink3:#7A8593;
@@ -13,7 +32,13 @@
      plano y no se confunde con los tres colores de estado. */
   --pin:#1C3557;
   --shadow:0 10px 30px rgba(20,28,38,.14);
-  --font:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* "Cifras" es Fira Sans recortada a los dígitos y a los signos de medida
+     (ver claude/tipografia-cifras-suite101.md). Va primero en la pila: por el
+     unicode-range, los números caen en Fira y todo lo demás sigue en Raleway,
+     sin tocar una sola etiqueta del marcado. Raleway trae cifras que cuelgan
+     por debajo de la línea base y en una cota o una fecha no se leen de un
+     golpe. */
+  --font:"Cifras","Raleway",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box}
