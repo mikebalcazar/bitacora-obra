@@ -177,6 +177,17 @@ export const TIPOS = [
 // Un ítem viejo con un tipo que ya no está en la lista no desaparece: se pinta
 // del azul marino de siempre y se puede prender y apagar como los demás.
 export const colorTipo = (t) => (TIPOS.find((x) => x.clave === t) || {}).color || '#1C3557';
+// El mismo color, aguado. Sirve para rellenar sin tapar: un ítem en producción
+// va del color de su tipo pero clarito, y encima del plano se sigue viendo el
+// dibujo. Se calcula aquí y no con color-mix porque esto también se dibuja
+// dentro de la app de escritorio y del reporte, y ahí no se puede andar
+// suponiendo qué entiende cada motor.
+export const aguado = (hex, a = 0.25) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return `rgba(28,53,87,${a})`;
+  const v = parseInt(m[1], 16);
+  return `rgba(${v >> 16 & 255},${v >> 8 & 255},${v & 255},${a})`;
+};
 // El avance de un ítem por su proceso, como fracción de las etapas activas. El
 // catálogo lo manda el servidor —las etapas viven en la base, no aquí— así que
 // el total cambia solo el día que se agregue una.
