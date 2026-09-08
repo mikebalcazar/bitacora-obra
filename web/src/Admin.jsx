@@ -37,7 +37,12 @@ export default function Admin() {
   }
   async function toggle(u) { await api.patch(`/users/${u.id}`, { active: !u.active }).catch((x) => toast(x.message)); load(); }
   async function setRole(u, role) { await api.patch(`/users/${u.id}`, { role }).catch((x) => toast(x.message)); load(); }
-  async function addMember(id, rol = 'con') { if (!id) return; await api.post(`/projects/${pid}/members`, { user_id: id, rol }).catch((x) => toast(x.message)); recargaMiembros(); }
+  async function addMember(id, rol = 'con') {
+    if (!id) return;
+    const r = await api.post(`/projects/${pid}/members`, { user_id: id, rol }).catch((x) => { toast(x.message); return null; });
+    if (r) toast(r.aviso ? 'Agregado, pero el correo no salió: ' + r.aviso : r.invitado ? 'Agregado. Le llegó el correo con cómo entrar.' : 'Rol actualizado.');
+    recargaMiembros();
+  }
   // Cambiar de rol es volver a agregarlo: la misma llamada, otro rol.
   async function setRolObra(id, rol) { await api.post(`/projects/${pid}/members`, { user_id: id, rol }).catch((x) => toast(x.message)); recargaMiembros(); }
   async function rmMember(id) { await api.del(`/projects/${pid}/members/${id}`).catch((x) => toast(x.message)); recargaMiembros(); }
@@ -107,7 +112,8 @@ export default function Admin() {
       <div className="card" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
         <b>Quién entra a cada obra</b>
         <div className="muted" style={{ fontSize: 13 }}>
-          Agregar a alguien aquí lo deja entrar a esta obra. Lo que ve adentro depende de con qué rol lo agregues.
+          Agregar a alguien aquí lo deja entrar a esta obra y le manda un correo con cómo entrar la primera vez.
+          Lo que ve adentro depende de con qué rol lo agregues.
         </div>
         <select value={pid} onChange={(e) => setPid(e.target.value)}>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
         {enObra.map((m) => (

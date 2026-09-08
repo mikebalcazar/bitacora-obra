@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, leer, escribir, fileUrl, FASES, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
+import { Photos, usePending, PhotoInput, PendingStrip } from './Fotos.jsx';
 
 // staff = puede escribir. veTodo = puede ver la obra completa. No son lo mismo:
 // el trabajador ve todo y no escribe nada, y el contratista ni ve todo ni
@@ -95,35 +96,6 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
       {edit && <EditElement e={e} onClose={() => setEdit(false)} onChanged={() => { changed(); }} onDeleted={() => { onChanged(); onClose(); }} />}
     </aside>
   );
-}
-
-function Photos({ photos, setLb, onDelete }) {
-  if (!photos?.length) return null;
-  return <div className="photos">{photos.map((p) => <div key={p.id} className="ph" onClick={() => setLb(fileUrl(p.r2_key))}><img src={fileUrl(p.r2_key)} alt={p.file_name} loading="lazy" />{onDelete && <button className="rm" onClick={(ev) => { ev.stopPropagation(); onDelete(p); }} title="Quitar foto">×</button>}</div>)}</div>;
-}
-
-function usePending() {
-  const [pending, setPending] = useState([]);
-  const add = async (files) => {
-    const out = [];
-    for (const f of files) out.push({ file: await compressImage(f), url: URL.createObjectURL(f) });
-    setPending((p) => [...p, ...out]);
-  };
-  const clear = () => { pending.forEach((p) => URL.revokeObjectURL(p.url)); setPending([]); };
-  const remove = (i) => setPending((p) => p.filter((_, j) => j !== i));
-  return { pending, add, clear, remove };
-}
-function PhotoInput({ onFiles, label = 'Foto' }) {
-  return (
-    <div className="row" style={{ gap: 6 }}>
-      <label className="btn sm">Cámara<input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { onFiles([...e.target.files]); e.target.value = ''; }} /></label>
-      <label className="btn sm">{label}s<input type="file" accept="image/*" multiple hidden onChange={(e) => { onFiles([...e.target.files]); e.target.value = ''; }} /></label>
-    </div>
-  );
-}
-function PendingStrip({ pending, remove }) {
-  if (!pending.length) return null;
-  return <div className="photos">{pending.map((p, i) => <div key={i} className="ph" style={{ cursor: 'default' }}><img src={p.url} alt="" /><button className="rm" onClick={() => remove(i)}>×</button></div>)}</div>;
 }
 
 function Log({ e, log, onChanged, setLb, user, staff }) {   // staff: quien no escribe, la lee y ya
