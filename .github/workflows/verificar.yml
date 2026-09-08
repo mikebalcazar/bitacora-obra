@@ -93,10 +93,11 @@ jobs:
           medir () {
             local u="$1" dest="$2" datos codigo bytes segundos
             datos=$(curl -sS -L --max-time 30 -o "$dest" \
-                    -w '%{http_code} %{size_download} %{time_total}' "$u" 2>/dev/null) \
-                    || datos="000 0 0"
+                    -w '%{http_code} %{size_download} %{time_total} %{content_type}' "$u" 2>/dev/null) \
+                    || datos="000 0 0 -"
             codigo=${datos%% *}; datos=${datos#* }
-            bytes=${datos%% *}; segundos=${datos#* }
+            bytes=${datos%% *}; datos=${datos#* }
+            segundos=${datos%% *}; tipo=${datos#* }
             echo "  $u"
             echo "    codigo=$codigo  bytes=$bytes  segundos=$segundos"
             if [ "$codigo" != "200" ]; then
@@ -123,7 +124,16 @@ jobs:
           for r in $RUTAS; do
             echo "== $r =="
             medir "${URL%/}${r}" /tmp/ruta
-            echo "    respuesta: $(head -c 200 /tmp/ruta 2>/dev/null)"
+            # Solo se enseña el cuerpo si es texto. Una .woff2 volcada aquí
+            # llena el comentario de bytes crudos y tapa lo que sí importa;
+            # además bash avisa de los nulos y ensucia más. El tipo lo dice
+            # el servidor, así que no hay que adivinarlo.
+            case "$tipo" in
+              text/*|application/json*|application/xml*|*+json*)
+                echo "    respuesta: $(head -c 200 /tmp/ruta 2>/dev/null)" ;;
+              *)
+                echo "    tipo: ${tipo:-desconocido} (binario, no se vuelca)" ;;
+            esac
           done
 
           echo
