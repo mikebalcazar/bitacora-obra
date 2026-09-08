@@ -112,3 +112,5 @@ jobs:
         /fonts/raleway-400.woff2
         /fonts/raleway-600.woff2
         /fonts/raleway-700.woff2
+      # Y que además se estén APLICANDO, no solo respondiendo.
+      cifras: Cifras, Raleway, sans-serif
