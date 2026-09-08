@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { api, leer, escribir, hayRed, fileUrl, FASES, TIPOS, colorTipo, aguado, fmtD, isLate, rasterizePlan, avance } from './api.js';
+import { api, leer, escribir, hayRed, fileUrl, FASES, TIPOS, colorTipo, aguado, fmtD, isLate, rasterizePlan, avance, veTodoEn } from './api.js';
+import Dudas from './Dudas.jsx';
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
 import ElementPanel from './ElementPanel.jsx';
@@ -28,7 +29,7 @@ export default function Project({ id }) {
   // El plano contesta "dónde"; la lista contesta "cómo van". Son la misma obra
   // vista de dos maneras y comparten los mismos filtros, así que apagar un tipo
   // en una lo apaga en la otra.
-  const [vista, setVista] = useState('plan');   // plan | lista
+  const [vista, setVista] = useState('plan');   // plan | lista | dudas
   const [uploading, setUploading] = useState(false);
   const [report, setReport] = useState(false);
   const [editPlan, setEditPlan] = useState(null);
@@ -67,6 +68,11 @@ export default function Project({ id }) {
   }, [data?.plans?.length, data?.project?.id]);
   useEffect(() => { if (drawer) leer(`/projects/${id}/punch`).then((r) => setOpenItems(r.items)).catch((e) => toast(e.message)); }, [drawer, data]);
 
+  // Editar la obra es de quien la dirige. Verla entera, también del trabajador:
+  // son dos preguntas distintas y por eso son dos banderas. El contratista no
+  // tiene ninguna de las dos y sigue viendo nada más lo que trae su nombre.
+  const miRol = data?.mi_rol || null;
+  const veTodo = veTodoEn(user, miRol);
   const plan = data?.plans.find((p) => p.id === planId) || null;
   const elements = useMemo(() => (data ? data.elements.filter((e) => e.plan_id === planId) : []), [data, planId]);
   // Los tipos que se pueden elegir salen de la lista de siempre más los que de
@@ -198,16 +204,20 @@ export default function Project({ id }) {
           <button className={'item' + (fase === 'produccion' ? ' on' : '')} onClick={() => setFase(fase === 'produccion' ? '' : 'produccion')}>En producción <small>{enFase('produccion')}</small></button>
           <button className={'item' + (fase === 'punchlist' ? ' on' : '')} onClick={() => setFase(fase === 'punchlist' ? '' : 'punchlist')}>Punchlist <small>{enFase('punchlist')}</small></button>
           <button className={'item' + (vista === 'lista' ? ' on' : '')} onClick={() => setVista(vista === 'lista' ? 'plan' : 'lista')}>Ver la obra en lista <small>{data.elements.length}</small></button>
+          <button className={'item' + (vista === 'dudas' ? ' on' : '')} onClick={() => setVista(vista === 'dudas' ? 'plan' : 'dudas')}>{staff ? 'Dudas por contestar' : 'Mis dudas'} <small>{data.dudas_abiertas || 0}</small></button>
           <button className={'item' + (drawer ? ' on' : '')} onClick={() => setDrawer(!drawer)}>Ver lista de pendientes <small>{openTotal}</small></button>
           {staff && <button className="item" onClick={() => go('/admin')}>Usuarios y accesos</button>}
         </section>
       </aside>
 
-      <main className={'stage' + (vista === 'lista' ? ' enlista' : '')}>
+      <main className={'stage' + (vista !== 'plan' ? ' enlista' : '')}>
         <div className="tools">
           <div className="segm">
             <button className={vista === 'plan' ? 'on' : ''} onClick={() => setVista('plan')}>Plano</button>
             <button className={vista === 'lista' ? 'on' : ''} onClick={() => { setVista('lista'); setDrawer(false); setMview('plan'); }}>Lista</button>
+            <button className={vista === 'dudas' ? 'on' : ''} onClick={() => { setVista('dudas'); setDrawer(false); setMview('plan'); }}>
+              Dudas{data.dudas_abiertas ? <b className="cuantas">{data.dudas_abiertas}</b> : null}
+            </button>
           </div>
           {/* El nombre del plano era un rótulo muerto y el cambio de plano un
               menú que solo aparecía si ya había dos. Ahora es un botón, siempre,
@@ -226,27 +236,32 @@ export default function Project({ id }) {
               vista siempre; repetirlos aquí arriba era decir dos veces lo
               mismo y quitarle aire al plano. En el celular no hay barra
               lateral, así que aquí es donde tienen que estar. */}
-          <div className="swatches solo-m">
+          {vista !== 'dudas' && <div className="swatches solo-m">
             {tipos.map((t) => (
               <button key={t} className={'swatch' + (apagados.has(t) ? ' off' : '')} onClick={() => prende(t)}
                 style={{ ['--tinte']: colorTipo(t) }} title={apagados.has(t) ? `Mostrar ${t}` : `Ocultar ${t}`}>
                 <i />{t}<small>{elements.filter((e) => (e.type || 'Otro') === t).length}</small>
               </button>
             ))}
-          </div>
-          <select className={'btn sm' + (fase ? ' on' : '')} style={{ width: 'auto' }} value={fase} onChange={(ev) => setFase(ev.target.value)} title="Ver una sola fase">
-            <option value="">Las dos fases</option>
-            {Object.entries(FASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
+          </div>}
+          {vista !== 'dudas' && (
+            <select className={'btn sm' + (fase ? ' on' : '')} style={{ width: 'auto' }} value={fase} onChange={(ev) => setFase(ev.target.value)} title="Ver una sola fase">
+              <option value="">Las dos fases</option>
+              {Object.entries(FASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          )}
         </div>
-        {(apagados.size > 0 || fase) && !adding && (
+        {(apagados.size > 0 || fase) && !adding && vista !== 'dudas' && (
           <div className="hint">
             Viendo {vista === 'lista' ? listados.length : shown.length} de {vista === 'lista' ? data.elements.length : elements.length} ítems{apagados.size ? ` · sin ${[...apagados].join(', ').toLowerCase()}` : ''}{fase ? ` · ${FASES[fase]}` : ''}
             <button className="btn sm" onClick={() => { setApagados(new Set()); setFase(''); }}>Ver todos</button>
           </div>
         )}
         {adding && <div className="hint">Toca el plano donde va el ítem · <button className="btn sm" onClick={() => setAdding(false)}>Cancelar</button></div>}
-        {vista === 'lista' ? (
+        {vista === 'dudas' ? (
+          <Dudas pid={id} staff={staff} user={user}
+            onIr={(eid, plid) => { setVista('plan'); selectEl(eid, { planId: plid }); if (window.innerWidth <= 900) setMview('elem'); }} />
+        ) : vista === 'lista' ? (
           <Lista items={listados} etapas={etapas} plans={data.plans} sel={sel}
             onIr={(e) => { selectEl(e.id, { planId: e.plan_id }); if (window.innerWidth <= 900) setMview('elem'); }} />
         ) : plan ? (
@@ -270,7 +285,7 @@ export default function Project({ id }) {
         )}
       </main>
 
-      <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} user={user} members={data.members} todos={data.elements} onIr={(eid, pid) => selectEl(eid, { planId: pid })} onChanged={load} onClose={() => { setSel(null); setMview('plan'); }} />
+      <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} veTodo={veTodo} user={user} members={data.members} todos={data.elements} onIr={(eid, pid) => selectEl(eid, { planId: pid })} onChanged={load} onClose={() => { setSel(null); setMview('plan'); }} />
 
       <nav className="mnav">
         <button className={mview === 'plan' && vista === 'plan' ? 'on' : ''} onClick={() => { setMview('plan'); setVista('plan'); setDrawer(false); }}><i dangerouslySetInnerHTML={{ __html: ICO.plan }} />Plano</button>

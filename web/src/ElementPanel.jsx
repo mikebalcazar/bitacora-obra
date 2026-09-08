@@ -2,10 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api, leer, escribir, fileUrl, FASES, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
 
-export default function ElementPanel({ elementId, flash, plan, staff, user, members = [], todos = [], onIr, onChanged, onClose }) {
+// staff = puede escribir. veTodo = puede ver la obra completa. No son lo mismo:
+// el trabajador ve todo y no escribe nada, y el contratista ni ve todo ni
+// escribe, salvo la evidencia de lo que le tocó.
+export default function ElementPanel({ elementId, flash, plan, staff, veTodo = staff, user, members = [], todos = [], onIr, onChanged, onClose }) {
   const { toast } = useApp();
   const [d, setD] = useState(null);
-  const [tab, setTab] = useState(!staff || flash ? 'punch' : 'log');
+  const [tab, setTab] = useState(!veTodo || flash ? 'punch' : 'log');
   // El proceso no es una pestaña: es el estado del ítem, y se lee de reojo
   // mientras se escribe en la bitácora. Vive en una barra abajo que se abre
   // cuando hay que palomear algo.
@@ -77,15 +80,15 @@ export default function ElementPanel({ elementId, flash, plan, staff, user, memb
           <span>{e.fase === 'punchlist' && e.entregado_en ? `Entregado ${fmtD(e.entregado_en)}` : `Creado ${fmtD(e.created_at)}`}</span>
         </div>
         <div className="tabs">
-          {staff && <button className={'tab' + (tab === 'log' ? ' on' : '')} onClick={() => setTab('log')}>Bitácora <span className="n">{log.length}</span></button>}
-          <button className={'tab' + (tab === 'punch' ? ' on' : '')} onClick={() => setTab('punch')}>{staff ? 'Punchlist' : 'Lo que me toca'} <span className="n">{open}/{punch.length}</span></button>
+          {veTodo && <button className={'tab' + (tab === 'log' ? ' on' : '')} onClick={() => setTab('log')}>Bitácora <span className="n">{log.length}</span></button>}
+          <button className={'tab' + (tab === 'punch' ? ' on' : '')} onClick={() => setTab('punch')}>{veTodo ? 'Punchlist' : 'Lo que me toca'} <span className="n">{open}/{punch.length}</span></button>
         </div>
       </div>
-      {tab === 'log' && staff
+      {tab === 'log' && veTodo
         ? <Log e={e} log={log} onChanged={changed} setLb={setLb} user={user} staff={staff} />
-        : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} members={members} onEntregar={entregar} onVerProceso={() => setProc(true)} />}
-      {staff && !!etapas.length && (
-        <BarraProceso e={e} etapas={etapas} hechas={hechas} n={nEtapas}
+        : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} veTodo={veTodo} members={members} onEntregar={entregar} onVerProceso={() => setProc(true)} />}
+      {veTodo && !!etapas.length && (
+        <BarraProceso e={e} etapas={etapas} hechas={hechas} n={nEtapas} puedeMarcar={staff}
           abierta={proc} onAbrir={() => setProc(!proc)} onChanged={changed} />
       )}
       {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
@@ -123,7 +126,7 @@ function PendingStrip({ pending, remove }) {
   return <div className="photos">{pending.map((p, i) => <div key={i} className="ph" style={{ cursor: 'default' }}><img src={p.url} alt="" /><button className="rm" onClick={() => remove(i)}>×</button></div>)}</div>;
 }
 
-function Log({ e, log, onChanged, setLb, user, staff }) {
+function Log({ e, log, onChanged, setLb, user, staff }) {   // staff: quien no escribe, la lee y ya
   const { toast } = useApp();
   const [txt, setTxt] = useState('');
   const [busy, setBusy] = useState(false);
@@ -178,13 +181,13 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
           );
         })}
       </div>
-      <div className="compose">
+      {staff && <div className="compose">
         <div className="row">
           <textarea rows={2} value={txt} onChange={(ev) => setTxt(ev.target.value)} placeholder="Escribe lo que pasó en este ítem…" onKeyDown={(ev) => { if (ev.key === 'Enter' && !ev.shiftKey && window.innerWidth > 900) { ev.preventDefault(); send(); } }} />
         </div>
         <PendingStrip pending={pending} remove={remove} />
         <div className="row"><PhotoInput onFiles={add} /><div className="spacer" /><button className="btn primary sm" disabled={busy || (!txt.trim() && !pending.length)} onClick={send}>{busy ? 'Guardando…' : 'Registrar'}</button></div>
-      </div>
+      </div>}
     </>
   );
 }
@@ -202,7 +205,7 @@ function Log({ e, log, onChanged, setLb, user, staff }) {
 // única forma de que "3 de 5" quiera decir algo: un camino con huecos no se
 // puede resumir en un número, y ese número es justo lo que se va a leer en la
 // lista general sin abrir un solo ítem.
-function BarraProceso({ e, etapas, hechas, n, abierta, onAbrir, onChanged }) {
+function BarraProceso({ e, etapas, hechas, n, puedeMarcar = true, abierta, onAbrir, onChanged }) {
   const { toast } = useApp();
   const [busy, setBusy] = useState('');
   const hecha = new Map(hechas.map((h) => [h.etapa, h]));
@@ -254,7 +257,7 @@ function BarraProceso({ e, etapas, hechas, n, abierta, onAbrir, onChanged }) {
             const sig = !h && i === n;
             return (
               <button key={x.clave} className={'pstep' + (h ? ' ok' : '') + (sig ? ' sig' : '') + (x.abre_punchlist ? ' bisagra' : '')}
-                disabled={busy === x.clave} onClick={() => marca(x, !h)}>
+                disabled={!puedeMarcar || busy === x.clave} onClick={() => marca(x, !h)}>
                 <i className="caja">{h ? '✓' : ''}</i>
                 <div>
                   <div className="t">{x.nombre}{!!x.abre_punchlist && <span className="pill acu">abre punchlist</span>}</div>
@@ -279,7 +282,7 @@ function BarraProceso({ e, etapas, hechas, n, abierta, onAbrir, onChanged }) {
   );
 }
 
-function Punch({ e, punch, flash, onChanged, setLb, user, staff, members, onEntregar, onVerProceso }) {
+function Punch({ e, punch, flash, onChanged, setLb, user, staff, veTodo = staff, members, onEntregar, onVerProceso }) {
   const { toast } = useApp();
   const [f, setF] = useState({ title: '', resp: e.resp || '', due_date: todayISO(3), assignee_id: '' });
   const [evid, setEvid] = useState(null);          // el pendiente que se está dando por terminado
@@ -354,7 +357,7 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff, members, onEntr
         )}
         {tot > 0 && <div className="plsum"><span>{ok}/{tot} resueltos</span><div className="bar"><i style={{ width: `${(ok / tot) * 100}%`, background: 'var(--ok)' }} /><i style={{ width: `${(pr / tot) * 100}%`, background: 'var(--proc)' }} /></div></div>}
         <div className="pl">
-          {!punch.length && <div className="empty"><h3>Sin pendientes</h3>{staff ? 'Este ítem no tiene detalles abiertos.' : 'Aquí no tienes nada asignado.'}</div>}
+          {!punch.length && <div className="empty"><h3>Sin pendientes</h3>{veTodo ? 'Este ítem no tiene detalles abiertos.' : 'Aquí no tienes nada asignado.'}</div>}
           {punch.map((k) => (
             <div key={k.id} className={'pi ' + k.status + (k.id === flash ? ' flash' : '')} data-k={k.id}>
               <div className="st" onClick={() => cycle(k)} title="Cambiar estado">{k.status === 'ok' ? '✓' : k.status === 'proc' ? '…' : ''}</div>
@@ -367,8 +370,8 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff, members, onEntr
                 ) : (
                   <div className="row" style={{ marginTop: 6, gap: 6 }}>
                     {staff && <label className="btn sm">+ Foto<input type="file" accept="image/*" capture="environment" multiple hidden onChange={(ev) => { addPhotos(k, [...ev.target.files]); ev.target.value = ''; }} /></label>}
-                    {!staff && k.status !== 'ok' && <button className="btn primary sm" onClick={() => setEvid(k.id)}>Ya quedó — subir evidencia</button>}
-                    {!staff && k.status === 'proc' && <span className="muted" style={{ fontSize: 12.5 }}>Esperando revisión del supervisor</span>}
+                    {!veTodo && k.status !== 'ok' && <button className="btn primary sm" onClick={() => setEvid(k.id)}>Ya quedó — subir evidencia</button>}
+                    {!veTodo && k.status === 'proc' && <span className="muted" style={{ fontSize: 12.5 }}>Esperando revisión del supervisor</span>}
                     {staff && <button className="btn sm danger" onClick={() => del(k)}>Borrar</button>}
                   </div>
                 )}

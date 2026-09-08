@@ -267,7 +267,7 @@ a{color:var(--accent)}
    Aquí la lista manda y la barra ocupa su lugar. */
 .stage.enlista{display:flex;flex-direction:column}
 .stage.enlista .tools{position:static;flex:none;flex-wrap:wrap;padding:12px 12px 0;row-gap:8px}
-.stage.enlista .lista{position:static;inset:auto;flex:1;min-height:0;padding-top:12px}
+.stage.enlista .lista,.stage.enlista .dudas{position:static;inset:auto;flex:1;min-height:0;padding-top:12px}
 
 /* El botón que abre los planos: el nombre del plano abierto, y de cuántos. */
 .btn.planos{gap:7px;max-width:min(58vw,320px)}
@@ -282,6 +282,33 @@ a{color:var(--accent)}
 .planrow .cual{flex:1;min-width:0;text-align:left;padding:4px 0}
 .planrow .cual .t{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .planrow .cual .s{font-size:12px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── las dudas ──────────────────────────────────────────────────────────── */
+/* Para quien pregunta esto es un buzón; para quien contesta, una fila de
+   trabajo. Las dos caben en la misma columna angosta: se lee de arriba abajo y
+   nada se acomoda en renglones. */
+.dudas{position:absolute;inset:0;overflow:auto;background:var(--bg);padding:56px 14px calc(14px + var(--sab));
+  display:flex;flex-direction:column;gap:10px;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+.dudas>*{width:min(720px,100%);align-self:center}
+/* Los botones sueltos de la columna no son tarjetas: no heredan su ancho. */
+.dudas>.btn{width:auto;align-self:center}
+.preguntar{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;
+  display:flex;flex-direction:column;gap:8px}
+.duda{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;
+  display:flex;flex-direction:column;gap:8px}
+.duda.cerrada{opacity:.72}
+.duda .quien{display:flex;align-items:center;gap:8px}
+.duda .min{flex:1;min-width:0;font-size:13px}
+.duda .min time{color:var(--ink3);font-size:12px;margin-left:6px}
+.duda .min .role{color:var(--ink3);font-size:11px;margin-left:6px}
+.duda .pregunta{white-space:pre-wrap;font-size:14.5px}
+.duda .liga{align-self:flex-start}
+/* La respuesta va sangrada y con una línea al lado: se distingue de la pregunta
+   sin necesidad de leerla. */
+.duda .respuesta{border-left:3px solid var(--accent-soft);padding-left:10px;font-size:14px;white-space:pre-wrap}
+.duda .responder{display:flex;flex-direction:column;gap:6px}
+.segm .cuantas{margin-left:5px;background:var(--pend);color:#fff;border-radius:8px;padding:0 5px;font-size:10px;font-weight:700}
+.segm button.on .cuantas{background:#fff;color:var(--accent)}
 
 /* Plano o lista: la misma obra, dos preguntas distintas. */
 .segm{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;
@@ -376,7 +403,7 @@ a{color:var(--accent)}
    completo arriba, el avance abajo. Apretar cinco columnas en 360 px deja el
    nombre en tres letras, que es justo lo que se venía a leer. */
 @media (max-width:700px){
-  .lista{padding-top:52px}
+  .lista,.dudas{padding-top:52px}
   .embudo{overflow-x:auto;padding-bottom:2px}
   .ecol{min-width:88px;flex:none}
   .lrow{flex-wrap:wrap;row-gap:6px}

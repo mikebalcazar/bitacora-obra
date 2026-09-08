@@ -158,8 +158,19 @@ export const isLate = (k) => k.status !== 'ok' && k.due_date && new Date(k.due_d
 export const ini = (n = '') => n.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
 export const ST = { pend: 'Pendiente', proc: 'En proceso', ok: 'Resuelto' };
 
-// Los tres roles, con el nombre que se usa en obra.
+// Los tres roles de cuenta, con el nombre que se usa en obra.
 export const ROLES = { admin: 'Dueño', int: 'Supervisor', con: 'Contratista' };
+
+// Y lo que se es dentro de una obra. Quien la dirige lo es en todas; a los
+// demás se lo dice su membresía, obra por obra: la misma persona es contratista
+// en una y trabajador en otra.
+export const ROLES_OBRA = {
+  con: { nombre: 'Contratista', que: 'Ve nada más los pendientes que traen su nombre. Sube evidencia y los marca terminados.' },
+  tra: { nombre: 'Trabajador', que: 'Ve la obra completa —planos, ítems, bitácora y punchlist— y no puede editar nada. Puede levantar dudas.' },
+};
+// Ver la obra entera es de quien la dirige y del trabajador. Editarla, solo de
+// quien la dirige: son dos preguntas distintas y se contestan por separado.
+export const veTodoEn = (user, miRol) => dirige(user) || miRol === 'tra';
 
 // Las dos fases por las que pasa un ítem. Producción es mientras se hace;
 // punchlist empieza el día que se entrega y hay algo que corregir.
