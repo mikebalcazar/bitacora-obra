@@ -82,15 +82,31 @@ El proxy de salida del chat rechaza `*.workers.dev`, `*.netlify.app`,
 `api.github.com`, npm y PyPI. **No se rodea: se usa el runner.**
 
 El corredor de GitHub Actions sí tiene internet abierto. Por eso **cada
-workflow que publica termina probando lo que publicó** e imprimiendo el
-resultado en su log, y el chat lee ese log por API. Ver `verificar.yml`.
+workflow que publica termina probando lo que publicó**. Ver `verificar.yml`.
+
+**Ojo: el log de Actions NO es el canal de vuelta.** Descargarlo redirige a
+`results-receiver.actions.githubusercontent.com`, que el proxy también rechaza.
+Se midió el 8-sep con el run #36. Del log, el chat solo alcanza a ver si el
+paso salió `success` o `failure`, sin un solo número.
+
+Por eso `verificar.yml` **deja lo que midió como comentario del commit**. Eso
+lo sirve `api.github.com`, que sí pasa:
 
 ```bash
-# el log del último run, que es donde está la verdad
+# el resultado de la verificación del último merge
 curl -s -H "Authorization: Bearer $T" \
-  "https://api.github.com/repos/mikebalcazar/bitacora-obra/actions/runs/<ID>/logs" -L -o /tmp/log.zip
-unzip -p /tmp/log.zip | grep -A20 "Verificar"
+  "https://api.github.com/repos/mikebalcazar/bitacora-obra/commits/<SHA>/comments" \
+  | python3 -c "import json,sys; [print(c['body']) for c in json.load(sys.stdin)]"
+
+# y si algo falló, en qué trabajo fue
+curl -s -H "Authorization: Bearer $T" \
+  "https://api.github.com/repos/mikebalcazar/bitacora-obra/actions/runs/<ID>/jobs" \
+  | python3 -c "import json,sys; [print(j['name'], j['conclusion']) for j in json.load(sys.stdin)['jobs']]"
 ```
+
+Regla general: **lo que el chat necesite saber del corredor tiene que volver por
+`api.github.com`** —comentario de commit, estado de commit o conclusión del
+trabajo—, nunca por el log.
 
 Regla: **si algo no se puede medir desde el chat, se mide en el runner.** Si
 tampoco ahí, se le dice a Mike qué quedó sin verificar. Nunca se supone.
