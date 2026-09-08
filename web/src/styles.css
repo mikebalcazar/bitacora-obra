@@ -99,11 +99,15 @@ a{color:var(--accent)}
 .hoja{position:absolute;left:0;top:0;z-index:0;background:var(--surface2)}
 /* Solo los pines se mueven con CSS: son cuatro nodos chicos, no una textura. */
 .world{position:absolute;left:0;top:0;transform-origin:0 0;z-index:2;will-change:transform}
+/* El pin va vacío a propósito. Con un número adentro dejaba de ser un círculo:
+   el texto abre una columna en la rejilla que se pasa por alto el ancho fijo y
+   el pin se estiraba a 120 px. Sin nada en el flujo no hay rejilla que estirar
+   —la etiqueta del código va posicionada aparte— y siempre mide 26. */
 .pin{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:var(--pin);
-  border:3px solid #fff;color:#fff;font-size:11px;font-weight:600;display:grid;place-items:center;
-  box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer}
-/* El aro dice cómo va el punchlist; el relleno, de qué tipo es el ítem. */
-.pin.pend{border-color:var(--pend)}.pin.proc{border-color:var(--proc)}.pin.ok{border-color:var(--ok)}
+  border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer}
+/* El relleno dice de qué tipo es el ítem; el aro rojo, que le falta cerrar
+   pendientes. Es lo único que el aro tiene que decir a la distancia. */
+.pin.abierto,.pin.prod.abierto{border-color:var(--pend)}
 .pin.sel{outline:3px solid var(--accent);outline-offset:2px}
 .pin.flash{animation:flash 1.2s ease-out 3}
 @keyframes flash{0%{box-shadow:0 0 0 0 rgba(63,95,133,.9)}100%{box-shadow:0 0 0 22px rgba(63,95,133,0)}}
@@ -356,8 +360,6 @@ a{color:var(--accent)}
 .swatch.fila small{margin-left:auto}
 .legend .dot.aro{background:#fff;border:3px solid var(--pin);width:13px;height:13px}
 .legend .dot.aro.pend{border-color:var(--pend)}
-.legend .dot.aro.proc{border-color:var(--proc)}
-.legend .dot.aro.ok{border-color:var(--ok)}
 
 /* Los interruptores de tipo viven en la barra lateral. En el celular no hay
    barra lateral, así que ahí —y solo ahí— salen encima del plano.

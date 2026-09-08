@@ -189,7 +189,6 @@ export const avance = (e, etapas = []) => {
 export const esDueno = (u) => u?.role === 'admin';
 export const esContratista = (u) => u?.role === 'con';
 export const dirige = (u) => u?.role === 'admin' || u?.role === 'int';
-export const elStatus = (e) => (!e.n_total ? 'none' : e.n_pend ? 'pend' : e.n_proc ? 'proc' : 'ok');
 export const todayISO = (offsetDays = 0) => { const d = new Date(); d.setDate(d.getDate() + offsetDays); return d.toISOString().slice(0, 10); };
 
 // Comprimir imagen en cliente (máx 1600 px, JPEG .82) → File
