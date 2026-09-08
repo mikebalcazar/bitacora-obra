@@ -38,7 +38,19 @@ async function getUser(req, env) {
 //                    no le toca.
 const isStaff = (u) => u && (u.role === 'admin' || u.role === 'int');
 const esDueno = (u) => u && u.role === 'admin';
-const esContratista = (u) => u && u.role === 'con';
+
+// Qué es esta persona en esta obra. Quien la dirige lo es en todas; a los demás
+// se lo dice su membresía, obra por obra: la misma persona es contratista en
+// una —donde solo le tocan sus pendientes— y trabajador en otra —donde anda
+// todo el día y necesita ver el proyecto completo sin moverle nada—.
+const ROLES_OBRA = ['con', 'tra'];
+async function rolEnObra(env, user, pid) {
+  if (isStaff(user)) return user.role;
+  const r = await env.DB.prepare(`SELECT rol FROM project_members WHERE project_id = ? AND user_id = ?`).bind(pid, user.id).first();
+  return r ? r.rol : null;
+}
+// El contratista es el único que ve un pedazo de la obra en vez de la obra.
+const soloLoSuyo = (rol) => rol === 'con';
 
 // ¿Este pendiente trae su nombre?
 async function leToca(env, user, punchId) {
@@ -47,8 +59,8 @@ async function leToca(env, user, punchId) {
   return !!r;
 }
 // ¿Tiene algo asignado en este elemento? Si no, para él el elemento no existe.
-async function tieneAlgoEn(env, user, elementId) {
-  if (isStaff(user)) return true;
+async function tieneAlgoEn(env, user, elementId, mio = true) {
+  if (!mio) return true;
   const r = await env.DB.prepare(`SELECT 1 FROM punch_items WHERE element_id = ? AND assignee_id = ? LIMIT 1`).bind(elementId, user.id).first();
   return !!r;
 }
@@ -516,12 +528,17 @@ async function api(req, env, url, path) {
   if (seg[0] === 'projects') {
     if (!seg[1]) {
       if (m === 'GET') {
-        // El contratista ve los proyectos donde está metido, y el número que
-        // trae cada uno son sus pendientes, no los de todos: si le aparece 40
-        // y suyos son 3, el tablero le miente.
+        // Quien no dirige la obra ve nada más las obras donde está metido. Y el
+        // número que trae cada tarjeta depende de qué sea ahí: al contratista
+        // se le cuentan sus pendientes, no los de todos —si le aparece 40 y
+        // suyos son 3, el tablero le miente—; al trabajador, que ve la obra
+        // completa, se le cuentan todos.
         const sql = isStaff(user)
           ? `SELECT p.*, (SELECT COUNT(*) FROM punch_items k JOIN elements e ON e.id=k.element_id JOIN plans pl ON pl.id=e.plan_id WHERE pl.project_id=p.id AND k.status!='ok') AS open_count FROM projects p ORDER BY p.status, p.name`
-          : `SELECT p.*, (SELECT COUNT(*) FROM punch_items k JOIN elements e ON e.id=k.element_id JOIN plans pl ON pl.id=e.plan_id WHERE pl.project_id=p.id AND k.status!='ok' AND k.assignee_id=?) AS open_count FROM projects p JOIN project_members pm ON pm.project_id=p.id AND pm.user_id=? ORDER BY p.status, p.name`;
+          : `SELECT p.*, pm.rol AS mi_rol,
+               (SELECT COUNT(*) FROM punch_items k JOIN elements e ON e.id=k.element_id JOIN plans pl ON pl.id=e.plan_id
+                 WHERE pl.project_id=p.id AND k.status!='ok' AND (pm.rol <> 'con' OR k.assignee_id=?)) AS open_count
+             FROM projects p JOIN project_members pm ON pm.project_id=p.id AND pm.user_id=? ORDER BY p.status, p.name`;
         const stmt = isStaff(user) ? env.DB.prepare(sql) : env.DB.prepare(sql).bind(user.id, user.id);
         const { results } = await stmt.all();
         return json({ projects: results });
@@ -545,7 +562,7 @@ async function api(req, env, url, path) {
       // Al contratista solo le salen en el plano los elementos donde tiene algo
       // asignado, y los números de cada pin cuentan lo suyo. Lo demás no es
       // asunto suyo y de paso no se pierde entre cien pines que no le tocan.
-      const mio = esContratista(user);
+      const mio = soloLoSuyo(await rolEnObra(env, user, pid));
       const { results: elements } = mio
         ? await env.DB.prepare(
             `SELECT e.*,
@@ -570,8 +587,14 @@ async function api(req, env, url, path) {
       // Quién más anda en la obra es cosa de quien la dirige.
       const { results: members } = mio
         ? { results: [] }
-        : await env.DB.prepare(`SELECT u.id, u.name, u.email, u.role, u.company FROM project_members pm JOIN users u ON u.id = pm.user_id WHERE pm.project_id = ?`).bind(pid).all();
-      return json({ project, plans, elements, members, etapas: await catalogoEtapas(env) });
+        : await env.DB.prepare(`SELECT u.id, u.name, u.email, u.role, u.company, pm.rol AS rol_obra FROM project_members pm JOIN users u ON u.id = pm.user_id WHERE pm.project_id = ?`).bind(pid).all();
+      // Cuántas dudas están esperando respuesta: quien dirige ve las de todos,
+      // quien pregunta ve las suyas. Va aquí y no en otra llamada porque es un
+      // número que se pinta junto al resto de la pantalla.
+      const qd = env.DB.prepare(`SELECT COUNT(*) AS n FROM dudas WHERE project_id = ? AND estado = 'abierta' ${isStaff(user) ? '' : 'AND user_id = ?'}`);
+      const abiertas = await (isStaff(user) ? qd.bind(pid) : qd.bind(pid, user.id)).first();
+      return json({ project, plans, elements, members, mi_rol: await rolEnObra(env, user, pid),
+                    dudas_abiertas: abiertas ? abiertas.n : 0, etapas: await catalogoEtapas(env) });
     }
     if (!seg[2] && m === 'PATCH') {
       if (!isStaff(user)) return err('sin permiso', 403);
@@ -582,8 +605,11 @@ async function api(req, env, url, path) {
     if (seg[2] === 'members' && m === 'POST') {
       if (!isStaff(user)) return err('sin permiso', 403);
       const b = await req.json();
-      await env.DB.prepare(`INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?,?)`).bind(pid, b.user_id).run();
-      return json({ ok: true });
+      const rol = ROLES_OBRA.includes(b.rol) ? b.rol : 'con';
+      await env.DB.prepare(
+        `INSERT INTO project_members (project_id, user_id, rol) VALUES (?,?,?)
+         ON CONFLICT (project_id, user_id) DO UPDATE SET rol = excluded.rol`).bind(pid, b.user_id, rol).run();
+      return json({ ok: true, rol });
     }
     if (seg[2] === 'members' && m === 'DELETE' && seg[3]) {
       if (!isStaff(user)) return err('sin permiso', 403);
@@ -609,9 +635,52 @@ async function api(req, env, url, path) {
         .bind(id, pid, fd.get('name') || 'Plano', fd.get('file_name') || '', imageKey, sourceKey, +fd.get('width') || 0, +fd.get('height') || 0, sort.s).run();
       return json({ ok: true, id, image_key: imageKey });
     }
+    // ----- dudas -----
+    // La cola del supervisor: preguntas de obra, la más vieja primero, y se van
+    // cerrando. Quien pregunta ve nada más las suyas; quien dirige, todas.
+    if (seg[2] === 'dudas' && m === 'GET') {
+      const todas = isStaff(user);
+      const q = env.DB.prepare(
+        `SELECT d.*, u.name AS quien, u.company AS quien_empresa, e.code AS element_code, e.name AS element_name, e.plan_id,
+                r.name AS resuelta_por_nombre
+           FROM dudas d JOIN users u ON u.id = d.user_id
+           LEFT JOIN elements e ON e.id = d.element_id
+           LEFT JOIN users r ON r.id = d.resuelta_por
+          WHERE d.project_id = ? ${todas ? '' : 'AND d.user_id = ?'}
+          ORDER BY CASE d.estado WHEN 'abierta' THEN 0 ELSE 1 END, d.created_at`);
+      const { results: dudas } = await (todas ? q.bind(pid) : q.bind(pid, user.id)).all();
+      // Las respuestas de todas, en una consulta: son pocas y se leen juntas.
+      const ids = dudas.map((d) => d.id);
+      let porDuda = {};
+      if (ids.length) {
+        const { results } = await env.DB.prepare(
+          `SELECT r.*, u.name AS quien, u.role AS quien_rol FROM duda_respuestas r JOIN users u ON u.id = r.user_id
+            WHERE r.duda_id IN (${ids.map(() => '?').join(',')}) ORDER BY r.created_at`).bind(...ids).all();
+        for (const r of results) (porDuda[r.duda_id] = porDuda[r.duda_id] || []).push(r);
+      }
+      dudas.forEach((d) => (d.respuestas = porDuda[d.id] || []));
+      return json({ dudas });
+    }
+    // Preguntar puede cualquiera que esté en la obra, incluido quien la dirige.
+    if (seg[2] === 'dudas' && m === 'POST') {
+      const b = await req.json();
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
+      const texto = String(b.texto || '').trim();
+      if (!texto) return err('Escribe la duda.');
+      // Si la duda viene colgada de un ítem, que sea un ítem de esta obra: si no,
+      // se podría preguntar sobre lo que hay en la obra de al lado.
+      let eid = b.element_id || null;
+      if (eid && (await projectOfElement(env, eid)) !== pid) eid = null;
+      const id = uid();
+      await env.DB.prepare(`INSERT INTO dudas (id, project_id, element_id, user_id, texto) VALUES (?,?,?,?,?)`)
+        .bind(id, pid, eid, user.id, texto).run();
+      await apunta(env, b.op_id);
+      return json({ ok: true, id });
+    }
+
     if (seg[2] === 'punch' && m === 'GET') {
       const open = url.searchParams.get('status') !== 'all';
-      const solo = esContratista(user) ? 'AND k.assignee_id = ?' : '';
+      const solo = soloLoSuyo(await rolEnObra(env, user, pid)) ? 'AND k.assignee_id = ?' : '';
       const q = env.DB.prepare(
         `SELECT k.*, e.code AS element_code, e.name AS element_name, e.plan_id, pl.name AS plan_name
          FROM punch_items k JOIN elements e ON e.id = k.element_id JOIN plans pl ON pl.id = e.plan_id
@@ -679,8 +748,8 @@ async function api(req, env, url, path) {
     const pid = await projectOfElement(env, eid);
     if (!pid || !(await canAccessProject(env, user, pid))) return err('sin acceso', 403);
     if (!seg[2] && m === 'GET') {
-      if (!(await tieneAlgoEn(env, user, eid))) return err('Este elemento no tiene nada asignado a ti.', 403);
-      const mio = esContratista(user);
+      const mio = soloLoSuyo(await rolEnObra(env, user, pid));
+      if (!(await tieneAlgoEn(env, user, eid, mio))) return err('Este elemento no tiene nada asignado a ti.', 403);
       const element = await env.DB.prepare(`SELECT e.*, pl.name AS plan_name FROM elements e JOIN plans pl ON pl.id = e.plan_id WHERE e.id = ?`).bind(eid).first();
       // La bitácora es de quien dirige la obra: ahí se acuerdan cosas y se
       // anotan tratos. El contratista trabaja sobre sus pendientes, no ahí.
@@ -774,6 +843,39 @@ async function api(req, env, url, path) {
       const photos = await savePhotos(env, user, 'punch', id, fd.getAll('photos'));
       await apunta(env, op);
       return json({ ok: true, id, photos });
+    }
+  }
+
+  // ----- dudas -----
+  if (seg[0] === 'dudas' && seg[1]) {
+    const d = await env.DB.prepare(`SELECT * FROM dudas WHERE id = ?`).bind(seg[1]).first();
+    if (!d || !(await canAccessProject(env, user, d.project_id))) return err('sin acceso', 403);
+    // Contesta quien dirige la obra, y también quien preguntó: media respuesta
+    // casi siempre necesita una aclaración de vuelta.
+    if (seg[2] === 'respuestas' && m === 'POST') {
+      if (!isStaff(user) && d.user_id !== user.id) return err('Esta duda no es tuya.', 403);
+      const b = await req.json();
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
+      const texto = String(b.texto || '').trim();
+      if (!texto) return err('Escribe la respuesta.');
+      const id = uid();
+      await env.DB.prepare(`INSERT INTO duda_respuestas (id, duda_id, user_id, texto) VALUES (?,?,?,?)`).bind(id, seg[1], user.id, texto).run();
+      await apunta(env, b.op_id);
+      return json({ ok: true, id });
+    }
+    // Dar por resuelta es del supervisor: quien pregunta no decide que ya le
+    // contestaron bien, igual que en el punchlist cierra quien lo levantó.
+    if (seg[2] === 'estado' && m === 'POST') {
+      if (!isStaff(user)) return err('Cerrar una duda es del supervisor.', 403);
+      const b = await req.json();
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
+      if (b.estado === 'abierta') {
+        await env.DB.prepare(`UPDATE dudas SET estado = 'abierta', resuelta_en = NULL, resuelta_por = NULL WHERE id = ?`).bind(seg[1]).run();
+      } else {
+        await env.DB.prepare(`UPDATE dudas SET estado = 'resuelta', resuelta_en = ?, resuelta_por = ? WHERE id = ?`).bind(now(), user.id, seg[1]).run();
+      }
+      await apunta(env, b.op_id);
+      return json({ ok: true });
     }
   }
 
