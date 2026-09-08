@@ -60,14 +60,24 @@ on:
 jobs:
   verificar:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write        # para dejar el resultado como comentario del commit
     steps:
       - name: Verificar que responda
+        id: medir
         env:
           URL: ${{ inputs.url }}
           MARCA: ${{ inputs.marca }}
           RUTAS: ${{ inputs.rutas }}
         run: |
           set -u
+          # Todo lo que se imprima queda también en /tmp/salida.txt, para poder
+          # mandárselo al chat. El proxy de salida del chat rechaza el host al
+          # que redirige la descarga de logs de Actions
+          # (results-receiver.actions.githubusercontent.com), así que el log NO
+          # es un canal de vuelta: lo único que el chat ve de aquí es el
+          # comentario que deja el paso siguiente.
+          exec > >(tee /tmp/salida.txt) 2>&1
           fallas=0
 
           # Sin subshell a propósito: si esto viviera dentro de $( ), el
@@ -116,3 +126,23 @@ jobs:
           fi
           echo "RESULTADO: todo verde"
           echo "### Verificación verde en $URL" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      # Aquí está el canal de vuelta. api.github.com sí lo alcanza el chat.
+      # jq arma el JSON: la salida trae comillas, saltos y acentos, y pegarla
+      # a mano en el cuerpo lo rompería.
+      - name: Dejar el resultado en el commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -u
+          [ -f /tmp/salida.txt ] || echo "No hubo salida que reportar." > /tmp/salida.txt
+          jq -Rs '{body: ("**Verificacion**\n\n```\n" + .[-60000:] + "\n```")}' \
+            /tmp/salida.txt > /tmp/comentario.json
+          curl -sS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/commits/$SHA/comments" \
+            -d @/tmp/comentario.json -o /dev/null -w 'comentario: %{http_code}\n'
