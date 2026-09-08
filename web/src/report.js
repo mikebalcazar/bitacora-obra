@@ -113,7 +113,7 @@ export const REPORT_CSS = `
 .page header .r b{display:block;font-size:16px;color:#141C26}
 .page h3{font-size:15px;margin:16px 0 6px;padding-bottom:4px;border-bottom:1px solid #D5D9DE;display:flex;justify-content:space-between}
 .page h3 span{font-size:11px;font-weight:400;color:#7A8593}
-.page table{width:100%;border-collapse:collapse;font-size:11.5px}
+.page table{width:100%;border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums}
 .page th{text-align:left;font-size:11px;font-weight:500;color:#7A8593;padding:5px 6px;border-bottom:1px solid #D5D9DE}
 .page td{padding:6px;border-bottom:1px solid #E6E9ED;vertical-align:top}
 .page .sum{display:flex;gap:18px;margin-bottom:6px;font-size:12px;flex-wrap:wrap}
