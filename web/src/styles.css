@@ -1,3 +1,21 @@
+/* Tipografia de la suite 101 -- claude/tipografia-cifras-suite101.md, 8-sep-2026.
+   Las cifras (medidas, cantidades, precios, fechas) van en Fira Sans, que las
+   dibuja alineadas y del mismo alto: se leen de un golpe. El texto sigue en
+   Raleway y la marca en Sansation. "Cifras" va PRIMERO en la pila y solo cubre
+   digitos y signos de medida por unicode-range, asi que ningun marcado cambia:
+   los numeros caen en Fira solos. Las fuentes viajan dentro de la app; nada se
+   pide a Google. El subconjunto lleva la caracteristica tnum, sin la cual
+   font-variant-numeric:tabular-nums no hace nada -- en silencio. */
+@font-face{font-family:"Cifras";src:url("/fonts/fira-cifras-400.woff2") format("woff2");font-weight:400 500;font-display:swap;unicode-range:U+0030-0039,U+00B0,U+00B1,U+00D7,U+0025}
+@font-face{font-family:"Cifras";src:url("/fonts/fira-cifras-600.woff2") format("woff2");font-weight:600 900;font-display:swap;unicode-range:U+0030-0039,U+00B0,U+00B1,U+00D7,U+0025}
+@font-face{font-family:"Raleway";src:url("/fonts/raleway-400.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Raleway";src:url("/fonts/raleway-500.woff2") format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"Raleway";src:url("/fonts/raleway-600.woff2") format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:"Raleway";src:url("/fonts/raleway-700.woff2") format("woff2");font-weight:700;font-display:swap}
+@font-face{font-family:"Raleway";src:url("/fonts/raleway-800.woff2") format("woff2");font-weight:800;font-display:swap}
+@font-face{font-family:"Sansation";src:url("/fonts/sansation-700.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Sansation";src:url("/fonts/sansation-700-ext.woff2") format("woff2");font-weight:700;font-display:swap;unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+
 :root{
   --bg:#EEF0F2; --surface:#FFFFFF; --surface2:#F5F6F8; --line:#D5D9DE; --line2:#E6E9ED;
   --ink:#141C26; --ink2:#4A5563; --ink3:#7A8593;
@@ -13,7 +31,10 @@
      plano y no se confunde con los tres colores de estado. */
   --pin:#1C3557;
   --shadow:0 10px 30px rgba(20,28,38,.14);
-  --font:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* Instrument Sans era una fuente pedida a Google en cada arranque; en obra,
+     con senal mala, la pantalla salia con otra letra. Ahora viaja dentro. */
+  --font:"Cifras","Raleway",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-marca:"Sansation","Raleway",sans-serif;
   --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box}
