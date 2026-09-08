@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { fileUrl, colorTipo } from './api.js';
+import { fileUrl, colorTipo, aguado } from './api.js';
 import { pdfjs, esPdf } from './pdf.js';
 
 // Plano + pines. Pan (arrastrar), zoom (rueda / pinch), tap para elegir.
@@ -270,8 +270,10 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
       <div className="world" style={{ transform: `translate(${v.x}px,${v.y}px) scale(${v.s})` }}>
         {elements.map((e) => {
           // El relleno dice de qué tipo es; el aro rojo, que tiene punchlist sin
-          // cerrar. Un ítem en producción va hueco: todavía no hay nada
-          // entregado que corregir.
+          // cerrar. Un ítem en producción va aguado: del color de su tipo pero
+          // al 25%, para que se note que todavía no hay nada entregado sin
+          // desaparecer del plano. Relleno blanco no se veía: el plano también
+          // es blanco, y quedaba un aro suelto.
           //
           // El pin no lleva número adentro. Lo llevaba, y con un dígito el pin
           // se estiraba a 120 px de ancho: el texto abre una columna en la
@@ -285,8 +287,7 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
             <div key={e.id} className={'pin' + (abierto ? ' abierto' : '') + (enProd ? ' prod' : '') + (e.id === sel ? ' sel' : '') + (flash && e.id === sel ? ' flash' : '')}
               style={{
                 left: e.x * plan.width, top: e.y * plan.height, transform: `translate(-50%,-50%) scale(${1 / v.s})`,
-                background: enProd ? '#fff' : tinte,
-                color: enProd ? tinte : '#fff',
+                background: enProd ? aguado(tinte) : tinte,
                 ['--tinte']: tinte,
               }}
               onPointerDown={(ev) => ev.stopPropagation()} onClick={(ev) => { ev.stopPropagation(); if (!adding) onPick(e.id); }} title={`${e.code} · ${e.name}`}>
