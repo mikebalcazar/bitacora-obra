@@ -18,13 +18,12 @@ on:
   push:
     branches: [main]
     # Un cambio de documentación no republica: el 11 y el 12-sep, tocar
-    # OPERAR.md disparó tres despliegues que nadie pidió. Igual que
-    # `desplegar.yml` de suite101-api. El botón de abajo sigue sirviendo
-    # para publicar a mano cuando sí se quiera.
+    # OPERAR.md disparó tres despliegues que nadie pidió. Aquí ningún `.md`
+    # es contenido publicado —se comprobó: sólo README y OPERAR—, así que se
+    # ignoran todos. El botón de abajo sigue sirviendo para publicar a mano.
     paths-ignore:
       - 'claude/**'
-      - 'README.md'
-      - 'OPERAR.md'
+      - '**.md'
   workflow_dispatch:        # botón para publicar a mano desde la web de GitHub
 
 concurrency:
