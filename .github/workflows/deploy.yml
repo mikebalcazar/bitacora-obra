@@ -17,6 +17,14 @@ name: Publicar bitácora
 on:
   push:
     branches: [main]
+    # Un cambio de documentación no republica: el 11 y el 12-sep, tocar
+    # OPERAR.md disparó tres despliegues que nadie pidió. Igual que
+    # `desplegar.yml` de suite101-api. El botón de abajo sigue sirviendo
+    # para publicar a mano cuando sí se quiera.
+    paths-ignore:
+      - 'claude/**'
+      - 'README.md'
+      - 'OPERAR.md'
   workflow_dispatch:        # botón para publicar a mano desde la web de GitHub
 
 concurrency:
