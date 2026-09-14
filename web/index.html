@@ -112,9 +112,13 @@
   #splash101 .pin{opacity:0;transform-box:fill-box;transform-origin:center;animation:splash101-caer .45s cubic-bezier(.2,.9,.3,1.3) forwards}
   #splash101 .p1{animation-delay:.9s}#splash101 .p2{animation-delay:1s}#splash101 .p3{animation-delay:1.1s}#splash101 .p4{animation-delay:1.2s}#splash101 .p5{animation-delay:1.3s}
   @keyframes splash101-caer{from{opacity:0;transform:translateY(-18px) scale(.6)}to{opacity:1;transform:none}}
-  #splash101 .marca{position:relative;text-align:center;padding:36px 64px;border-radius:50%;
-    background:radial-gradient(closest-side,rgba(20,28,38,.92) 40%,rgba(20,28,38,0) 100%)}
-  #splash101 .marca svg{display:block;margin:0 auto 12px;height:44px;width:auto}
+  /* sin halo: la sombra sigue el contorno del logotipo y del texto, corta y
+     suave, sólo para despegarlos del plano (Mike, 14-sep: el halo parecía una mancha) */
+  #splash101 .marca{position:relative;text-align:center;padding:36px 64px}
+  #splash101 .marca svg{display:block;margin:0 auto 12px;height:44px;width:auto;
+    filter:drop-shadow(0 1px 1px rgba(0,0,0,.75)) drop-shadow(0 0 5px rgba(0,0,0,.45)) drop-shadow(0 8px 10px rgba(0,0,0,.3))}
+  #splash101 .sub,#splash101 .estado{text-shadow:0 1px 1px rgba(0,0,0,.8),0 0 6px rgba(0,0,0,.6),0 0 14px rgba(0,0,0,.35)}
+  #splash101 .estado i{box-shadow:0 1px 3px rgba(0,0,0,.6)}
   #splash101 .sub{font-size:12px;letter-spacing:.18em;text-transform:uppercase;opacity:.8}
   #splash101 .estado{margin-top:14px;font-size:13px;min-height:18px;opacity:.95}
   #splash101 .estado i{display:inline-block;width:5px;height:5px;border-radius:50%;background:#fff;margin:0 2px;animation:splash101-latir 1.2s ease-in-out infinite}
