@@ -13,7 +13,13 @@ export default function App() {
   const [route, setRoute] = useState(parseHash());
   const [toast, setToast] = useState(null);
 
-  useEffect(() => { api.get('/me').then((r) => setUser(r.user)).catch(() => setUser(null)); }, []);
+  // La pantalla de arranque (index.html) se queda hasta saber quién entró; con
+  // sesión o sin ella hay pantalla que enseñar, así que en los dos casos se quita.
+  useEffect(() => {
+    const splash = window.splash101;
+    if (splash) splash.estado('Abriendo tu bitácora');
+    api.get('/me').then((r) => setUser(r.user)).catch(() => setUser(null)).finally(() => { if (splash) splash.ocultar(); });
+  }, []);
   useEffect(() => { const f = () => setRoute(parseHash()); window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, []);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2800); return () => clearTimeout(t); }, [toast]);
 
