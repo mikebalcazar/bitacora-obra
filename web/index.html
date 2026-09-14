@@ -74,8 +74,7 @@
   </div></div>
   <div class="marca">
     <svg viewBox="126.33 208.74 402.42 194.51" height="44" role="img" aria-label="quell101" fill="#fff"><g transform="translate(0,351.34) scale(0.047783,-0.047783)"><path d="M3365.7648177959904 812.0Q3270.7648177959904 836.0 3190.7648177959904 836.0Q2905.7648177959904 836.0 2905.7648177959904 533.0Q2905.7648177959904 220.0 3152.7648177959904 220.0Q3276.7648177959904 220.0 3365.7648177959904 274.0ZM3630.7648177959904 -380.0H3365.7648177959904V50.0Q3257.7648177959904 0.0 3121.7648177959904 0.0Q2643.7648177959904 0.0 2643.7648177959904 531.0Q2643.7648177959904 1050.0 3188.7648177959904 1050.0Q3391.7648177959904 1050.0 3630.7648177959904 1007.0Z M4723.36481779599 1050.0V0.0H4516.36481779599L4484.36481779599 134.0Q4303.36481779599 0.0 4100.36481779599 0.0Q3778.3648177959903 0.0 3778.3648177959903 381.0V1050.0H4043.3648177959903V388.0Q4043.3648177959903 214.0 4195.36481779599 214.0Q4324.36481779599 214.0 4458.36481779599 317.0V1050.0Z M5313.96481779599 1050.0Q5791.96481779599 1050.0 5791.96481779599 562.0Q5791.96481779599 497.0 5782.96481779599 432.0H5085.96481779599Q5085.96481779599 210.0 5411.96481779599 210.0Q5570.96481779599 210.0 5729.96481779599 240.0V30.0Q5590.96481779599 0.0 5391.96481779599 0.0Q4820.96481779599 0.0 4820.96481779599 537.0Q4820.96481779599 1050.0 5313.96481779599 1050.0ZM5085.96481779599 616.0H5533.96481779599V624.0Q5533.96481779599 842.0 5313.96481779599 842.0Q5103.96481779599 842.0 5085.96481779599 616.0Z M6153.56481779599 1430.0V0.0H5888.56481779599V1430.0Z M6566.1648177959905 1430.0V0.0H6301.1648177959905V1430.0Z"/></g><rect x="126.33" y="360.72" width="26.49" height="6.52"/><rect x="366.4" y="261.5" width="16.27" height="89.61"/><rect x="479.98" y="261.19" width="16.27" height="89.61"/><path d="M431.49,208.74c-53.63,0-97.26,43.63-97.26,97.26,0,20.28,6.25,39.12,16.91,54.72h-169.64v6.52h174.51c17.85,21.95,45.05,36.01,75.48,36.01,53.63,0,97.26-43.63,97.26-97.26s-43.63-97.26-97.26-97.26ZM431.49,396.74c-29.48,0-55.72-14.14-72.3-35.99v-.02h-.01c-11.55-15.22-18.42-34.18-18.42-54.72,0-50.03,40.7-90.74,90.74-90.74s90.73,40.7,90.73,90.74-40.7,90.74-90.73,90.74Z"/><path d="M431.81,262.73c-26.11,0-39.16,14.87-39.16,44.62s13.05,44.38,39.16,44.38,38.48-14.79,38.48-44.38-12.83-44.62-38.48-44.62ZM431.81,337.61c-14.85,0-22.28-10.21-22.28-30.63s7.43-30.14,22.28-30.14,21.61,10.05,21.61,30.14-7.2,30.63-21.61,30.63Z"/></svg>
-    <div class="sub">Bitácora de obra · Forespot</div>
-    <div class="estado" id="splash101-estado">Cargando aplicación <i></i><i></i><i></i></div>
+        <div class="estado" id="splash101-estado">Cargando aplicación <i></i><i></i><i></i></div>
     <button type="button" id="splash101-reintentar" hidden onclick="location.reload()">Reintentar</button>
   </div>
 </div>
@@ -115,12 +114,16 @@
   /* sin halo: la sombra sigue el contorno del logotipo y del texto, corta y
      suave, sólo para despegarlos del plano (Mike, 14-sep: el halo parecía una mancha) */
   #splash101 .marca{position:relative;text-align:center;padding:36px 64px}
-  #splash101 .marca svg{display:block;margin:0 auto 12px;height:44px;width:auto;
-    filter:drop-shadow(0 1px 1px rgba(0,0,0,.75)) drop-shadow(0 0 5px rgba(0,0,0,.45)) drop-shadow(0 8px 10px rgba(0,0,0,.3))}
-  #splash101 .sub,#splash101 .estado{text-shadow:0 1px 1px rgba(0,0,0,.8),0 0 6px rgba(0,0,0,.6),0 0 14px rgba(0,0,0,.35)}
-  #splash101 .estado i{box-shadow:0 1px 3px rgba(0,0,0,.6)}
+  /* la marca en el azul de la casa: contrasta con el plano blanco (Mike, 14-sep) */
+  #splash101 .marca{color:#0381c2}
+  #splash101 .marca svg{display:block;margin:0 auto 12px;height:44px;width:auto;fill:#0381c2;
+    filter:drop-shadow(0 1px 1px rgba(0,0,0,.25)) drop-shadow(0 6px 8px rgba(0,40,70,.22))}
+  #splash101 .sub,#splash101 .estado{text-shadow:0 1px 1px rgba(255,255,255,.7),0 3px 6px rgba(0,40,70,.18)}
+  #splash101 .marca .estado i{background:#0381c2;box-shadow:0 1px 2px rgba(0,40,70,.3)}
   #splash101 .sub{font-size:12px;letter-spacing:.18em;text-transform:uppercase;opacity:.8}
-  #splash101 .estado{margin-top:14px;font-size:13px;min-height:18px;opacity:.95}
+  /* sólo el logotipo (Mike, 14-sep): el estado se enseña únicamente si hay que avisar algo */
+  #splash101 .estado{display:none;margin-top:14px;font-size:13px;min-height:18px;opacity:.95}
+  #splash101.aviso .estado{display:block}
   #splash101 .estado i{display:inline-block;width:5px;height:5px;border-radius:50%;background:#fff;margin:0 2px;animation:splash101-latir 1.2s ease-in-out infinite}
   #splash101 .estado i:nth-child(2){animation-delay:.2s}#splash101 .estado i:nth-child(3){animation-delay:.4s}
   @keyframes splash101-latir{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
@@ -139,8 +142,8 @@
       setTimeout(function () { caja.classList.add("fuera");
         setTimeout(function () { if (caja.parentNode) caja.parentNode.removeChild(caja); }, 400);
       }, Math.max(0, 1400 - (Date.now() - desde))); }
-    setTimeout(function () { if (!fuera) estado("Sigue cargando… revisa tu señal"); }, 8000);
-    setTimeout(function () { if (!fuera) { estado("No se pudo cargar"); boton.hidden = false; } }, 20000);
+    setTimeout(function () { if (!fuera) { caja.classList.add("aviso"); estado("Sigue cargando… revisa tu señal"); } }, 8000);
+    setTimeout(function () { if (!fuera) { caja.classList.add("aviso"); estado("No se pudo cargar"); boton.hidden = false; } }, 20000);
     window.splash101 = { estado: estado, ocultar: ocultar };
   })();
 </script>
