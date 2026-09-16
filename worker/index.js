@@ -316,6 +316,24 @@ async function sendMail(env, to, subject, html) {
 // llegó, y al reintentar llega otra vez con el mismo identificador: se reconoce
 // y no se repite. Sin esto, una foto subida con mala señal aparecería tres
 // veces en la bitácora.
+/* El código de un ítem es único dentro de su obra, y quien lo impide es un
+ * índice de la base (migración 0010), no una revisión de este código: el
+ * `MW-07` repetido de Sanje CC 37 entró porque no había ninguna cerradura, y
+ * una ruta nueva que se olvide de preguntar vuelve a abrir la puerta.
+ *
+ * Lo que sí toca aquí es traducir el choque. Sin esto, el supervisor que teclea
+ * un código que ya existe ve un «error interno» y no sabe qué hizo mal. */
+const esCodigoRepetido = (e) => /UNIQUE constraint failed: elements\.project_id, elements\.code/i.test(String(e?.message || e));
+
+async function conCodigoUnico(hacer, codigo) {
+  try {
+    return await hacer();
+  } catch (e) {
+    if (!esCodigoRepetido(e)) throw e;
+    return err(`En esta obra ya hay un ítem con el código ${codigo}. Los códigos no se repiten dentro de una misma obra: escoge otro.`, 409);
+  }
+}
+
 async function yaHecha(env, opId) {
   if (!opId) return false;
   const r = await env.DB.prepare(`SELECT 1 FROM operaciones WHERE id = ?`).bind(opId).first();
@@ -848,11 +866,18 @@ async function api(req, env, url, path) {
       if (!isStaff(user)) return err('Los elementos los levanta el supervisor.', 403);
       if (!b.name) return err('nombre requerido');
       const id = b.op_id && /^[0-9a-f-]{36}$/i.test(b.op_id) ? b.op_id : uid();
+      // La obra se guarda en el ítem, no se deduce pasando por el plano en cada
+      // consulta. Y es lo que hace que la cerradura del código sirva: sin obra,
+      // SQLite trata los nulos como distintos y el ítem nuevo se le escaparía.
+      const codigo = String(b.code || '').trim();
       // Nace en producción: todavía no hay nada entregado que corregir.
-      await env.DB.prepare(`INSERT INTO elements (id, plan_id, code, type, name, resp, x, y, created_by) VALUES (?,?,?,?,?,?,?,?,?)`)
-        .bind(id, seg[1], b.code || '', b.type || 'Otro', b.name, b.resp || '', +b.x, +b.y, user.id).run();
-      await apunta(env, b.op_id);
-      return json({ ok: true, id });
+      const alta = await conCodigoUnico(async () => {
+        await env.DB.prepare(`INSERT INTO elements (id, plan_id, project_id, code, type, name, resp, x, y, created_by) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+          .bind(id, seg[1], pid, codigo, b.type || 'Otro', b.name, b.resp || '', +b.x, +b.y, user.id).run();
+        await apunta(env, b.op_id);
+        return json({ ok: true, id });
+      }, codigo);
+      return alta;
     }
     if (!seg[2] && m === 'PATCH') {
       if (!isStaff(user)) return err('sin permiso', 403);
@@ -894,9 +919,12 @@ async function api(req, env, url, path) {
     if (!seg[2] && m === 'PATCH') {
       if (!isStaff(user)) return err('El contratista no edita elementos.', 403);
       const b = await req.json();
-      await env.DB.prepare(`UPDATE elements SET code = COALESCE(?, code), type = COALESCE(?, type), name = COALESCE(?, name), resp = COALESCE(?, resp), x = COALESCE(?, x), y = COALESCE(?, y) WHERE id = ?`)
-        .bind(b.code ?? null, b.type ?? null, b.name ?? null, b.resp ?? null, b.x ?? null, b.y ?? null, eid).run();
-      return json({ ok: true });
+      const codigo = b.code === undefined || b.code === null ? null : String(b.code).trim();
+      return await conCodigoUnico(async () => {
+        await env.DB.prepare(`UPDATE elements SET code = COALESCE(?, code), type = COALESCE(?, type), name = COALESCE(?, name), resp = COALESCE(?, resp), x = COALESCE(?, x), y = COALESCE(?, y) WHERE id = ?`)
+          .bind(codigo, b.type ?? null, b.name ?? null, b.resp ?? null, b.x ?? null, b.y ?? null, eid).run();
+        return json({ ok: true });
+      }, codigo);
     }
     if (!seg[2] && m === 'DELETE') {
       if (!isStaff(user)) return err('sin permiso', 403);
