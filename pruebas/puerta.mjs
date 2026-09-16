@@ -44,9 +44,12 @@ const USERS = [
 const SESION_VIEJA = { token: 'token-viejo-del-apk', user: USERS[1] };
 
 let pedidasALaSuite = [];
+let escrito = [];
+let codigoOcupado = null;   // el código que la base va a rechazar por repetido
 
 function mundo() {
   pedidasALaSuite = [];
+  escrito = [];
   return {
     APP_NAME: 'quell101',
     API: {
@@ -73,10 +76,20 @@ function mundo() {
                 if (/FROM sessions s JOIN users u/.test(sql)) {
                   return args[0] === SESION_VIEJA.token ? SESION_VIEJA.user : null;
                 }
+                if (/SELECT project_id FROM plans/.test(sql)) return { project_id: 'obra-a' };
                 return null;
               },
               async all() { return { results: [] }; },
-              async run() { return { success: true }; },
+              async run() {
+                // La base rechaza el código repetido con este mensaje exacto;
+                // está copiado de lo que devolvió SQLite de verdad en
+                // pruebas/codigo-unico.mjs.
+                if (codigoOcupado && /INSERT INTO elements/.test(sql) && args.includes(codigoOcupado)) {
+                  throw new Error('D1_ERROR: UNIQUE constraint failed: elements.project_id, elements.code: SQLITE_CONSTRAINT');
+                }
+                escrito.push({ sql, args });
+                return { success: true };
+              },
             };
           },
         };
@@ -153,6 +166,35 @@ console.log('\n== los archivos ==');
   rev(malo.status === 401, 'con uno inventado, no', String(malo.status));
   const enOtraRuta = await pide('/api/me?t=supervisora');
   rev(enOtraRuta.status === 401, 'y el token en la dirección sólo vale para /files/', String(enOtraRuta.status));
+}
+
+console.log('\n== el código repetido del ítem ==');
+{
+  const alta = (code, env) => worker.fetch(new Request('https://bitacora-obra.mike-929.workers.dev/api/plans/pa/elements', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: 's101=supervisora' },
+    body: JSON.stringify({ name: 'Mueble nuevo', code, x: 0.5, y: 0.5 }),
+  }), env);
+
+  codigoOcupado = null;
+  const env1 = mundo();
+  const bien = await alta('MW-08', env1);
+  rev(bien.status === 200, 'el supervisor levanta un ítem con un código libre', String(bien.status));
+  const ins = escrito.find((e) => /INSERT INTO elements/.test(e.sql));
+  rev(/project_id/.test(ins?.sql ?? ''), 'y el ítem se guarda con su obra', ins?.sql?.includes('project_id') ? 'project_id va en el INSERT' : 'NO va');
+  rev(ins?.args?.[2] === 'obra-a', 'con la obra del plano, no con lo que mande la pantalla', String(ins?.args?.[2]));
+
+  codigoOcupado = 'MW-07';
+  const choque = await alta('MW-07', mundo());
+  const cuerpo = await choque.json().catch(() => ({}));
+  rev(choque.status === 409, 'y si el código ya existe en la obra, contesta 409', String(choque.status));
+  rev(/ya hay un ítem con el código MW-07/.test(cuerpo.error ?? ''), 'con palabras, no con un «error interno»', String(cuerpo.error));
+
+  // Un espacio de más no es un código distinto.
+  codigoOcupado = 'MW-07';
+  const conEspacios = await alta('  MW-07  ', mundo());
+  rev(conEspacios.status === 409, 'y «  MW-07  » tampoco se cuela: se recortan los espacios', String(conEspacios.status));
+  codigoOcupado = null;
 }
 
 console.log('\n== el sitio ==');
