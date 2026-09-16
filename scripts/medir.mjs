@@ -52,9 +52,11 @@ async function traer(ruta, { method = 'GET', body, cabeceras = {} } = {}) {
   const texto = await r.text();
   let crudo = null;
   try { crudo = JSON.parse(texto); } catch { /* HTML o un binario */ }
-  const cuerpo = crudo && typeof crudo === 'object' && 'ok' in crudo
-    ? (crudo.ok ? crudo.data : { error: crudo.error, detalle: crudo.detalle })
-    : crudo;
+  // Sólo la API de la suite envuelve en `{ ok, data }`. Lo que contesta el
+  // propio quell101 trae `ok` pegado a los datos (`{ ok: true, app, hora }`), y
+  // desenvolverlo también dejaba `undefined` donde había respuesta.
+  const envuelto = crudo && typeof crudo === 'object' && 'ok' in crudo && ('data' in crudo || 'error' in crudo);
+  const cuerpo = envuelto ? (crudo.ok ? crudo.data : { error: crudo.error, detalle: crudo.detalle }) : crudo;
   return { estado: r.status, ms: Date.now() - t0, tipo: r.headers.get('content-type') || '', ubicacion: r.headers.get('location') || '', bytes: texto.length, texto, cuerpo };
 }
 
