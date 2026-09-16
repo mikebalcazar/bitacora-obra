@@ -7,6 +7,12 @@ name: Armar apps
 on:
   workflow_dispatch:
     inputs:
+      cual:
+        description: 'Cuál armar'
+        required: true
+        default: android
+        type: choice
+        options: [android, windows, windows-nativo, piloto, todas]
       servidor:
         description: 'Dirección del servidor con el que van a hablar las apps'
         required: true
@@ -15,6 +21,7 @@ on:
 jobs:
   android:
     name: Android (.apk)
+    if: inputs.cual == 'android' || inputs.cual == 'todas'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,6 +83,7 @@ jobs:
 
   windows:
     name: Windows (instalador)
+    if: inputs.cual == 'windows' || inputs.cual == 'todas'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -124,6 +132,7 @@ jobs:
 
   windows-nativo:
     name: Windows nativo (C++)
+    if: inputs.cual == 'windows-nativo' || inputs.cual == 'todas'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -195,9 +204,25 @@ jobs:
 
   windows-piloto:
     name: Windows piloto nativo (C++ puro)
+    if: inputs.cual == 'piloto' || inputs.cual == 'todas'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      # El piloto es el único que NO lleva el sitio adentro: tiene su propia
+      # pantalla de entrada en C++, y desde el 16-sep esa entrada no existe
+      # —`/api/auth/pin` contesta 410—. Armarlo y publicarlo dejaría en la
+      # página de descargas un programa que no abre.
+      #
+      # El candado se limpia solo: en cuanto `main.cpp` deje de llamar a esa
+      # ruta y pida la sesión a la suite (contrato 0.8.0, `aparato: true`), este
+      # paso pasa sin que nadie tenga que acordarse de quitarlo.
+      - name: Revisar que el piloto pueda entrar
+        shell: pwsh
+        run: |
+          if (Select-String -Path apps/windows-nativo/main.cpp -Pattern '/api/auth/pin' -Quiet) {
+            throw "El piloto sigue entrando por /api/auth/pin, y esa puerta se cerró el 16-sep (contesta 410). Tal como está, el programa no puede entrar: arreglar main.cpp para pedir la sesión a la suite con aparato:true antes de armarlo. Está anotado en ese mismo archivo."
+          }
 
       # PDFium es el que dibuja el plano. Son las mismas entrañas que usa Chrome
       # para ver PDFs, sueltas: no hace falta navegador para tenerlas.

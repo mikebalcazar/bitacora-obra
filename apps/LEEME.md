@@ -52,6 +52,22 @@ el camino de app empacada: `web/src/suite.js` pide la sesión con
 (`bo_token`) que `api.js` ya manda en `Authorization`—. O sea: basta con correr
 **Armar apps** otra vez y repartir lo que salga.
 
-La excepción es `windows-nativo`, que no lleva el sitio adentro: tiene su propia
-pantalla de entrada en C++ y llama a `/api/auth/pin` a mano. Ésa sí hay que
-tocarla, y en `main.cpp` está anotado exactamente qué cambiar.
+La excepción es el **piloto nativo** (`apps/windows-nativo/`, el trabajo
+`windows-piloto` del flujo), que no lleva el sitio adentro: tiene su propia
+pantalla de entrada en C++ y llama a `/api/auth/pin` a mano. Ése sí hay que
+tocarlo, y en su `main.cpp` está anotado exactamente qué cambiar. El flujo se
+niega a armarlo mientras siga así, para no dejar en la página de descargas un
+programa que no abre.
+
+Ojo con los nombres, que confunden: el trabajo `windows-nativo` del flujo
+compila `apps/windows-cpp/`, que **sí** lleva el sitio adentro —es una ventana
+de Windows con el WebView— y por lo tanto entra por la suite como las demás. El
+piloto es el otro, el de `apps/windows-nativo/`, y no es una app de trabajo: se
+hizo para medir si el plano se siente mejor dibujado en nativo.
+
+## Armarlas de una en una
+
+El flujo pregunta **cuál**: `android`, `windows`, `windows-nativo`, `piloto` o
+`todas`. Antes armaba y publicaba las cuatro de un jalón, y eso dejó de servir
+el día que una de ellas no podía entrar: publicar las cuatro habría puesto en
+descargas un programa roto junto a tres buenos.
