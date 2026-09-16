@@ -110,11 +110,19 @@ async function medir() {
   const foto = await traer('/files/loquesea?t=inventado');
   rev(foto.estado === 401, 'y un archivo con un token inventado en la dirección, tampoco', `${foto.estado}`);
 
-  // La puerta vieja sigue en pie mientras el APK y la app de Windows ya
-  // instaladas no se rearmen: llevan adentro la copia anterior del sitio.
+  /* La puerta vieja, cerrada el 16-sep por encargo de Mike.
+   *
+   * Hasta ese día esta medición comprobaba lo contrario —que siguiera en pie
+   * para el APK y la app de Windows ya instaladas—. Cambió de signo, y se deja
+   * dicho para que nadie lea esto y crea que alguien se equivocó de sentido.
+   *
+   * 410 y no 404: «existía y se fue», con el texto que dice a dónde ir. Un 404
+   * es lo que contestaría un servidor roto, y la app instalada no sabría
+   * distinguir. */
   const vieja = await traer('/api/auth/pin', { method: 'POST', body: { email: 'nadie@ejemplo.mx', pin: '000000' } });
-  rev(vieja.estado === 401 || vieja.estado === 429,
-    'la puerta vieja sigue viva para las apps ya instaladas, y sigue diciendo que no', `${vieja.estado}`);
+  rev(vieja.estado === 410, 'la puerta vieja está cerrada: /api/auth/pin contesta 410', `${vieja.estado}`);
+  rev(vieja.cuerpo?.error === 'esta_puerta_se_cerro' && /suite 101/i.test(String(vieja.cuerpo?.mensaje || '')),
+    'y dice con palabras que ahora se entra con la cuenta de la suite', String(vieja.cuerpo?.error));
 
   const salud101 = await traer('/api/salud');
   rev(salud101.estado === 200 && salud101.cuerpo?.app === 'quell101', 'el Worker se nombra quell101', String(salud101.cuerpo?.app));

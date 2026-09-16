@@ -145,14 +145,47 @@ for (const [cabeceras, quien] of [
   rev(r.status === 401, `${quien}, no`, String(r.status));
 }
 
-console.log('\n== las apps ya instaladas ==');
+console.log('\n== la puerta vieja, cerrada ==');
 {
+  /* Hasta el 16-sep aquí se comprobaba lo contrario: que el token viejo del APK
+   * SIGUIERA entrando. Mike mandó cerrar esa puerta, y lo que había que medir
+   * cambió de signo. Se deja dicho para que nadie lea esta prueba y crea que
+   * alguien se equivocó de sentido.
+   *
+   * Lo que se mide ahora es lo único que cierra la puerta de verdad: que un
+   * token que ESTÁ en la tabla `sessions` y no ha vencido tampoco pase. Quitar
+   * las rutas que reparten tokens y dejar la consulta habría dejado adentro a
+   * los que ya andaban por ahí, con noventa días de vida cada uno. */
   const r = await pide('/api/me', { Authorization: `Bearer ${SESION_VIEJA.token}` });
-  const cuerpo = await r.json().catch(() => ({}));
-  rev(r.status === 200 && cuerpo.user?.email === SESION_VIEJA.user.email,
-    'el token viejo del APK sigue entrando por la puerta de atrás', `${r.status} ${cuerpo.user?.email ?? cuerpo.error ?? ''}`);
-  const mala = await pide('/api/me', { Authorization: 'Bearer token-viejo-que-ya-no-existe' });
-  rev(mala.status === 401, 'y un token viejo que ya no existe, no', String(mala.status));
+  rev(r.status === 401, 'un token viejo del APK, aunque siga vivo en la base, ya no entra', String(r.status));
+
+  const conGalleta = await pide('/api/me', { cookie: `bo_session=${SESION_VIEJA.token}` });
+  rev(conGalleta.status === 401, 'ni con la galleta vieja de la bitácora', String(conGalleta.status));
+
+  // Y las rutas que repartían los tokens contestan 410 —«existía y se fue»— y
+  // no 404, que es lo que diría un servidor roto. La app instalada va a ver una
+  // razón en vez de un error sin nombre.
+  const manda = (ruta, cuerpo, cabeceras = {}) => worker.fetch(new Request(
+    `https://bitacora-obra.mike-929.workers.dev${ruta}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json', ...cabeceras }, body: JSON.stringify(cuerpo) },
+  ), mundo());
+
+  for (const [ruta, cuerpo] of [
+    ['/api/auth/pin', { email: 'fer@ejemplo.mx', pin: '482913' }],
+    ['/api/auth/request', { email: 'fer@ejemplo.mx' }],
+    ['/api/auth/verify', { email: 'fer@ejemplo.mx', code: '123456' }],
+    ['/api/auth/logout', {}],
+  ]) {
+    const v = await manda(ruta, cuerpo);
+    const j = await v.json().catch(() => ({}));
+    rev(v.status === 410 && j.error === 'esta_puerta_se_cerro',
+      `${ruta} contesta 410 y dice a dónde ir`, `${v.status} ${j.error ?? ''}`);
+  }
+
+  // Y la ruta que guardaba el PIN de esta base también se fue: escribía en una
+  // columna que desde la mudanza nadie lee, y decía «PIN cambiado».
+  const pin = await manda('/api/pin', { pin: '482913' }, { Authorization: 'Bearer supervisora' });
+  rev(pin.status === 404, 'y la ruta del PIN propio ya no existe: el PIN es de la suite', String(pin.status));
 }
 
 console.log('\n== los archivos ==');

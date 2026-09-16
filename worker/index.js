@@ -5,9 +5,11 @@ const JSON_H = { 'content-type': 'application/json; charset=utf-8' };
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { ...JSON_H, ...extra } });
 const err = (msg, status = 400) => json({ error: msg }, status);
 const now = () => new Date().toISOString();
-const plusMin = (m) => new Date(Date.now() + m * 60000).toISOString();
 const uid = () => crypto.randomUUID();
-const COOKIE = 'bo_session';
+// La galleta de la puerta vieja ya no se lee ni se pone. Se deja el nombre
+// dicho aquí para quien encuentre una `bo_session` en su navegador y se
+// pregunte de dónde salió: era la de la bitácora, y desde el 16-sep no sirve.
+// La sesión de hoy es la `s101` de la suite, y de ésa no sabe este Worker.
 
 // La puerta de la suite. quell101 le habla a `suite101-api` desde su mismo
 // origen, por `/s101/*`, con un *service binding*: una llamada de Worker a
@@ -22,11 +24,6 @@ const APP = 'quell101';
 const LLAVE = 'quell';
 
 // ---------- auth helpers ----------
-function getCookie(req, name) {
-  const c = req.headers.get('cookie') || '';
-  const m = c.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
-  return m ? decodeURIComponent(m[1]) : null;
-}
 // En las apps empaquetadas la cookie no viaja —otro origen— y una etiqueta de
 // imagen no puede mandar encabezados, así que para los archivos el token
 // también se acepta en la dirección. Solo para eso: queda escrito en registros
@@ -82,15 +79,21 @@ async function getUser(req, env) {
     return null;
   }
 
-  // La puerta vieja, mientras dure la mudanza. El APK y la app de Windows que
-  // ya están instaladas llevan adentro la copia anterior del sitio y entran
-  // por aquí; el día que se rearmen entrarán por la suite como el sitio.
-  const token = getCookie(req, COOKIE) || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '') || tokenEnDireccion(req);
-  if (!token) return null;
-  const row = await env.DB.prepare(
-    `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1`
-  ).bind(token, now()).first();
-  return row || null;
+  /* Y ya no hay puerta de atrás.
+   *
+   * Aquí se consultaba la tabla `sessions` de esta base, para que el APK y la
+   * app de Windows ya instaladas siguieran entrando con su token viejo.
+   * Cerrada el 16-sep por encargo de Mike: las apps empacadas se rearman más
+   * adelante y entrarán por la suite, como el sitio.
+   *
+   * Que esto se vaya es lo que de verdad cierra la puerta. Quitar las rutas
+   * que reparten tokens y dejar esta consulta habría dejado adentro a los diez
+   * tokens que ya andaban por ahí, con noventa días de vida cada uno: una
+   * puerta sin repartidor de llaves sigue siendo una puerta para quien ya tiene
+   * la suya.
+   *
+   * Si la suite no dijo quién viene, no viene nadie. */
+  return null;
 }
 // Tres roles y nada más:
 //   admin ("dueño")  manda: todo lo del supervisor, más dar de alta gente.
@@ -233,71 +236,17 @@ async function etapasDe(env, ids) {
 }
 
 // ---------- PIN ----------
-// Seis dígitos son un millón de combinaciones: se guardan derivados, nunca en
-// claro, y probar a ciegas se castiga con esperas que crecen. Las vueltas de
-// PBKDF2 hacen que cada intento cueste, aquí y para quien quisiera probar el
-// millón con la base robada en la mano.
-//
-// Cien mil es el techo: Cloudflare no ejecuta PBKDF2 con más y responde
-// "iteration counts above 100000 are not supported". Lo que de verdad frena a
-// quien prueba a ciegas contra el servidor no son las vueltas, son los bloqueos
-// que crecen; las vueltas son para el día que alguien se lleve la base.
-const VUELTAS = 100000;
-const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+/* Aquí vivían el hasheo del PIN propio de la bitácora y los bloqueos por
+ * intentos fallidos: `derivaPin` con PBKDF2, la lista de PINs flojos, y los
+ * castigos que crecían por dirección de internet. Se fueron con la puerta
+ * vieja el 16-sep.
+ *
+ * Todo eso lo hace ahora la suite, una sola vez para las nueve apps, y por eso
+ * se quita en vez de dejarse «por si acaso»: dos sitios donde se revisa un PIN
+ * son dos sitios que se separan, y el que nadie usa es el que se queda con la
+ * regla vieja. Quien busque esas reglas, están en `suite101-api/src/lib.ts`.
+ */
 
-async function derivaPin(pin, salt) {
-  const enc = new TextEncoder();
-  const clave = await crypto.subtle.importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(salt), iterations: VUELTAS },
-    clave, 256
-  );
-  return b64(bits);
-}
-const pinValido = (p) => /^[0-9]{6}$/.test(String(p || ''));
-// Un PIN que se adivina de una no protege nada: 123456, 000000, 111111, y las
-// escaleras. No es una lista larga a propósito; es quitar lo obvio.
-function pinFlojo(p) {
-  const s = String(p);
-  if (/^(\d)\1{5}$/.test(s)) return 'Ese PIN es un solo número repetido.';
-  if ('0123456789'.includes(s) || '9876543210'.includes(s)) return 'Ese PIN es una escalera de números.';
-  if (['123456', '654321', '111111', '000000', '121212', '112233'].includes(s)) return 'Ese PIN es de los primeros que alguien probaría.';
-  return null;
-}
-
-// Las esperas, iguales para el usuario y para la dirección de internet.
-const CASTIGOS_PIN = [15 * 60, 60 * 60, 4 * 3600, 24 * 3600];
-const FALLOS_PIN = 5;
-function esperaLegible(seg) {
-  const min = Math.ceil(seg / 60);
-  if (min <= 1) return 'un minuto';
-  if (min < 90) return `${min} minutos`;
-  const h = Math.round(min / 60);
-  return h === 1 ? 'una hora' : `${h} horas`;
-}
-function quienIntenta(req) {
-  return req.headers.get('CF-Connecting-IP') || (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'desconocido';
-}
-const bloqueado = (hasta) => !!hasta && hasta > now();
-
-async function castigaIp(env, ip) {
-  const r = await env.DB.prepare(`SELECT * FROM pin_intentos WHERE ip = ?`).bind(ip).first();
-  const fails = (r?.fails || 0) + 1;
-  if (fails >= FALLOS_PIN) {
-    const castigos = Math.min((r?.castigos || 0) + 1, CASTIGOS_PIN.length);
-    const seg = CASTIGOS_PIN[castigos - 1];
-    await env.DB.prepare(
-      `INSERT INTO pin_intentos (ip, fails, castigos, locked_until, visto_en) VALUES (?,0,?,?,?)
-       ON CONFLICT(ip) DO UPDATE SET fails=0, castigos=excluded.castigos, locked_until=excluded.locked_until, visto_en=excluded.visto_en`
-    ).bind(ip, castigos, new Date(Date.now() + seg * 1000).toISOString(), now()).run();
-    return seg;
-  }
-  await env.DB.prepare(
-    `INSERT INTO pin_intentos (ip, fails, castigos, locked_until, visto_en) VALUES (?,?,0,NULL,?)
-     ON CONFLICT(ip) DO UPDATE SET fails=excluded.fails, visto_en=excluded.visto_en`
-  ).bind(ip, fails, now()).run();
-  return 0;
-}
 
 async function sendMail(env, to, subject, html) {
   if (!env.RESEND_API_KEY) return { dev: true };
@@ -488,112 +437,48 @@ async function api(req, env, url, path) {
 
   if (seg[0] === 'salud' && m === 'GET') return json({ ok: true, app: env.APP_NAME || 'quell101', hora: now() });
 
-  // ----- auth -----
-  // Abre sesión y la devuelve firmada en cookie, y también como token suelto:
-  // la app de Android y la de Windows no comparten origen con el sitio, así que
-  // para ellas la cookie no sirve y llevan el token a mano.
-  async function abreSesion(u) {
-    const token = uid() + uid().replace(/-/g, '');
-    await env.DB.prepare(`INSERT INTO sessions (token, user_id, expires_at) VALUES (?,?,?)`).bind(token, u.id, plusMin(60 * 24 * 90)).run();
-    const secure = url.protocol === 'https:' ? '; Secure' : '';
-    return json({ ok: true, user: pubUser(u), token, tiene_pin: !!u.pin_hash }, 200, {
-      'set-cookie': `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}${secure}`,
-    });
-  }
-
+  /* ----- auth: ESTA PUERTA SE CERRÓ -----
+   *
+   * Aquí vivía el login propio de quell101: correo y PIN, o correo y código,
+   * contra la tabla `sessions` de esta base. Se quedó en pie después de la
+   * mudanza al login de la suite (16-sep) por una razón concreta: el APK de
+   * Android y la app de Windows que ya estaban instaladas llevan adentro la
+   * copia anterior del sitio y entraban por aquí.
+   *
+   * Mike la manda cerrar el 16-sep: las apps empacadas se van a rearmar más
+   * adelante, y hasta entonces se entra por el sitio, con la sesión de la
+   * suite. Medido antes de cerrar: tres personas dadas de alta aquí —Mike,
+   * Fer y Goyo—, las tres con cuenta en la suite y las tres con el mismo
+   * correo en las dos bases, así que nadie se queda sin manera de entrar.
+   * Diez sesiones viejas vivas, de dos de ellas: ésas dejan de servir, y eso
+   * es exactamente lo que se pidió.
+   *
+   * SE CONTESTA 410 Y NO 404, y no es un detalle: un 404 le dice a la app
+   * empacada «esa ruta no existe», que es lo que contestaría un servidor roto
+   * o una dirección mal escrita. Un 410 dice «existía y se fue», y el texto
+   * dice a dónde ir. Quien tenga la app instalada va a ver una razón en vez de
+   * un error sin nombre.
+   *
+   * Lo que NO se quitó todavía, a propósito: la tabla `sessions`, `login_codes`,
+   * `pin_intentos` y las columnas de PIN en `users`. Ya nadie las lee. Se
+   * limpian en su propia migración cuando esto lleve unos días publicado —
+   * igual que las columnas de contraseña de roster101—, porque borrar esquema
+   * el mismo día que se corta una puerta deja sin red el día que algo se tenga
+   * que revisar.
+   *
+   * Cuando se rearmen el APK y la app de Windows: entran como app empacada del
+   * contrato 0.8.0 —`POST /auth/entrar` con `{aparato:true}` contra la suite,
+   * que devuelve `token`, y después `Authorization: Bearer` en cada petición—.
+   * `getUser` ya lo acepta por ese camino; no hay que agregar nada aquí.
+   */
   if (seg[0] === 'auth') {
-    // Entrar con el PIN de siempre: sin esperar correo, que en obra es lo que
-    // hace que la gente deje de abrir la app.
-    if (seg[1] === 'pin' && !seg[2] && m === 'POST') {
-      const { email, pin } = await req.json();
-      const e = String(email || '').trim().toLowerCase();
-      const ip = quienIntenta(req);
-
-      const freno = await env.DB.prepare(`SELECT * FROM pin_intentos WHERE ip = ?`).bind(ip).first();
-      if (bloqueado(freno?.locked_until)) {
-        return err('Demasiados intentos desde aquí. Espera un rato o entra con un código a tu correo.', 429);
-      }
-
-      const u = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND active = 1`).bind(e).first();
-      // Sin usuario, sin PIN puesto o con PIN malo se contesta lo mismo: quien
-      // esté probando no aprende de aquí quién existe y quién no.
-      const malo = async () => {
-        const seg2 = await castigaIp(env, ip);
-        return err(seg2 ? `Demasiados intentos. Espera ${esperaLegible(seg2)} o entra con un código a tu correo.` : 'Correo o PIN incorrecto.', 401);
-      };
-      if (!u || !u.pin_hash || !pinValido(pin)) return await malo();
-
-      if (bloqueado(u.pin_locked_until)) {
-        return err('Este usuario está bloqueado un rato por intentos fallidos. Entra con un código a tu correo.', 429);
-      }
-
-      const hash = await derivaPin(pin, u.pin_salt);
-      if (hash !== u.pin_hash) {
-        const fails = (u.pin_fails || 0) + 1;
-        if (fails >= FALLOS_PIN) {
-          const castigos = Math.min((u.pin_castigos || 0) + 1, CASTIGOS_PIN.length);
-          const segs = CASTIGOS_PIN[castigos - 1];
-          await env.DB.prepare(`UPDATE users SET pin_fails = 0, pin_castigos = ?, pin_locked_until = ? WHERE id = ?`)
-            .bind(castigos, new Date(Date.now() + segs * 1000).toISOString(), u.id).run();
-        } else {
-          await env.DB.prepare(`UPDATE users SET pin_fails = ? WHERE id = ?`).bind(fails, u.id).run();
-        }
-        return await malo();
-      }
-
-      await env.DB.batch([
-        env.DB.prepare(`UPDATE users SET pin_fails = 0, pin_castigos = 0, pin_locked_until = NULL WHERE id = ?`).bind(u.id),
-        env.DB.prepare(`DELETE FROM pin_intentos WHERE ip = ?`).bind(ip),
-      ]);
-      return await abreSesion(u);
-    }
-
-    if (seg[1] === 'request' && m === 'POST') {
-      const { email } = await req.json();
-      const e = String(email || '').trim().toLowerCase();
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return err('correo inválido');
-      let user = await env.DB.prepare(`SELECT * FROM users WHERE email = ?`).bind(e).first();
-      if (!user) {
-        const count = await env.DB.prepare(`SELECT COUNT(*) AS n FROM users`).first();
-        if (count.n === 0) {
-          // primer usuario = admin
-          await env.DB.prepare(`INSERT INTO users (id, email, name, role, company) VALUES (?,?,?,?,?)`).bind(uid(), e, e.split('@')[0], 'admin', '').run();
-          user = await env.DB.prepare(`SELECT * FROM users WHERE email = ?`).bind(e).first();
-        } else return err('Este correo no tiene acceso. Pide al administrador que te dé de alta.', 403);
-      }
-      if (!user.active) return err('Usuario inactivo', 403);
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      await env.DB.prepare(`INSERT OR REPLACE INTO login_codes (email, code, expires_at, attempts) VALUES (?,?,?,0)`).bind(e, code, plusMin(10)).run();
-      const mail = await sendMail(env, e, `${code} — tu código de acceso`, `<p>Tu código para entrar a <b>${env.APP_NAME || 'quell101'}</b>:</p><p style="font-size:28px;letter-spacing:6px"><b>${code}</b></p><p>Vence en 10 minutos.</p>`);
-      return json({ ok: true, ...(mail.dev && env.DEV ? { dev_code: code } : {}) });
-    }
-    if (seg[1] === 'verify' && m === 'POST') {
-      const { email, code } = await req.json();
-      const e = String(email || '').trim().toLowerCase();
-      const row = await env.DB.prepare(`SELECT * FROM login_codes WHERE email = ?`).bind(e).first();
-      if (!row || row.expires_at < now()) return err('Código vencido. Pide uno nuevo.', 401);
-      if (row.attempts >= 5) return err('Demasiados intentos. Pide otro código.', 429);
-      if (row.code !== String(code || '').trim()) {
-        await env.DB.prepare(`UPDATE login_codes SET attempts = attempts + 1 WHERE email = ?`).bind(e).run();
-        return err('Código incorrecto', 401);
-      }
-      const user = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND active = 1`).bind(e).first();
-      if (!user) return err('Usuario no encontrado', 404);
-      // Entrar por correo también levanta el castigo: quien probó su PIN de más
-      // pero sí es quien dice ser, no se queda fuera cuatro horas.
-      await env.DB.batch([
-        env.DB.prepare(`DELETE FROM login_codes WHERE email = ?`).bind(e),
-        env.DB.prepare(`UPDATE users SET pin_fails = 0, pin_castigos = 0, pin_locked_until = NULL WHERE id = ?`).bind(user.id),
-        env.DB.prepare(`DELETE FROM pin_intentos WHERE ip = ?`).bind(quienIntenta(req)),
-      ]);
-      return await abreSesion(user);
-    }
-    if (seg[1] === 'logout' && m === 'POST') {
-      const token = getCookie(req, COOKIE);
-      if (token) await env.DB.prepare(`DELETE FROM sessions WHERE token = ?`).bind(token).run();
-      return json({ ok: true }, 200, { 'set-cookie': `${COOKIE}=; Path=/; HttpOnly; Max-Age=0` });
-    }
-    return err('ruta no encontrada', 404);
+    return json({
+      error: 'esta_puerta_se_cerro',
+      mensaje: 'La bitácora ya no tiene entrada propia: se entra con la cuenta de la suite 101, '
+             + 'desde el sitio. Si estás usando la aplicación instalada de Android o de Windows, '
+             + 'abre la bitácora en el navegador mientras se rearman.',
+      donde: new URL('/', url).toString(),
+    }, 410);
   }
 
   const user = await getUser(req, env);
@@ -601,20 +486,17 @@ async function api(req, env, url, path) {
 
   if (seg[0] === 'me' && m === 'GET') return json({ user: pubUser(user) });
 
-  // Poner o cambiar el PIN. Se pide tener sesión: o se acaba de entrar con el
-  // código del correo —la primera vez, o porque lo olvidó— o ya estaba dentro.
-  if (seg[0] === 'pin' && m === 'POST') {
-    const { pin } = await req.json();
-    if (!pinValido(pin)) return err('El PIN son seis dígitos.');
-    const flojo = pinFlojo(pin);
-    if (flojo) return err(flojo);
-    const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
-    const hash = await derivaPin(pin, salt);
-    await env.DB.prepare(
-      `UPDATE users SET pin_hash = ?, pin_salt = ?, pin_set_at = ?, pin_fails = 0, pin_castigos = 0, pin_locked_until = NULL WHERE id = ?`
-    ).bind(hash, salt, now(), user.id).run();
-    return json({ ok: true });
-  }
+  /* El PIN se puso a la suite, y esta ruta se fue con la puerta vieja.
+   *
+   * Esto guardaba un PIN en `users.pin_hash` DE ESTA BASE. Desde la mudanza al
+   * login de la suite, ese PIN ya no abría nada: la pantalla seguía diciendo
+   * «PIN cambiado» y no cambiaba el PIN con el que se entra. Una pantalla que
+   * dice que guardó algo y no guarda nada es peor que una pantalla que falta.
+   *
+   * El PIN de verdad es uno solo para todas las apps y vive en la suite. La
+   * pantalla de la bitácora ahora le habla ahí (`POST /s101/auth/pin`), que es
+   * lo mismo que ya hacía la pantalla de entrada.
+   */
 
   // ----- users (admin) -----
   if (seg[0] === 'users') {

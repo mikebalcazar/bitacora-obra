@@ -95,6 +95,20 @@ void entraYCarga() {
             g.aviso = m; g.pantalla = Pantalla::Error; g.trabajando = false; repinta();
         };
 
+        /* OJO: ESTA ENTRADA YA NO EXISTE DEL OTRO LADO.
+         *
+         * `/api/auth/pin` era el login propio de la bitácora. Se cerró el
+         * 16-sep-2026 por encargo de Mike y hoy contesta 410 con un texto que
+         * dice qué hacer. Esta app, tal como está compilada, no puede entrar:
+         * es a propósito, y se rearma más adelante.
+         *
+         * CUANDO SE REARME: se entra como app empacada del contrato 0.8.0 de la
+         * suite —`POST /s101/auth/entrar` con `{"aparato": true}`, que devuelve
+         * `token`, y después `Authorization: Bearer <token>` en cada
+         * petición—. El Worker de la bitácora ya acepta ese camino; no hay que
+         * cambiar nada allá. Lo que cambia aquí son estas tres líneas y el
+         * texto de la pantalla de entrada: ya no se pide un PIN de la bitácora,
+         * se pide el de la cuenta de la suite. */
         std::string cuerpo = "{\"email\":\"" + escapa(g.correo) + "\",\"pin\":\"" + escapa(g.pin) + "\"}";
         auto r = red::pide(L"POST", "/api/auth/pin", cuerpo);
         if (!r.ok) { fallar(r.error.empty() ? "Correo o PIN incorrecto." : r.error); return; }
