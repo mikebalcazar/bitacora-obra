@@ -119,7 +119,22 @@ async function medir() {
    * 410 y no 404: «existía y se fue», con el texto que dice a dónde ir. Un 404
    * es lo que contestaría un servidor roto, y la app instalada no sabría
    * distinguir. */
-  const vieja = await traer('/api/auth/pin', { method: 'POST', body: { email: 'nadie@ejemplo.mx', pin: '000000' } });
+  /* Se REINTENTA, como el de la portada de arriba, y por la misma razón: el
+   * borde de Cloudflare tarda unos segundos en soltar la versión recién
+   * publicada. La primera corrida de esta medición (16-sep) salió en rojo
+   * midiendo el Worker VIEJO —contestó 401 con «Correo o PIN incorrecto.», que
+   * es el texto del código que se acababa de quitar— con el nuevo ya
+   * desplegado: wrangler decía «Deployed» y el borde seguía en la anterior.
+   *
+   * Y el 410 sirve de seña de que la versión nueva ya está arriba: la portada
+   * contesta 200 con la vieja y con la nueva, así que esperar por ella no
+   * distingue nada. Éste sí, y por eso va antes que lo demás. */
+  let vieja = await traer('/api/auth/pin', { method: 'POST', body: { email: 'nadie@ejemplo.mx', pin: '000000' } });
+  for (let i = 1; i < 12 && vieja.estado !== 410; i++) {
+    if (i === 1) console.log('  (el borde todavía sirve la versión anterior: esperando)');
+    await dormir(5000);
+    vieja = await traer('/api/auth/pin', { method: 'POST', body: { email: 'nadie@ejemplo.mx', pin: '000000' } });
+  }
   rev(vieja.estado === 410, 'la puerta vieja está cerrada: /api/auth/pin contesta 410', `${vieja.estado}`);
   rev(vieja.cuerpo?.error === 'esta_puerta_se_cerro' && /suite 101/i.test(String(vieja.cuerpo?.mensaje || '')),
     'y dice con palabras que ahora se entra con la cuenta de la suite', String(vieja.cuerpo?.error));
