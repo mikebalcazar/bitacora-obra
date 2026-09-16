@@ -9,19 +9,74 @@ const plusMin = (m) => new Date(Date.now() + m * 60000).toISOString();
 const uid = () => crypto.randomUUID();
 const COOKIE = 'bo_session';
 
+// La puerta de la suite. quell101 le habla a `suite101-api` desde su mismo
+// origen, por `/s101/*`, con un *service binding*: una llamada de Worker a
+// Worker que nunca sale a internet. El Worker pone `X-App`; la interfaz no lo
+// manda, y si lo manda se sobrescribe: la app no decide quién dice ser.
+const PREFIJO_SUITE = '/s101';
+const APP = 'quell101';
+
 // ---------- auth helpers ----------
 function getCookie(req, name) {
   const c = req.headers.get('cookie') || '';
   const m = c.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
   return m ? decodeURIComponent(m[1]) : null;
 }
+// En las apps empaquetadas la cookie no viaja —otro origen— y una etiqueta de
+// imagen no puede mandar encabezados, así que para los archivos el token
+// también se acepta en la dirección. Solo para eso: queda escrito en registros
+// y en el historial, y por eso no se usa para el resto.
+const tokenEnDireccion = (req) =>
+  new URL(req.url).pathname.startsWith('/files/') ? new URL(req.url).searchParams.get('t') : null;
+
+/** Le pregunta a la suite quién viene. Devuelve lo que contesta `/yo` o null.
+ *
+ *  Se le pasa tal cual lo que trajo la petición: la cookie `s101` si es el
+ *  sitio, o `Authorization: Bearer` si es una app empacada. La suite decide;
+ *  aquí no se abre ninguna sesión ni se guarda nada. */
+async function laSuiteDiceQuien(req, env) {
+  if (!env.API) return null;
+  const galleta = req.headers.get('cookie');
+  const llevada = req.headers.get('authorization') || (tokenEnDireccion(req) ? `Bearer ${tokenEnDireccion(req)}` : null);
+  if (!galleta && !llevada) return null;
+  const h = new Headers({ 'X-App': APP });
+  if (galleta) h.set('cookie', galleta);
+  if (llevada) h.set('authorization', llevada);
+  const r = await env.API.fetch(new Request('https://suite101-api/yo', { headers: h }));
+  if (!r.ok) return null;
+  const cuerpo = await r.json().catch(() => null);
+  return cuerpo?.data || null;
+}
+
+/** ¿La suite le abre quell101 a esta persona?
+ *
+ *  El dueño de la suite entra a todo. A los demás se lo dice su membresía: la
+ *  lista de apps que le puso el administrador de su empresa en workshop101.
+ *  Vacía quiere decir todas, que es como la deja workshop101 cuando se marcan
+ *  todas las casillas. */
+const laSuiteLeAbre = (yo) =>
+  !!yo && (yo.superadmin === true ||
+    (yo.orgs || []).some((o) => !o.apps?.length || o.apps.includes(APP)));
+
 async function getUser(req, env) {
-  // En las apps empaquetadas la cookie no viaja —otro origen— y una etiqueta de
-  // imagen no puede mandar encabezados, así que para los archivos el token
-  // también se acepta en la dirección. Solo para eso: queda escrito en registros
-  // y en el historial, y por eso no se usa para el resto.
-  const enDireccion = new URL(req.url).pathname.startsWith('/files/') ? new URL(req.url).searchParams.get('t') : null;
-  const token = getCookie(req, COOKIE) || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '') || enDireccion;
+  // Primero la suite, que es la puerta buena. Quien entra por ahí se casa con
+  // su renglón de `users` por el correo: la suite dice quién es, y esta base
+  // dice qué hace aquí —dueño, supervisor o contratista— y en qué obras.
+  const yo = await laSuiteDiceQuien(req, env);
+  if (yo) {
+    if (!laSuiteLeAbre(yo)) return null;
+    const row = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND active = 1`)
+      .bind(String(yo.usuario?.correo || '').toLowerCase()).first();
+    if (row) return row;
+    // Entra a la suite pero nadie le ha dado de alta aquí: no se le inventa un
+    // renglón. Dar de alta es decidir un rol, y eso lo hace una persona.
+    return null;
+  }
+
+  // La puerta vieja, mientras dure la mudanza. El APK y la app de Windows que
+  // ya están instaladas llevan adentro la copia anterior del sitio y entran
+  // por aquí; el día que se rearmen entrarán por la suite como el sitio.
+  const token = getCookie(req, COOKIE) || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '') || tokenEnDireccion(req);
   if (!token) return null;
   const row = await env.DB.prepare(
     `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.active = 1`
@@ -64,7 +119,10 @@ async function invita(env, req, quien, obra, rol) {
       <li>Escribe este correo: <b>${quien.email}</b></li>
       <li>Te llega un código de 6 dígitos y con él creas tu PIN.</li>
     </ol>
-    <p>De ahí en adelante entras con tu correo y tu PIN, sin esperar ningún código.</p>`;
+    <p>De ahí en adelante entras con tu correo y tu PIN, sin esperar ningún código.
+       Es el mismo correo y el mismo PIN de las demás aplicaciones de la suite 101.</p>
+    <p>Si al escribir tu correo te dice que no tiene acceso, es que todavía no te
+       han dado de alta en la suite: avísale a quien administra tu empresa.</p>`;
   // Que no se caiga el alta por un correo que no salió: la persona ya quedó
   // agregada, y el correo se le puede volver a mandar.
   try { await sendMail(env, quien.email, `Te dieron acceso a ${obra.name} en ${app}`, html); return { ok: true }; }
@@ -325,7 +383,15 @@ export default {
     try {
       if (req.method === 'OPTIONS' && cors) return new Response(null, { status: 204, headers: cors });
       let r;
-      if (path.startsWith('/api/')) r = await api(req, env, url, path);
+      if (path === PREFIJO_SUITE || path.startsWith(PREFIJO_SUITE + '/')) {
+        // `/s101/auth/codigo` → `/auth/codigo`. Un `/s101` pelón va a la raíz.
+        const u = new URL(req.url);
+        u.pathname = u.pathname.slice(PREFIJO_SUITE.length) || '/';
+        const p = new Request(u, req);
+        p.headers.set('X-App', APP);
+        r = await env.API.fetch(p);
+      }
+      else if (path.startsWith('/api/')) r = await api(req, env, url, path);
       else if (path.startsWith('/descargas/')) r = await entregaApp(env, path.slice(11));
       else if (path.startsWith('/files/')) r = await serveFile(req, env, path.slice(7));
       else return env.ASSETS.fetch(req);

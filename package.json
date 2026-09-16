@@ -9,7 +9,9 @@
     "dev:worker": "wrangler dev --local --var DEV:1",
     "migrate:local": "wrangler d1 migrations apply bitacora-obra --local",
     "migrate:remote": "wrangler d1 migrations apply bitacora-obra --remote",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "prueba": "node pruebas/puerta.mjs",
+    "medir": "node scripts/medir.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.129.0"

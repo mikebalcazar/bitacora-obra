@@ -49,6 +49,13 @@ jobs:
       - name: Instalar dependencias
         run: npm ci && npm --prefix web ci
 
+      # La puerta, en una mesa de trabajo: con una API de mentiras y tres
+      # renglones de base se comprueba quién pasa y —sobre todo— quién no.
+      # Corre antes de publicar: un despliegue no enseña esto hasta que ya es
+      # tarde.
+      - name: Probar la puerta
+        run: npm run prueba
+
       - name: Armar la aplicación
         run: npm run build
 
@@ -90,6 +97,39 @@ jobs:
           else
             echo "Sin RESEND_API_KEY: los códigos de acceso NO se envían por correo."
           fi
+
+      # La puerta de la suite, medida desde afuera: que el enlace de servicio
+      # llegue a la API, que nada abra sin sesión y que la puerta vieja siga en
+      # pie para las apps ya instaladas. Aquí NO se entra y NO se escribe:
+      # quell101 no tiene staging y su base es la obra de verdad.
+      - name: Medir la puerta de la suite
+        id: medir
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          sleep 12
+          node scripts/medir.mjs 2>&1 | tee /tmp/medicion.txt
+
+      - name: Dejar la medición en el commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -u
+          [ -f /tmp/medicion.txt ] || echo "No hubo medición que reportar." > /tmp/medicion.txt
+          jq -Rs '{body: ("**Medicion de la puerta**\n\n```\n" + .[-60000:] + "\n```")}' \
+            /tmp/medicion.txt > /tmp/comentario.json
+          curl -sS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/commits/$SHA/comments" \
+            -d @/tmp/comentario.json -o /dev/null -w 'comentario: %{http_code}\n'
+
+      - name: La medición tenía que salir verde
+        if: steps.medir.outcome == 'failure'
+        run: exit 1
 
       - name: Revisar que la bitácora responda
         run: |

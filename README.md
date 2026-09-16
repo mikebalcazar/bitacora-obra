@@ -51,8 +51,27 @@ esta plataforma y pégalo aquí: el día que canceles uno, el otro sigue publica
 Para dar de baja esta plataforma sin rozar la otra: borra el Worker
 `bitacora-obra`, la base `bitacora-obra` y el bucket `bitacora-obra-files`.
 
-## Primer acceso
-El primer correo que pide código se convierte en administrador. Después, altas desde **Usuarios y accesos**.
+## Cómo se entra
+La puerta es la de la **suite 101**, la misma que dash101, peek101 y las demás:
+correo y código de 6 dígitos, o el PIN de la suite, o la cuenta de Google. El
+sitio le habla a `suite101-api` desde su propio origen, por `/s101/*`, con un
+*service binding*; el Worker pone `X-App: quell101`.
+
+Entrar a la suite no basta: hay que estar dado de alta en las dos partes.
+
+| Dónde | Quién lo hace | Qué decide |
+|---|---|---|
+| **workshop101** | Quien administra la empresa | Que la persona exista en la suite y que quell101 esté en su lista de apps |
+| **Usuarios y accesos**, aquí | El dueño de la bitácora | Qué es en obra —dueño, supervisor o contratista— y en qué obras |
+
+Las dos se casan por el correo. Quien entra a la suite y no tiene renglón aquí
+ve una pantalla que se lo dice; no se le inventa un rol.
+
+El APK de Android y la app de Windows **ya instaladas** siguen entrando por la
+puerta anterior (correo + PIN guardado en esta base) hasta que se rearmen: llevan
+adentro la copia anterior del sitio. Al rearmarlas piden la sesión a la suite con
+`aparato: true` y se quedan con el token, que es lo que el contrato 0.8.0 abrió
+para ellas.
 
 ## Desarrollo local
 ```

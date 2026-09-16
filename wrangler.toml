@@ -11,7 +11,7 @@ not_found_handling = "single-page-application"
 # resuelve la capa de archivos, y como esta aplicación vive en una sola página,
 # lo que no encuentra devuelve index.html: por eso una ruta olvidada aquí no da
 # "no encontrado", sino la pantalla de entrada, que despista.
-run_worker_first = ["/api/*", "/files/*", "/descargas/*"]
+run_worker_first = ["/api/*", "/files/*", "/descargas/*", "/s101/*"]
 
 [vars]
 APP_NAME = "quell101"
@@ -27,3 +27,11 @@ migrations_dir = "migrations"
 [[r2_buckets]]
 binding = "FILES"
 bucket_name = "bitacora-obra-files"
+
+# La puerta de la suite, desde el mismo origen. No hay URL: es un *service
+# binding*, o sea una llamada de Worker a Worker que nunca sale a internet.
+# Todo `/s101/*` va a dar ahí con la cabecera `X-App: quell101` puesta por el
+# Worker.
+[[services]]
+binding = "API"
+service = "suite101-api"

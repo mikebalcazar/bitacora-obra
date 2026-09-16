@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { api, setToken, empaquetada, BASE } from './api.js';
+import { api, empaquetada, BASE } from './api.js';
+import { pedirCodigo, entrarASuite, yo, ponerPin, canjearSiVengoDeGoogle, irAGoogle } from './suite.js';
 import Marca from './Marca.jsx';
+
+// La entrada de quell101 es la de la suite 101: el mismo correo y la misma
+// sesión que dash101, peek101 y las demás. Aquí no se abre ninguna sesión
+// propia; la suite dice quién es la persona y la base de quell101 dice qué
+// hace en obra. Quien entra a la suite pero no está dado de alta aquí no pasa:
+// dar de alta es decidir un rol, y eso lo hace una persona.
 
 // El campo de dígitos vive AFUERA de la pantalla, a propósito. Definido adentro,
 // React lo trata como un componente nuevo en cada tecleo: lo destruye, lo vuelve
@@ -26,15 +33,14 @@ const pesa = (b) => (b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(0)} MB` : `$
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState(() => { try { return localStorage.getItem('bo_email') || ''; } catch { return ''; } });
-  const [pin, setPin] = useState('');
-  const [code, setCode] = useState('');
+  const [digitos, setDigitos] = useState('');
+  const [modo, setModo] = useState('codigo');     // codigo | pin
   const [pin1, setPin1] = useState('');
   const [pin2, setPin2] = useState('');
-  const [paso, setPaso] = useState('pin');        // pin | codigo | elige | confirma
+  const [paso, setPaso] = useState('correo');     // correo | clave | elige | confirma | sinalta
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [aviso, setAviso] = useState('');
-  const [devCode, setDevCode] = useState('');
   const [apps, setApps] = useState(null);
 
   useEffect(() => {
@@ -42,37 +48,64 @@ export default function Login({ onLogin }) {
     api.get('/apps').then((r) => setApps(r.apps || {})).catch(() => setApps({}));
   }, []);
 
+  // Si venimos de Google, el boleto se canjea antes de pintar nada.
+  useEffect(() => {
+    let vivo = true;
+    canjearSiVengoDeGoogle()
+      .then((vino) => { if (vino && vivo) return terminar(); })
+      .catch((x) => { if (vivo) setErr(x.message); });
+    return () => { vivo = false; };
+  }, []);
+
   const recuerda = () => { try { localStorage.setItem('bo_email', email); } catch {} };
+
+  /** Ya hay sesión de la suite. Falta saber qué es esta persona en la obra. */
+  async function terminar() {
+    const quien = await yo();
+    let user = null;
+    try {
+      user = (await api.get('/me')).user;
+    } catch (x) {
+      if (x.status === 401 || x.status === 403) { setPaso('sinalta'); return; }
+      throw x;
+    }
+    if (!quien.tiene_pin) {
+      window.__boUser = user;
+      setAviso('Elige un PIN de seis dígitos.');
+      setPin1(''); setPin2(''); setErr('');
+      setPaso('elige');
+      return;
+    }
+    onLogin(user);
+  }
+
+  async function seguir(e) {
+    e.preventDefault(); setBusy(true); setErr('');
+    try {
+      await pedirCodigo(email);
+      recuerda();
+      setAviso(`Te mandamos un código a ${email}. Vence en 10 minutos.`);
+      setModo('codigo'); setDigitos(''); setPaso('clave');
+    } catch (x) { setErr(x.message); } finally { setBusy(false); }
+  }
 
   async function entrar(e) {
     e.preventDefault(); setBusy(true); setErr('');
     try {
-      const r = await api.post('/auth/pin', { email, pin });
+      await entrarASuite(modo === 'codigo' ? { correo: email, codigo: digitos } : { correo: email, pin: digitos });
       recuerda();
-      if (r.token) setToken(r.token);
-      onLogin(r.user);
-    } catch (x) { setErr(x.message); setPin(''); } finally { setBusy(false); }
+      await terminar();
+    } catch (x) { setErr(x.message); setDigitos(''); } finally { setBusy(false); }
   }
 
-  async function pedirCodigo() {
-    setBusy(true); setErr('');
+  async function cambiarModo() {
+    setErr('');
+    if (modo === 'codigo') { setModo('pin'); setDigitos(''); setAviso(''); return; }
+    setBusy(true);
     try {
-      const r = await api.post('/auth/request', { email });
-      recuerda();
-      if (r.dev_code) { setDevCode(r.dev_code); setCode(r.dev_code); }
+      await pedirCodigo(email);
+      setModo('codigo'); setDigitos('');
       setAviso(`Te mandamos un código a ${email}. Vence en 10 minutos.`);
-      setPaso('codigo');
-    } catch (x) { setErr(x.message); } finally { setBusy(false); }
-  }
-
-  async function verificar(e) {
-    e.preventDefault(); setBusy(true); setErr('');
-    try {
-      const r = await api.post('/auth/verify', { email, code });
-      if (r.token) setToken(r.token);
-      window.__boUser = r.user;
-      setAviso(r.tiene_pin ? 'Elige tu nuevo PIN.' : 'Elige un PIN de seis dígitos.');
-      setPaso('elige');
     } catch (x) { setErr(x.message); } finally { setBusy(false); }
   }
 
@@ -98,53 +131,62 @@ export default function Login({ onLogin }) {
     }
     setBusy(true);
     try {
-      await api.post('/pin', { pin: pin1 });
-      onLogin({ ...(window.__boUser || {}), tiene_pin: true });
+      await ponerPin(pin1);
+      onLogin(window.__boUser || {});
     } catch (x) {
       setErr(x.message); setPin1(''); setPin2(''); setPaso('elige');
     } finally { setBusy(false); }
   }
 
-  const alEnviar = { pin: entrar, codigo: verificar, elige: siguiente, confirma: guardarPin }[paso];
+  const alEnviar = { correo: seguir, clave: entrar, elige: siguiente, confirma: guardarPin, sinalta: (e) => e.preventDefault() }[paso];
+  const esCodigo = modo === 'codigo';
 
   return (
     <div className="center">
       <form className="login" onSubmit={alEnviar}>
         <Marca alto={30} />
 
-        {paso === 'pin' && (
+        {paso === 'correo' && (
           <>
             <h1>Entrar</h1>
             <div className="field"><label>Correo</label>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com" inputMode="email" autoComplete="username" />
-            </div>
-            <div className="field"><label>PIN</label>
-              <Digitos valor={pin} onValor={setPin} autoComplete="current-password" />
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com" inputMode="email" autoComplete="username" autoCapitalize="off" autoCorrect="off" spellCheck="false" />
             </div>
             {err && <div className="err">{err}</div>}
-            <button className="btn primary block" disabled={busy || pin.length !== 6 || !email}>{busy ? 'Entrando…' : 'Entrar'}</button>
-            <button type="button" className="btn block" disabled={busy || !email} onClick={pedirCodigo}>
-              Es mi primera vez / olvidé mi PIN
-            </button>
+            <button className="btn primary block" disabled={busy || !email}>{busy ? 'Un momento…' : 'Continuar'}</button>
+            <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>
+              Te mandamos un código de 6 dígitos. Si ya tienes PIN, en la siguiente pantalla puedes entrar con él.
+            </p>
+            <button type="button" className="btn block" onClick={irAGoogle}>Entrar con Google</button>
           </>
         )}
 
-        {paso === 'codigo' && (
+        {paso === 'clave' && (
           <>
-            <h1>Código</h1>
-            <p className="muted" style={{ margin: 0 }}>{aviso}</p>
-            {devCode && <p className="muted" style={{ margin: 0 }}>Modo desarrollo · código: <b>{devCode}</b></p>}
-            <Digitos autoFocus oculto={false} valor={code} onValor={setCode} autoComplete="one-time-code" />
+            <h1>{esCodigo ? 'Código' : 'Tu PIN'}</h1>
+            {aviso && esCodigo && <p className="muted" style={{ margin: 0 }}>{aviso}</p>}
+            {!esCodigo && <p className="muted" style={{ margin: 0 }}>El PIN de seis dígitos que pusiste en la suite.</p>}
+            <Digitos
+              key={modo}
+              autoFocus
+              oculto={!esCodigo}
+              valor={digitos}
+              onValor={setDigitos}
+              autoComplete={esCodigo ? 'one-time-code' : 'current-password'}
+            />
             {err && <div className="err">{err}</div>}
-            <button className="btn primary block" disabled={busy || code.length !== 6}>{busy ? 'Verificando…' : 'Continuar'}</button>
-            <button type="button" className="btn block" onClick={() => { setPaso('pin'); setCode(''); setErr(''); }}>Regresar</button>
+            <button className="btn primary block" disabled={busy || digitos.length !== 6}>{busy ? 'Entrando…' : 'Entrar'}</button>
+            <button type="button" className="btn block" disabled={busy} onClick={cambiarModo}>
+              {esCodigo ? 'Entrar con mi PIN' : 'Mándame un código al correo'}
+            </button>
+            <button type="button" className="btn block" onClick={() => { setPaso('correo'); setDigitos(''); setErr(''); setAviso(''); }}>Usar otro correo</button>
           </>
         )}
 
         {paso === 'elige' && (
           <>
             <h1>Tu PIN</h1>
-            <p className="muted" style={{ margin: 0 }}>{aviso} Con él vas a entrar de ahora en adelante.</p>
+            <p className="muted" style={{ margin: 0 }}>{aviso} Con él vas a entrar de ahora en adelante, aquí y en las demás apps de la suite.</p>
             <Digitos key="elige" autoFocus valor={pin1} onValor={setPin1} autoComplete="new-password" />
             <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>
               Nada de 123456 ni seis veces el mismo número: son los primeros que alguien probaría.
@@ -162,6 +204,17 @@ export default function Login({ onLogin }) {
             {err && <div className="err">{err}</div>}
             <button className="btn primary block" disabled={busy || pin2.length !== 6}>{busy ? 'Guardando…' : 'Guardar PIN y entrar'}</button>
             <button type="button" className="btn block" onClick={() => { setPin1(''); setPin2(''); setErr(''); setPaso('elige'); }}>Empezar de nuevo</button>
+          </>
+        )}
+
+        {paso === 'sinalta' && (
+          <>
+            <h1>Todavía no</h1>
+            <p className="muted" style={{ margin: 0 }}>
+              Tu cuenta entró a la suite, pero nadie te ha dado de alta en la bitácora de obra.
+              Pídele a quien administra tu empresa que te agregue y vuelve a entrar.
+            </p>
+            <button type="button" className="btn block" onClick={() => { setPaso('correo'); setDigitos(''); setErr(''); }}>Usar otro correo</button>
           </>
         )}
       </form>

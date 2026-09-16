@@ -1,5 +1,6 @@
 import React, { useEffect, useState, createContext, useContext } from 'react';
 import { api, setToken, alCambiarRed, vaciaFila, hayRed } from './api.js';
+import { salirDeSuite } from './suite.js';
 import Login from './Login.jsx';
 import Home from './Home.jsx';
 import Project from './Project.jsx';
@@ -38,7 +39,13 @@ export default function App() {
     user,
     go: (h) => { location.hash = h; },
     toast: (m) => setToast(m),
-    logout: async () => { await api.post('/auth/logout').catch(() => {}); setToken(null); setUser(null); location.hash = ''; },
+    // Salir cierra las dos puertas: la de la suite, que es la de ahora, y la
+    // vieja, por si esta pantalla vive dentro de una app todavía sin rearmar.
+    logout: async () => {
+      await salirDeSuite();
+      await api.post('/auth/logout').catch(() => {});
+      setToken(null); setUser(null); location.hash = '';
+    },
   };
 
   if (user === undefined) return <div className="center"><div className="spin" /></div>;
