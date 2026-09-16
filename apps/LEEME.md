@@ -35,3 +35,23 @@ El `.apk` que sale es de depuración: se instala en cualquier teléfono con
 "orígenes desconocidos" permitido, pero no sirve para la Play Store. Para la
 tienda hace falta una llave de firma, y esa se guarda como secreto del
 repositorio el día que se vaya a publicar.
+
+## Las que están instaladas hoy NO entran (16-sep-2026)
+
+Mike mandó cerrar la puerta vieja de la bitácora, y con eso el `.apk` y el
+instalador de Windows que ya andan por ahí dejaron de poder entrar: llevan
+adentro la copia del sitio de **antes** de la mudanza al login de la suite, y
+ésa pedía la sesión a `/api/auth/*`, que hoy contesta 410.
+
+No es un descuido: se pidió así, y mientras tanto se entra por el navegador.
+
+**Rearmarlas no necesita escribir código.** Lo que va dentro del `.apk` y del
+instalador sale de `npm run build`, y ese código ya entra por la suite —incluido
+el camino de app empacada: `web/src/suite.js` pide la sesión con
+`aparato: true`, la suite devuelve el token y se guarda en el mismo llavero
+(`bo_token`) que `api.js` ya manda en `Authorization`—. O sea: basta con correr
+**Armar apps** otra vez y repartir lo que salga.
+
+La excepción es `windows-nativo`, que no lleva el sitio adentro: tiene su propia
+pantalla de entrada en C++ y llama a `/api/auth/pin` a mano. Ésa sí hay que
+tocarla, y en `main.cpp` está anotado exactamente qué cambiar.

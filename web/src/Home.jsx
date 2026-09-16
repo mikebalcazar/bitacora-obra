@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from './api.js';
+import { ponerPin } from './suite.js';
 import { useApp } from './App.jsx';
 import Marca from './Marca.jsx';
 
@@ -72,7 +73,10 @@ function CambiarPin({ onClose }) {
       return toast('No coincidieron. Vamos otra vez.');
     }
     setBusy(true);
-    try { await api.post('/pin', { pin: a }); toast('PIN cambiado'); onClose(); }
+    // A la suite, no a la bitácora. Hasta el 16-sep esto guardaba un PIN en la
+    // base de la bitácora y decía «PIN cambiado» — y desde la mudanza al login
+    // de la suite ese PIN ya no abría nada. La pantalla cumplía y no servía.
+    try { await ponerPin(a); toast('PIN cambiado'); onClose(); }
     catch (x) { toast(x.message); setA(''); setB(''); setPaso('elige'); }
     finally { setBusy(false); }
   }
@@ -84,7 +88,7 @@ function CambiarPin({ onClose }) {
         <h2>{eligiendo ? 'Tu PIN nuevo' : 'Otra vez'}</h2>
         <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>
           {eligiendo
-            ? 'Seis dígitos. Nada de 123456 ni seis veces el mismo número.'
+            ? 'Seis dígitos. Nada de 123456 ni seis veces el mismo número. Es el PIN de tu cuenta de la suite: el mismo con el que entras a todas las aplicaciones.'
             : 'Tecléalo de nuevo, de memoria. Así sabemos que te lo vas a acordar mañana.'}
         </p>
         <input
