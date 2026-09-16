@@ -23,9 +23,13 @@ const rev = (ok, texto, extra = '') => {
 // Quién es cada galleta para la suite. `null` = la suite dice que no.
 const SUITE = {
   'duena': { usuario: { id: 'u1', correo: 'mike@forespot.com' }, superadmin: true, orgs: [], tiene_pin: true },
-  'supervisora': { usuario: { id: 'u2', correo: 'fer@forespot.com' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'staff', apps: ['quell101', 'peek101'] }], tiene_pin: true },
+  // Como la guarda la suite de verdad: llaves cortas, no nombres de app. Fue
+  // el error que se coló a producción el 16-sep y que la lista vacía de Mike y
+  // de Fer tapó, porque vacía quiere decir todas.
+  'supervisora': { usuario: { id: 'u2', correo: 'fer@forespot.com' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'staff', apps: ['quell', 'peek'] }], tiene_pin: true },
   'todas-las-apps': { usuario: { id: 'u3', correo: 'goyomonroy23807@gmail.com' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'staff', apps: [] }], tiene_pin: false },
-  'sin-quell': { usuario: { id: 'u4', correo: 'solo-dash@ejemplo.mx' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'socio', apps: ['dash101'] }], tiene_pin: true },
+  'nombre_largo': { usuario: { id: 'u7', correo: 'fer@forespot.com' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'staff', apps: ['quell101'] }], tiene_pin: true },
+  'sin-quell': { usuario: { id: 'u4', correo: 'solo-dash@ejemplo.mx' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'socio', apps: ['dash'] }], tiene_pin: true },
   'sin-alta-aqui': { usuario: { id: 'u5', correo: 'nadie@ejemplo.mx' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'staff', apps: ['quell101'] }], tiene_pin: true },
 };
 
@@ -104,7 +108,8 @@ console.log('\n== la puerta de la suite ==');
 console.log('\n== quién pasa ==');
 for (const [galleta, quien, espera] of [
   ['duena', 'la dueña de la suite', 200],
-  ['supervisora', 'quien trae quell101 en su lista de apps', 200],
+  ['supervisora', 'quien trae la llave «quell» en su lista de apps', 200],
+  ['nombre_largo', 'quien la trae escrita como «quell101»', 200],
   ['todas-las-apps', 'quien trae la lista vacía, que quiere decir todas', 200],
 ]) {
   const r = await pide('/api/me', { Cookie: `s101=${galleta}` });
@@ -120,7 +125,7 @@ for (const [cabeceras, quien] of [
   [{}, 'sin nada'],
   [{ Cookie: 's101=inventada' }, 'con una galleta que la suite no reconoce'],
   [{ Authorization: 'Bearer inventado' }, 'con un token que la suite no reconoce'],
-  [{ Cookie: 's101=sin-quell' }, 'quien entra a la suite pero no trae quell101 en sus apps'],
+  [{ Cookie: 's101=sin-quell' }, 'quien entra a la suite pero sólo trae «dash» en sus apps'],
   [{ Cookie: 's101=sin-alta-aqui' }, 'quien entra a la suite pero nadie lo dio de alta en la obra'],
 ]) {
   const r = await pide('/api/me', cabeceras);

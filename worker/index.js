@@ -15,6 +15,11 @@ const COOKIE = 'bo_session';
 // manda, y si lo manda se sobrescribe: la app no decide quién dice ser.
 const PREFIJO_SUITE = '/s101';
 const APP = 'quell101';
+// Con la que la suite guarda la lista de apps de cada persona. NO es el nombre
+// de la app: `miembros.apps` lleva llaves cortas (`quell`, `dash`, `roster`…),
+// que es lo que escribe workshop101 y lo que compara la propia API
+// (`LLAVE_APP` en schema/tipos.ts).
+const LLAVE = 'quell';
 
 // ---------- auth helpers ----------
 function getCookie(req, name) {
@@ -53,10 +58,14 @@ async function laSuiteDiceQuien(req, env) {
  *  El dueño de la suite entra a todo. A los demás se lo dice su membresía: la
  *  lista de apps que le puso el administrador de su empresa en workshop101.
  *  Vacía quiere decir todas, que es como la deja workshop101 cuando se marcan
- *  todas las casillas. */
+ *  todas las casillas.
+ *
+ *  Se acepta la llave corta, que es la que se guarda, y también el nombre
+ *  largo: cuesta nada y evita que una lista escrita a mano deje a alguien
+ *  fuera sin que se entienda por qué. */
+const abre = (o) => !o.apps?.length || o.apps.includes(LLAVE) || o.apps.includes(APP);
 const laSuiteLeAbre = (yo) =>
-  !!yo && (yo.superadmin === true ||
-    (yo.orgs || []).some((o) => !o.apps?.length || o.apps.includes(APP)));
+  !!yo && (yo.superadmin === true || (yo.orgs || []).some(abre));
 
 async function getUser(req, env) {
   // Primero la suite, que es la puerta buena. Quien entra por ahí se casa con
