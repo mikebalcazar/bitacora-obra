@@ -6,6 +6,7 @@ import PlanCanvas from './PlanCanvas.jsx';
 import ElementPanel from './ElementPanel.jsx';
 import Marca from './Marca.jsx';
 import { buildReport, REPORT_CSS } from './report.js';
+import { siguienteCodigo } from './codigos.js';
 
 const TYPES = TIPOS.map((t) => t.clave);
 
@@ -19,6 +20,9 @@ export default function Project({ id }) {
   const [flash, setFlash] = useState(null);
   const [adding, setAdding] = useState(false);
   const [newAt, setNewAt] = useState(null);
+  // Reubicar un ítem ya colocado: se pica desde «Editar ítem», se toca el
+  // nuevo punto y se confirma (encargo A.4). Va por la fila, como el alta.
+  const [moviendo, setMoviendo] = useState(null);   // { id, code } o null
   // Los tipos apagados, no los prendidos: así un tipo nuevo aparece solo, sin
   // que nadie tenga que acordarse de encenderlo.
   const [apagados, setApagados] = useState(() => new Set());
@@ -102,8 +106,22 @@ export default function Project({ id }) {
     if (opts.mobile !== false) setMview('elem');
   }
   function onPlanClick(x, y) {
+    if (moviendo) { reubicar(x, y); return; }
     if (!adding) return;
     setAdding(false); setNewAt({ x, y });
+  }
+  async function reubicar(x, y) {
+    const { id: eid, code } = moviendo;
+    if (!confirm(`¿Dejar ${code || 'el ítem'} aquí? Queda anotado en su bitácora quién lo movió.`)) return;
+    setMoviendo(null);
+    const r = await escribir({
+      metodo: 'PATCH', ruta: `/elements/${eid}`, cuerpo: { x, y, reubicar: true },
+      // Sin señal se ve movido al instante; sube solo cuando vuelva la señal.
+      parche: { clave: `/projects/${id}`, fn: (d) => { d.elements = (d.elements || []).map((e) => (e.id === eid ? { ...e, x, y } : e)); return d; } },
+    }).catch((e) => { toast(e.message); return null; });
+    if (!r) return;
+    toast(r.subido ? `${code || 'Ítem'} reubicado.` : `${code || 'Ítem'} reubicado; sube en cuanto haya señal.`);
+    await load();
   }
   async function createElement(f) {
     const punto = { ...f, x: newAt.x, y: newAt.y };
@@ -258,6 +276,7 @@ export default function Project({ id }) {
           </div>
         )}
         {adding && <div className="hint">Toca el plano donde va el ítem · <button className="btn sm" onClick={() => setAdding(false)}>Cancelar</button></div>}
+        {moviendo && <div className="hint">Toca el plano donde va ahora {moviendo.code || 'el ítem'} · <button className="btn sm" onClick={() => setMoviendo(null)}>Cancelar</button></div>}
         {vista === 'dudas' ? (
           <Dudas pid={id} staff={staff} user={user}
             onIr={(eid, plid) => { setVista('plan'); selectEl(eid, { planId: plid }); if (window.innerWidth <= 900) setMview('elem'); }} />
@@ -265,7 +284,7 @@ export default function Project({ id }) {
           <Lista items={listados} etapas={etapas} plans={data.plans} sel={sel}
             onIr={(e) => { selectEl(e.id, { planId: e.plan_id }); if (window.innerWidth <= 900) setMview('elem'); }} />
         ) : plan ? (
-          <PlanCanvas plan={plan} elements={shown} sel={sel} flash={flash} adding={adding} onPick={(eid) => selectEl(eid)} onClick={onPlanClick} />
+          <PlanCanvas plan={plan} elements={shown} sel={sel} flash={flash} adding={adding || !!moviendo} mios={data.mios || null} onPick={(eid) => selectEl(eid)} onClick={onPlanClick} />
         ) : (
           <div className="center" style={{ position: 'absolute', inset: 0 }}>
             <div className="empty"><h3>Sin planos</h3>{staff ? <label className="btn primary">{uploading ? 'Procesando…' : 'Subir plano (PDF o imagen)'}<input type="file" accept="application/pdf,image/*" hidden disabled={uploading} onChange={(e) => e.target.files[0] && uploadPlan(e.target.files[0])} /></label> : 'El supervisor aún no ha cargado planos.'}</div>
@@ -285,7 +304,8 @@ export default function Project({ id }) {
         )}
       </main>
 
-      <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} veTodo={veTodo} user={user} members={data.members} todos={data.elements} onIr={(eid, pid) => selectEl(eid, { planId: pid })} onChanged={load} onClose={() => { setSel(null); setMview('plan'); }} />
+      <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} veTodo={veTodo} user={user} members={data.members} todos={data.elements} onIr={(eid, pid) => selectEl(eid, { planId: pid })} onChanged={load} onClose={() => { setSel(null); setMview('plan'); }}
+        onReubicar={(e) => { setMoviendo({ id: e.id, code: e.code }); setVista('plan'); setMview('plan'); }} />
 
       <nav className="mnav">
         <button className={mview === 'plan' && vista === 'plan' ? 'on' : ''} onClick={() => { setMview('plan'); setVista('plan'); setDrawer(false); }}><i dangerouslySetInnerHTML={{ __html: ICO.plan }} />Plano</button>
@@ -295,7 +315,7 @@ export default function Project({ id }) {
         {staff && <button onClick={() => plan && setReport(true)}><i dangerouslySetInnerHTML={{ __html: ICO.doc }} />Reporte</button>}
       </nav>
 
-      {newAt && <NewElementModal n={data.elements.length + 1} members={data.members} onCancel={() => setNewAt(null)} onOk={createElement} />}
+      {newAt && <NewElementModal elements={data.elements} members={data.members} onCancel={() => setNewAt(null)} onOk={createElement} />}
       {report && <ReportModal hasSel={!!sel} onCancel={() => setReport(false)} onOk={generateReport} />}
       {repView && <ReportView {...repView} onClose={() => setRepView(null)} />}
       {editPlan && <EditPlanModal plan={editPlan} onClose={() => setEditPlan(null)} onChanged={load} />}
@@ -381,16 +401,22 @@ function Lista({ items, etapas, plans, sel, onIr }) {
   );
 }
 
-function NewElementModal({ n, members, onCancel, onOk }) {
-  const [f, setF] = useState({ code: `E-${String(n).padStart(2, '0')}`, type: 'Mueble', name: '', resp: '' });
+function NewElementModal({ elements, members, onCancel, onOk }) {
+  // El código se propone por obra según el tipo (MW-, PT-, FX-), sin contar
+  // los prefijos viejos y sin rellenar huecos. Es una propuesta: si el taller
+  // quiere otro a mano, puede; la base avisa si choca. En cuanto la persona
+  // toca la clave, cambiar de tipo ya no se la pisa.
+  const [f, setF] = useState({ code: siguienteCodigo(elements, 'Mueble'), type: 'Mueble', name: '', resp: '' });
+  const [claveTocada, setClaveTocada] = useState(false);
+  const cambiaTipo = (type) => setF({ ...f, type, code: claveTocada ? f.code : siguienteCodigo(elements, type) });
   const resps = [...new Set(members.map((m) => m.company || m.name).filter(Boolean))];
   return (
     <div className="ov" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <form className="modal" onSubmit={(e) => { e.preventDefault(); onOk(f); }}>
         <div><div className="eyebrow">Nuevo ítem</div><h2>Ubicado en el plano</h2></div>
         <div className="two">
-          <div className="field"><label>Clave</label><input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></div>
-          <div className="field"><label>Tipo</label><select value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
+          <div className="field"><label>Clave <small className="muted">propuesta por obra</small></label><input value={f.code} onChange={(e) => { setClaveTocada(true); setF({ ...f, code: e.target.value }); }} /></div>
+          <div className="field"><label>Tipo</label><select value={f.type} onChange={(e) => cambiaTipo(e.target.value)}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
         </div>
         <div className="field"><label>Nombre</label><input required autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Cocina — isla central" /></div>
         <div className="field"><label>Responsable</label><input list="resps" value={f.resp} onChange={(e) => setF({ ...f, resp: e.target.value })} placeholder="Taller 101 / contratista" /><datalist id="resps">{resps.map((r) => <option key={r} value={r} />)}</datalist></div>

@@ -1,6 +1,8 @@
 // quell101 — Cloudflare Worker (API + assets)
 // Bindings: DB (D1), FILES (R2), ASSETS (static). Vars: MAIL_FROM, APP_NAME, DEV. Secrets: RESEND_API_KEY
 
+import { PREFIJOS, siguienteCodigo } from '../web/src/codigos.js';
+
 const JSON_H = { 'content-type': 'application/json; charset=utf-8' };
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), { status, headers: { ...JSON_H, ...extra } });
 const err = (msg, status = 400) => json({ error: msg }, status);
@@ -160,12 +162,22 @@ async function leToca(env, user, punchId) {
   const r = await env.DB.prepare(`SELECT 1 FROM punch_items WHERE id = ? AND assignee_id = ?`).bind(punchId, user.id).first();
   return !!r;
 }
-// ¿Tiene algo asignado en este elemento? Si no, para él el elemento no existe.
-async function tieneAlgoEn(env, user, elementId, mio = true) {
-  if (!mio) return true;
-  const r = await env.DB.prepare(`SELECT 1 FROM punch_items WHERE element_id = ? AND assignee_id = ? LIMIT 1`).bind(elementId, user.id).first();
+// ¿Este ítem es suyo? Lo es si está en la lista de contratistas del ítem
+// (element_contratistas, desde 0011) O si tiene al menos un pendiente con su
+// nombre. La segunda regla conserva lo que ya funcionaba: hoy el contratista
+// ve sus pendientes aunque nadie lo haya puesto en la lista del mueble.
+async function esSuyo(env, user, elementId) {
+  const r = await env.DB.prepare(
+    `SELECT 1 AS si WHERE EXISTS (SELECT 1 FROM element_contratistas ec WHERE ec.element_id = ? AND ec.user_id = ?)
+                       OR EXISTS (SELECT 1 FROM punch_items k WHERE k.element_id = ? AND k.assignee_id = ?)`,
+  ).bind(elementId, user.id, elementId, user.id).first();
   return !!r;
 }
+// Lo único que un contratista ve de un ítem que no es suyo: para ubicarse en
+// el plano. Ni fase, ni pendientes, ni bitácora, ni fotos (decisión 4). El
+// recorte pasa aquí, antes de salir del Worker, no al pintar.
+const soloUbicacion = (e) => ({ id: e.id, plan_id: e.plan_id, project_id: e.project_id ?? null, code: e.code, name: e.name, type: e.type, x: e.x, y: e.y, ajeno: true,
+  n_pend: 0, n_proc: 0, n_total: 0, n_etapas: 0, n_log: 0 });
 
 async function canAccessProject(env, user, projectId) {
   if (isStaff(user)) return true;
@@ -570,18 +582,24 @@ async function api(req, env, url, path) {
       // asignado, y los números de cada pin cuentan lo suyo. Lo demás no es
       // asunto suyo y de paso no se pierde entre cien pines que no le tocan.
       const mio = soloLoSuyo(await rolEnObra(env, user, pid));
-      const { results: elements } = mio
+      // Desde 0011 el contratista ve TODOS los ítems del plano, con los suyos
+      // resaltados (decisión 3). De los ajenos sólo lo necesario para
+      // ubicarse; de los suyos, todo, con los pendientes de los demás
+      // contratistas del mismo mueble (decisión 5).
+      const { results: crudos } = mio
         ? await env.DB.prepare(
             `SELECT e.*,
-               (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id AND k.assignee_id=? AND k.status='pend') AS n_pend,
-               (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id AND k.assignee_id=? AND k.status='proc') AS n_proc,
-               (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id AND k.assignee_id=?) AS n_total,
+               (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id AND k.status='pend') AS n_pend,
+               (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id AND k.status='proc') AS n_proc,
+               (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id) AS n_total,
                (SELECT COUNT(*) FROM element_etapas ee JOIN etapas t ON t.clave=ee.etapa AND t.activa=1 WHERE ee.element_id=e.id) AS n_etapas,
-               0 AS n_log
+               0 AS n_log,
+               (EXISTS (SELECT 1 FROM element_contratistas ec WHERE ec.element_id=e.id AND ec.user_id=?)
+                OR EXISTS (SELECT 1 FROM punch_items k WHERE k.element_id=e.id AND k.assignee_id=?)) AS suyo
              FROM elements e JOIN plans p ON p.id = e.plan_id
-             WHERE p.project_id = ? AND EXISTS (SELECT 1 FROM punch_items k WHERE k.element_id=e.id AND k.assignee_id=?)
+             WHERE p.project_id = ?
              ORDER BY e.code`
-          ).bind(user.id, user.id, user.id, pid, user.id).all()
+          ).bind(user.id, user.id, pid).all()
         : await env.DB.prepare(
             `SELECT e.*,
                (SELECT COUNT(*) FROM punch_items k WHERE k.element_id=e.id AND k.status='pend') AS n_pend,
@@ -591,6 +609,8 @@ async function api(req, env, url, path) {
                (SELECT COUNT(*) FROM log_entries l WHERE l.element_id=e.id) AS n_log
              FROM elements e JOIN plans p ON p.id = e.plan_id WHERE p.project_id = ? ORDER BY e.code`
           ).bind(pid).all();
+      const mios = mio ? crudos.filter((e) => e.suyo).map((e) => e.id) : null;
+      const elements = mio ? crudos.map((e) => (e.suyo ? { ...e, suyo: undefined } : soloUbicacion(e))) : crudos;
       // Quién más anda en la obra es cosa de quien la dirige.
       const { results: members } = mio
         ? { results: [] }
@@ -600,7 +620,7 @@ async function api(req, env, url, path) {
       // número que se pinta junto al resto de la pantalla.
       const qd = env.DB.prepare(`SELECT COUNT(*) AS n FROM dudas WHERE project_id = ? AND estado = 'abierta' ${isStaff(user) ? '' : 'AND user_id = ?'}`);
       const abiertas = await (isStaff(user) ? qd.bind(pid) : qd.bind(pid, user.id)).first();
-      return json({ project, plans, elements, members, mi_rol: await rolEnObra(env, user, pid),
+      return json({ project, plans, elements, members, mi_rol: await rolEnObra(env, user, pid), mios,
                     dudas_abiertas: abiertas ? abiertas.n : 0, etapas: await catalogoEtapas(env) });
     }
     if (!seg[2] && m === 'PATCH') {
@@ -751,13 +771,21 @@ async function api(req, env, url, path) {
       // La obra se guarda en el ítem, no se deduce pasando por el plano en cada
       // consulta. Y es lo que hace que la cerradura del código sirva: sin obra,
       // SQLite trata los nulos como distintos y el ítem nuevo se le escaparía.
-      const codigo = String(b.code || '').trim();
+      const tipo = b.type || 'Otro';
+      let codigo = String(b.code || '').trim();
+      // Si la pantalla no propuso código y el tipo lleva prefijo, se propone
+      // aquí con la misma regla, por obra (una app vieja, o una operación de la
+      // fila que salió sin él).
+      if (!codigo && PREFIJOS[tipo]) {
+        const { results: delaObra } = await env.DB.prepare(`SELECT code FROM elements WHERE project_id = ?`).bind(pid).all();
+        codigo = siguienteCodigo(delaObra, tipo);
+      }
       // Nace en producción: todavía no hay nada entregado que corregir.
       const alta = await conCodigoUnico(async () => {
         await env.DB.prepare(`INSERT INTO elements (id, plan_id, project_id, code, type, name, resp, x, y, created_by) VALUES (?,?,?,?,?,?,?,?,?,?)`)
-          .bind(id, seg[1], pid, codigo, b.type || 'Otro', b.name, b.resp || '', +b.x, +b.y, user.id).run();
+          .bind(id, seg[1], pid, codigo, tipo, b.name, b.resp || '', +b.x, +b.y, user.id).run();
         await apunta(env, b.op_id);
-        return json({ ok: true, id });
+        return json({ ok: true, id, code: codigo });
       }, codigo);
       return alta;
     }
@@ -781,30 +809,75 @@ async function api(req, env, url, path) {
     if (!pid || !(await canAccessProject(env, user, pid))) return err('sin acceso', 403);
     if (!seg[2] && m === 'GET') {
       const mio = soloLoSuyo(await rolEnObra(env, user, pid));
-      if (!(await tieneAlgoEn(env, user, eid, mio))) return err('Este elemento no tiene nada asignado a ti.', 403);
       const element = await env.DB.prepare(`SELECT e.*, pl.name AS plan_name FROM elements e JOIN plans pl ON pl.id = e.plan_id WHERE e.id = ?`).bind(eid).first();
-      // La bitácora es de quien dirige la obra: ahí se acuerdan cosas y se
-      // anotan tratos. El contratista trabaja sobre sus pendientes, no ahí.
-      const { results: log } = mio ? { results: [] } : await env.DB.prepare(`SELECT l.*, u.name AS user_name, u.role AS user_role FROM log_entries l JOIN users u ON u.id = l.user_id WHERE l.element_id = ? ORDER BY l.created_at`).bind(eid).all();
+      if (!element) return err('no encontrado', 404);
+      // Un ítem que no es suyo: sólo para ubicarse (decisión 4). El recorte se
+      // hace aquí, y nada más sale: ni un pendiente, ni un renglón, ni una foto.
+      if (mio && !(await esSuyo(env, user, eid))) {
+        return json({ element: { ...soloUbicacion(element), plan_name: element.plan_name }, recorte: true, log: [], punch: [], etapas: [], hechas: [] });
+      }
+      // Un ítem suyo lo ve completo (decisión 5): los pendientes de todos los
+      // contratistas del mueble, la bitácora, las fotos, la fase y las etapas.
+      const { results: log } = await env.DB.prepare(`SELECT l.*, u.name AS user_name, u.role AS user_role FROM log_entries l JOIN users u ON u.id = l.user_id WHERE l.element_id = ? ORDER BY l.created_at`).bind(eid).all();
       const qp = env.DB.prepare(`SELECT k.*, u.name AS created_by_name, a.name AS assignee_name, a.company AS assignee_company
          FROM punch_items k LEFT JOIN users u ON u.id = k.created_by LEFT JOIN users a ON a.id = k.assignee_id
-         WHERE k.element_id = ? ${mio ? 'AND k.assignee_id = ?' : ''}
+         WHERE k.element_id = ?
          ORDER BY CASE k.status WHEN 'pend' THEN 0 WHEN 'proc' THEN 1 ELSE 2 END, k.due_date`);
-      const { results: punch } = await (mio ? qp.bind(eid, user.id) : qp.bind(eid)).all();
+      const { results: punch } = await qp.bind(eid).all();
       const lp = await photosFor(env, 'log', log.map((l) => l.id));
       const kp = await photosFor(env, 'punch', punch.map((k) => k.id));
       log.forEach((l) => (l.photos = lp[l.id] || []));
       punch.forEach((k) => (k.photos = kp[k.id] || []));
       const etapas = await catalogoEtapas(env);
-      return json({ element, log, punch, etapas, hechas: (await etapasDe(env, [eid]))[eid] || [] });
+      const { results: contratistas } = await env.DB.prepare(
+        `SELECT u.id, u.name, u.company, ec.asignado_at FROM element_contratistas ec JOIN users u ON u.id = ec.user_id WHERE ec.element_id = ? ORDER BY u.name`,
+      ).bind(eid).all();
+      return json({ element, log, punch, etapas, hechas: (await etapasDe(env, [eid]))[eid] || [], contratistas });
+    }
+    // Los contratistas de un ítem. Los pone quien dirige la obra, como en
+    // «Quién entra a cada obra». Se manda la lista completa: lo que no venga,
+    // se quita. Asignar dos veces al mismo no duplica (llave compuesta).
+    if (seg[2] === 'contratistas' && m === 'PUT') {
+      if (!isStaff(user)) return err('Los contratistas de un ítem los pone quien dirige la obra.', 403);
+      const b = await req.json();
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
+      const ids = [...new Set((Array.isArray(b.user_ids) ? b.user_ids : []).map(String).filter(Boolean))];
+      for (const uidC of ids) {
+        const q = await env.DB.prepare(
+          `SELECT u.id, u.role, u.active, (SELECT 1 FROM project_members pm WHERE pm.project_id = ? AND pm.user_id = u.id) AS en_obra FROM users u WHERE u.id = ?`,
+        ).bind(pid, uidC).first();
+        if (!q || !q.active) return err('Ese contratista no existe o está dado de baja.', 400);
+        if (q.role !== 'con') return err('Sólo se asignan contratistas (rol con).', 400);
+        if (!q.en_obra) return err('Primero dale acceso a la obra en «Quién entra a cada obra»; luego lo asignas al ítem.', 400);
+      }
+      const ops = [env.DB.prepare(`DELETE FROM element_contratistas WHERE element_id = ?${ids.length ? ` AND user_id NOT IN (${ids.map(() => '?').join(',')})` : ''}`).bind(eid, ...ids)];
+      for (const uidC of ids) {
+        ops.push(env.DB.prepare(`INSERT INTO element_contratistas (element_id, user_id, asignado_por) VALUES (?,?,?) ON CONFLICT (element_id, user_id) DO NOTHING`).bind(eid, uidC, user.id));
+      }
+      await env.DB.batch(ops);
+      await apunta(env, b.op_id);
+      const { results: contratistas } = await env.DB.prepare(
+        `SELECT u.id, u.name, u.company, ec.asignado_at FROM element_contratistas ec JOIN users u ON u.id = ec.user_id WHERE ec.element_id = ? ORDER BY u.name`,
+      ).bind(eid).all();
+      return json({ ok: true, contratistas });
     }
     if (!seg[2] && m === 'PATCH') {
       if (!isStaff(user)) return err('El contratista no edita elementos.', 403);
       const b = await req.json();
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
       const codigo = b.code === undefined || b.code === null ? null : String(b.code).trim();
+      // Reubicar: sólo cambian x y y, que ya existen. Pasa por la fila (op_id)
+      // para que funcione sin señal, y deja constancia en la bitácora del
+      // ítem: quién lo movió y cuándo (encargo A.4).
+      const reubica = b.reubicar === true && typeof b.x === 'number' && typeof b.y === 'number';
       return await conCodigoUnico(async () => {
         await env.DB.prepare(`UPDATE elements SET code = COALESCE(?, code), type = COALESCE(?, type), name = COALESCE(?, name), resp = COALESCE(?, resp), x = COALESCE(?, x), y = COALESCE(?, y) WHERE id = ?`)
           .bind(codigo, b.type ?? null, b.name ?? null, b.resp ?? null, b.x ?? null, b.y ?? null, eid).run();
+        if (reubica) {
+          await env.DB.prepare(`INSERT INTO log_entries (id, element_id, user_id, kind, text) VALUES (?,?,?,?,?)`)
+            .bind(uid(), eid, user.id, 'trabajo', 'Reubicado en el plano.').run();
+        }
+        await apunta(env, b.op_id);
         return json({ ok: true });
       }, codigo);
     }

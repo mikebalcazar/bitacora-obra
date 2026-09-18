@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, leer, escribir, fileUrl, FASES, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
+import { api, leer, escribir, fileUrl, FASES, TIPOS, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
 import { Photos, usePending, PhotoInput, PendingStrip } from './Fotos.jsx';
 
 // staff = puede escribir. veTodo = puede ver la obra completa. No son lo mismo:
 // el trabajador ve todo y no escribe nada, y el contratista ni ve todo ni
 // escribe, salvo la evidencia de lo que le tocó.
-export default function ElementPanel({ elementId, flash, plan, staff, veTodo = staff, user, members = [], todos = [], onIr, onChanged, onClose }) {
+export default function ElementPanel({ elementId, flash, plan, staff, veTodo = staff, user, members = [], todos = [], onIr, onChanged, onClose, onReubicar }) {
   const { toast } = useApp();
   const [d, setD] = useState(null);
   const [tab, setTab] = useState(!veTodo || flash ? 'punch' : 'log');
@@ -22,9 +22,26 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
   useEffect(() => { if (flash) setTab('punch'); }, [flash]);
   useEffect(() => { if (flash && d) setTimeout(() => document.querySelector(`[data-k="${flash}"]`)?.scrollIntoView({ block: 'center' }), 50); }, [flash, d]);
 
-  if (!elementId) return <aside className="panel"><div className="empty"><h3>{staff ? 'Selecciona un ítem' : 'Selecciona un pendiente'}</h3>Toca un pin del plano{staff ? ' o crea uno con + Ítem' : '. Solo salen los pines donde tienes algo asignado.'}</div></aside>;
+  if (!elementId) return <aside className="panel"><div className="empty"><h3>Selecciona un ítem</h3>Toca un pin del plano{staff ? ' o crea uno con + Ítem' : veTodo ? '.' : '. Los tuyos van resaltados; de los demás sólo ves dónde están.'}</div></aside>;
   if (!d) return <aside className="panel"><div className="spin" /></aside>;
-  const { element: e, log, punch, etapas = [], hechas = [] } = d;
+  const { element: e, log, punch, etapas = [], hechas = [], contratistas = [] } = d;
+  // Un ítem que no es suyo: el servidor ya lo recortó a nombre, código y
+  // posición. Aquí sólo se dice, sin inventar lo que no vino.
+  if (d.recorte) {
+    return (
+      <aside className="panel">
+        <div className="head">
+          <div className="row" style={{ gap: 6 }}>
+            <button className="btn sm" onClick={onClose} title="Cerrar">←</button>
+            <div className="eyebrow">{e.type} · <span style={{ color: 'var(--accent)' }}>{e.code}</span></div>
+          </div>
+          <h2>{e.name}</h2>
+          <div className="meta"><span>{e.plan_name}</span></div>
+        </div>
+        <div className="recorte">Este ítem <b>no es tuyo</b>: sólo sale para que te ubiques en el plano. Lo que trae —pendientes, bitácora, fotos— es de quien lo lleva.</div>
+      </aside>
+    );
+  }
   const nEtapas = etapas.filter((x) => hechas.some((h) => h.etapa === x.clave)).length;
   const open = punch.filter((k) => k.status !== 'ok').length;
   const changed = () => { load(); onChanged(); };
@@ -77,12 +94,14 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
         <div className="meta">
           <span className={'pill fase ' + e.fase}>{FASES[e.fase] || 'Producción'}</span>
           {e.resp && <span>Resp. <b style={{ fontWeight: 500, color: 'var(--ink2)' }}>{e.resp}</b></span>}
+          {!staff && contratistas.length > 0 && <span>Contratistas: <b style={{ fontWeight: 500, color: 'var(--ink2)' }}>{contratistas.map((c) => c.name).join(', ')}</b></span>}
           <span>{e.plan_name}</span>
           <span>{e.fase === 'punchlist' && e.entregado_en ? `Entregado ${fmtD(e.entregado_en)}` : `Creado ${fmtD(e.created_at)}`}</span>
         </div>
+        {staff && <Contratistas e={e} contratistas={contratistas} members={members} onChanged={changed} />}
         <div className="tabs">
           {veTodo && <button className={'tab' + (tab === 'log' ? ' on' : '')} onClick={() => setTab('log')}>Bitácora <span className="n">{log.length}</span></button>}
-          <button className={'tab' + (tab === 'punch' ? ' on' : '')} onClick={() => setTab('punch')}>{veTodo ? 'Punchlist' : 'Lo que me toca'} <span className="n">{open}/{punch.length}</span></button>
+          <button className={'tab' + (tab === 'punch' ? ' on' : '')} onClick={() => setTab('punch')}>{veTodo ? 'Punchlist' : 'Pendientes del ítem'} <span className="n">{open}/{punch.length}</span></button>
         </div>
       </div>
       {tab === 'log' && veTodo
@@ -93,8 +112,41 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
           abierta={proc} onAbrir={() => setProc(!proc)} onChanged={changed} />
       )}
       {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
-      {edit && <EditElement e={e} onClose={() => setEdit(false)} onChanged={() => { changed(); }} onDeleted={() => { onChanged(); onClose(); }} />}
+      {edit && <EditElement e={e} onClose={() => setEdit(false)} onChanged={() => { changed(); }} onDeleted={() => { onChanged(); onClose(); }}
+        onReubicar={onReubicar ? () => { setEdit(false); onReubicar(e); } : null} />}
     </aside>
+  );
+}
+
+// Los contratistas del ítem (encargo D, 18-sep-2026). Los pone quien dirige la
+// obra, de entre la gente que ya tiene acceso a ella con rol de contratista.
+// `elements.resp` (texto libre) se queda como está: esto es aparte y liga a
+// cuentas de verdad.
+function Contratistas({ e, contratistas, members, onChanged }) {
+  const { toast } = useApp();
+  const [busy, setBusy] = useState(false);
+  const candidatos = members.filter((m) => (m.rol_obra === 'con' || m.role === 'con') && !contratistas.some((c) => c.id === m.id));
+  async function guarda(ids) {
+    setBusy(true);
+    await escribir({ metodo: 'PUT', ruta: `/elements/${e.id}/contratistas`, cuerpo: { user_ids: ids } }).catch((x) => toast(x.message));
+    setBusy(false); onChanged();
+  }
+  return (
+    <div className="chips" style={{ margin: '6px 0 4px', alignItems: 'center' }}>
+      <span className="muted" style={{ fontSize: 12 }}>Contratistas:</span>
+      {contratistas.map((c) => (
+        <span key={c.id} className="chip" title={c.company || ''}>{c.name}
+          <button type="button" className="x" disabled={busy} title="Quitar de este ítem" onClick={() => guarda(contratistas.filter((o) => o.id !== c.id).map((o) => o.id))}>×</button>
+        </span>
+      ))}
+      {!contratistas.length && <span className="chip">nadie todavía</span>}
+      {candidatos.length > 0
+        ? <select className="sm" value="" disabled={busy} onChange={(ev) => ev.target.value && guarda([...contratistas.map((c) => c.id), ev.target.value])}>
+            <option value="">+ asignar…</option>
+            {candidatos.map((m) => <option key={m.id} value={m.id}>{m.name}{m.company ? ` · ${m.company}` : ''}</option>)}
+          </select>
+        : <span className="muted" style={{ fontSize: 12 }}>{members.some((m) => m.rol_obra === 'con' || m.role === 'con') ? '' : 'Primero dale acceso a la obra a un contratista.'}</span>}
+    </div>
   );
 }
 
@@ -415,17 +467,20 @@ function Evidencia({ k, onListo, onCancel }) {
   );
 }
 
-function EditElement({ e, onClose, onChanged, onDeleted }) {
+function EditElement({ e, onClose, onChanged, onDeleted, onReubicar }) {
   const { toast } = useApp();
   const [f, setF] = useState({ code: e.code, type: e.type, name: e.name, resp: e.resp });
   const [confirm, setConfirm] = useState(false);
+  // Un ítem viejo con un tipo que ya no está en la lista conserva el suyo.
+  const tipos = [...TIPOS.map((t) => t.clave), ...(TIPOS.some((t) => t.clave === e.type) ? [] : [e.type])];
   return (
     <div className="ov" onClick={(ev) => ev.target === ev.currentTarget && onClose()}>
       <form className="modal" onSubmit={async (ev) => { ev.preventDefault(); await api.patch(`/elements/${e.id}`, f).catch((x) => toast(x.message)); onChanged(); onClose(); }}>
         <h2>Editar ítem</h2>
-        <div className="two"><div className="field"><label>Clave</label><input value={f.code} onChange={(ev) => setF({ ...f, code: ev.target.value })} /></div><div className="field"><label>Tipo</label><input value={f.type} onChange={(ev) => setF({ ...f, type: ev.target.value })} /></div></div>
+        <div className="two"><div className="field"><label>Clave</label><input value={f.code} onChange={(ev) => setF({ ...f, code: ev.target.value })} /></div><div className="field"><label>Tipo</label><select value={f.type} onChange={(ev) => setF({ ...f, type: ev.target.value })}>{tipos.map((t) => <option key={t}>{t}</option>)}</select></div></div>
         <div className="field"><label>Nombre</label><input required value={f.name} onChange={(ev) => setF({ ...f, name: ev.target.value })} /></div>
-        <div className="field"><label>Responsable</label><input value={f.resp} onChange={(ev) => setF({ ...f, resp: ev.target.value })} /></div>
+        <div className="field"><label>Responsable <small className="muted">(texto, como siempre; los contratistas con cuenta van arriba)</small></label><input value={f.resp} onChange={(ev) => setF({ ...f, resp: ev.target.value })} /></div>
+        {onReubicar && <button type="button" className="btn" onClick={onReubicar}>Reubicar en el plano…</button>}
         {!confirm ? <button type="button" className="btn danger" onClick={() => setConfirm(true)}>Borrar ítem (bitácora y punchlist incluidos)…</button>
           : <button type="button" className="btn danger" onClick={async () => { await api.del(`/elements/${e.id}`).catch((x) => toast(x.message)); onDeleted(); }}>Confirmar borrado definitivo</button>}
         <div className="acts"><button type="button" className="btn" onClick={onClose}>Cancelar</button><button className="btn primary">Guardar</button></div>

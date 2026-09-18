@@ -438,3 +438,14 @@ a{color:var(--accent)}
   .lrow .pend{order:5;width:auto;flex:1;text-align:right}
   .lrow .pend .pill{white-space:nowrap}
 }
+
+/* El contratista ve todo el plano: los suyos resaltados, los ajenos apenas
+   marcados para ubicarse (encargo D, 18-sep-2026). */
+.pin.mio{box-shadow:0 0 0 3px #fff,0 0 0 6px var(--accent)}
+.pin.ajeno{opacity:.45}
+.pin.ajeno span{opacity:.8}
+.recorte{padding:14px 16px;color:var(--ink2);font-size:14px;line-height:1.5}
+.recorte b{color:var(--ink)}
+.chip .x{border:0;background:transparent;color:var(--ink2);font-size:14px;line-height:1;padding:0 0 0 2px;cursor:pointer}
+.chip .x:hover{color:var(--pend)}
+select.sm{font-size:12px;padding:3px 6px;border-radius:12px;border:1px solid var(--line);background:var(--surface)}
