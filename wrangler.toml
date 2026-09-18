@@ -15,6 +15,9 @@ run_worker_first = ["/api/*", "/files/*", "/descargas/*", "/s101/*"]
 
 [vars]
 APP_NAME = "quell101"
+# La empresa de la suite cuya base es ésta. quell101 todavía tiene una sola
+# base; cuando se mude a la base por empresa, esto se va con la mudanza.
+ORG_ID = "forespot"
 MAIL_FROM = "quell101 <bitacora@envios.taller101.mx>"
 DEV = ""
 

@@ -72,13 +72,17 @@ async function getUser(req, env) {
   // dice qué hace aquí —dueño, supervisor o contratista— y en qué obras.
   const yo = await laSuiteDiceQuien(req, env);
   if (yo) {
-    if (!laSuiteLeAbre(yo)) return null;
     const row = await env.DB.prepare(`SELECT * FROM users WHERE email = ? AND active = 1`)
       .bind(String(yo.usuario?.correo || '').toLowerCase()).first();
-    if (row) return row;
     // Entra a la suite pero nadie le ha dado de alta aquí: no se le inventa un
     // renglón. Dar de alta es decidir un rol, y eso lo hace una persona.
-    return null;
+    if (!row) return null;
+    // El cliente del taller no es miembro de la empresa en la suite: entra
+    // con su acceso de cliente, el mismo con el que abre peek101. La suite
+    // dice que es él; este renglón dice que aquí es cliente y de qué obras.
+    if (row.role === 'cli') return yo.acceso?.tipo === 'cliente' ? row : null;
+    if (!laSuiteLeAbre(yo)) return null;
+    return row;
   }
 
   /* Y ya no hay puerta de atrás.
@@ -107,6 +111,20 @@ async function getUser(req, env) {
 //                    no le toca.
 const isStaff = (u) => u && (u.role === 'admin' || u.role === 'int');
 const esDueno = (u) => u && u.role === 'admin';
+// Y un cuarto, desde 0012: el cliente del taller. Ve el plano de su obra y los
+// puntos que el taller le pide definir; contesta y puede preguntar. Nada más.
+const esCli = (u) => u && u.role === 'cli';
+
+// Lo único que un cliente abre. Está escrito en positivo y se revisa antes de
+// cualquier ruta: lo que no esté aquí le contesta 403 aunque una ruta nueva se
+// olvide de preguntar. Es la misma idea que el recorte del contratista: el
+// filtro vive en el servidor, no en la pantalla.
+const rutaDeCliente = (m, seg) =>
+  (seg[0] === 'me' && m === 'GET') ||
+  (seg[0] === 'projects' && m === 'GET' && (!seg[1] || !seg[2] || seg[2] === 'dudas')) ||
+  (seg[0] === 'projects' && m === 'POST' && seg[1] && seg[2] === 'dudas') ||
+  (seg[0] === 'elements' && m === 'GET' && seg[1] && !seg[2]) ||
+  (seg[0] === 'dudas' && m === 'POST' && seg[1] && seg[2] === 'respuestas');
 
 // El correo de invitación. Dar de alta a alguien y no avisarle no es invitar:
 // la persona no sabe que existe la aplicación, ni que su correo ya es su
@@ -142,6 +160,81 @@ async function invita(env, req, quien, obra, rol) {
   try { await sendMail(env, quien.email, `Te dieron acceso a ${obra.name} en ${app}`, html); return { ok: true }; }
   catch (e) { return { ok: false, error: String(e.message || e) }; }
 }
+
+// El correo al cliente invitado. Entra por la misma puerta que todos —la de la
+// suite—, con «Mándame un código» la primera vez, porque no tiene contraseña
+// todavía: la pone ahí mismo.
+async function invitaCliente(env, req, quien, obras) {
+  const sitio = new URL(req.url).origin;
+  const app = env.APP_NAME || 'quell101';
+  const lista = obras.map((o) => `<li><b>${o.name}</b>${o.client ? ` (${o.client})` : ''}</li>`).join('');
+  const html = `
+    <p>Hola${quien.name ? ' ' + quien.name : ''},</p>
+    <p>El taller te invitó a ver ${obras.length === 1 ? 'tu obra' : 'tus obras'} en <b>${app}</b>:</p>
+    <ul>${lista}</ul>
+    <p>Ahí vas a ver el plano con tus muebles y los puntos que el taller necesita
+       que definas; contestas sobre cada uno, con foto si hace falta, y también
+       puedes preguntar lo que quieras. Lo interno del taller no sale ahí.</p>
+    <p><b>Para entrar la primera vez:</b></p>
+    <ol>
+      <li>Abre <a href="${sitio}">${sitio}</a></li>
+      <li>Escribe este correo: <b>${quien.email}</b> y pica «Continuar».</li>
+      <li>Como todavía no tienes contraseña, pica <b>«Mándame un código»</b>: te
+          llega uno de 6 dígitos y con él pones tu contraseña.</li>
+    </ol>
+    <p>De ahí en adelante entras con tu correo y tu contraseña. Es la misma
+       cuenta con la que ves tu estado de cuenta en peek101.</p>`;
+  try { await sendMail(env, quien.email, `Te invitaron a ver tu obra en ${app}`, html); return { ok: true }; }
+  catch (e) { return { ok: false, error: String(e.message || e) }; }
+}
+
+// El aviso al cliente de que tiene puntos por definir. Un solo correo, cuando
+// el taller aprieta el botón; nada automático por punto (decisión 8 de Mike).
+async function avisaCliente(env, req, quien, obra, cuantos) {
+  const sitio = new URL(req.url).origin;
+  const app = env.APP_NAME || 'quell101';
+  const html = `
+    <p>Hola${quien.name ? ' ' + quien.name : ''},</p>
+    <p>En tu obra <b>${obra.name}</b> hay <b>${cuantos} ${cuantos === 1 ? 'punto' : 'puntos'} por definir</b>.
+       El taller necesita tu respuesta para seguir.</p>
+    <p>Entra a <a href="${sitio}/#/p/${obra.id}">${sitio}</a> con tu correo y tu contraseña, abre la obra y
+       contesta sobre cada punto. Si algo no se entiende, ahí mismo puedes preguntar.</p>`;
+  try { await sendMail(env, quien.email, `${cuantos} ${cuantos === 1 ? 'punto' : 'puntos'} por definir en ${obra.name}`, html); return { ok: true }; }
+  catch (e) { return { ok: false, error: String(e.message || e) }; }
+}
+
+// La suite le abre la puerta al cliente: `POST /orgs/:o/clientes/invitar`
+// (contrato 0.15.0) lo deja como cliente de la empresa —el mismo que ve
+// peek101— sin PIN. Se llama con la sesión de quien invita, por el enlace de
+// servicio, como todo lo de `/s101`. quell101 tiene una sola base, la de una
+// empresa, y esa empresa es `ORG_ID`; el día que se mude a la base por
+// empresa esto se va con la mudanza.
+async function invitaEnSuite(req, env, correo, nombre) {
+  if (!env.API) return { ok: false, error: 'sin_suite' };
+  const h = new Headers({ 'X-App': APP, 'content-type': 'application/json' });
+  const galleta = req.headers.get('cookie');
+  const llevada = req.headers.get('authorization');
+  if (galleta) h.set('cookie', galleta);
+  if (llevada) h.set('authorization', llevada);
+  let org = env.ORG_ID;
+  if (!org) {
+    const yo = await laSuiteDiceQuien(req, env);
+    org = (yo?.orgs || []).find(abre)?.id;
+  }
+  if (!org) return { ok: false, error: 'sin_empresa' };
+  const r = await env.API.fetch(new Request(`https://suite101-api/orgs/${org}/clientes/invitar`, { method: 'POST', headers: h, body: JSON.stringify({ correo, nombre }) }));
+  const cuerpo = await r.json().catch(() => null);
+  if (!r.ok || !cuerpo?.ok) return { ok: false, error: cuerpo?.error || `suite_${r.status}`, detalle: cuerpo?.detalle };
+  return { ok: true, data: cuerpo.data };
+}
+const PORQUE_NO_INVITA = {
+  es_miembro: 'Ese correo es de alguien de la empresa en la suite, no de un cliente.',
+  en_uso: 'Ese correo ya entra como cliente o personal de otra empresa.',
+  sin_suite: 'No hay enlace con la suite desde aquí.',
+  sin_empresa: 'No se pudo saber de qué empresa es esta bitácora.',
+  app_inactiva: 'quell101 no está prendida para esta empresa en la suite.',
+  org_sin_pago: 'La suscripción de la empresa venció. Avísale a quien la administra.',
+};
 
 // Qué es esta persona en esta obra. Quien la dirige lo es en todas; a los demás
 // se lo dice su membresía, obra por obra: la misma persona es contratista en
@@ -332,6 +425,27 @@ async function photosFor(env, ownerType, ids) {
   return map;
 }
 
+// Las respuestas y las fotos de un puñado de dudas, en dos consultas: son
+// pocas y se leen juntas. Lo usan la lista de la obra y el ítem del cliente.
+async function armaDudas(env, dudas) {
+  const ids = dudas.map((d) => d.id);
+  const porDuda = {};
+  if (ids.length) {
+    const { results } = await env.DB.prepare(
+      `SELECT r.*, u.name AS quien, u.role AS quien_rol FROM duda_respuestas r JOIN users u ON u.id = r.user_id
+        WHERE r.duda_id IN (${ids.map(() => '?').join(',')}) ORDER BY r.created_at`).bind(...ids).all();
+    for (const r of results) (porDuda[r.duda_id] = porDuda[r.duda_id] || []).push(r);
+  }
+  dudas.forEach((d) => (d.respuestas = porDuda[d.id] || []));
+  const fd = await photosFor(env, 'duda', ids);
+  const fr = await photosFor(env, 'duda_resp', Object.values(porDuda).flat().map((r) => r.id));
+  dudas.forEach((d) => {
+    d.photos = fd[d.id] || [];
+    d.respuestas.forEach((r) => (r.photos = fr[r.id] || []));
+  });
+  return dudas;
+}
+
 // ---------- router ----------
 // La app de Android y la de Windows llevan su propia copia del sitio adentro, así
 // que no comparten origen con el servidor: sus peticiones son de otro origen y
@@ -495,6 +609,7 @@ async function api(req, env, url, path) {
 
   const user = await getUser(req, env);
   if (!user) return err('no autorizado', 401);
+  if (esCli(user) && !rutaDeCliente(m, seg)) return err('Un cliente ve el plano de su obra y sus puntos por definir; nada más.', 403);
 
   if (seg[0] === 'me' && m === 'GET') return json({ user: pubUser(user) });
 
@@ -543,10 +658,68 @@ async function api(req, env, url, path) {
     }
   }
 
+  // ----- clientes (dueño) -----
+  // Invitar a un cliente: correo, nombre como va a aparecer aquí, y a qué
+  // obras. Va desde la pantalla de inicio, no desde «Usuarios y accesos»
+  // (decisión de Mike, 18-sep). Tres cosas en orden: la suite lo deja entrar
+  // como cliente (0.15.0), esta base lo apunta como `cli` en esas obras, y le
+  // llega el correo. Si la suite dice que no, aquí no se escribe nada.
+  if (seg[0] === 'clientes') {
+    if (!esDueno(user)) return err('Invitar clientes es del dueño.', 403);
+    if (!seg[1] && m === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT u.id, u.email, u.name, u.active, u.created_at,
+                (SELECT GROUP_CONCAT(p.name, ' · ') FROM project_members pm JOIN projects p ON p.id = pm.project_id WHERE pm.user_id = u.id AND pm.rol = 'cli') AS obras
+           FROM users u WHERE u.role = 'cli' ORDER BY u.name`).all();
+      return json({ clientes: results });
+    }
+    if (seg[1] === 'invitar' && m === 'POST') {
+      const b = await req.json();
+      const e = String(b.email || '').trim().toLowerCase();
+      const nombre = String(b.name || '').trim().slice(0, 120);
+      const pids = [...new Set((Array.isArray(b.project_ids) ? b.project_ids : []).map(String).filter(Boolean))];
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return err('correo inválido');
+      if (!nombre) return err('Escribe cómo se va a llamar aquí.');
+      if (!pids.length) return err('Elige al menos una obra.');
+      const obras = [];
+      for (const pid of pids) {
+        const o = await env.DB.prepare(`SELECT id, name, client FROM projects WHERE id = ?`).bind(pid).first();
+        if (!o) return err('Una de las obras no existe.', 400);
+        obras.push(o);
+      }
+      const ya = await env.DB.prepare(`SELECT * FROM users WHERE email = ?`).bind(e).first();
+      if (ya && ya.role !== 'cli') return err('Ese correo ya es de alguien del taller, no de un cliente.', 409);
+
+      const suite = await invitaEnSuite(req, env, e, nombre);
+      if (!suite.ok) return err(PORQUE_NO_INVITA[suite.error] || `La suite no dejó invitar (${suite.error}).`, suite.error === 'es_miembro' || suite.error === 'en_uso' ? 409 : 502);
+
+      let id = ya ? ya.id : uid();
+      if (!ya) {
+        await env.DB.prepare(`INSERT INTO users (id, email, name, role, company) VALUES (?,?,?,?,?)`).bind(id, e, nombre, 'cli', '').run();
+      } else {
+        await env.DB.prepare(`UPDATE users SET name = ?, active = 1 WHERE id = ?`).bind(nombre, id).run();
+      }
+      await env.DB.batch(obras.map((o) =>
+        env.DB.prepare(`INSERT INTO project_members (project_id, user_id, rol) VALUES (?,?,'cli') ON CONFLICT (project_id, user_id) DO UPDATE SET rol = 'cli'`).bind(o.id, id)));
+      const correo = await invitaCliente(env, req, { email: e, name: nombre }, obras);
+      return json({ ok: true, id, nuevo: !ya, obras: obras.length, suite: suite.data, aviso: correo.ok ? null : correo.error });
+    }
+    return err('ruta no encontrada', 404);
+  }
+
   // ----- projects -----
   if (seg[0] === 'projects') {
     if (!seg[1]) {
       if (m === 'GET') {
+        // El cliente ve sus obras, y el número de cada tarjeta son los puntos
+        // que el taller le pidió definir y siguen sin respuesta.
+        if (esCli(user)) {
+          const { results } = await env.DB.prepare(
+            `SELECT p.id, p.name, p.client, p.status, pm.rol AS mi_rol,
+               (SELECT COUNT(*) FROM dudas d WHERE d.project_id = p.id AND d.para = 'cliente' AND d.estado = 'abierta') AS open_count
+             FROM projects p JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = ? AND pm.rol = 'cli' ORDER BY p.status, p.name`).bind(user.id).all();
+          return json({ projects: results });
+        }
         // Quien no dirige la obra ve nada más las obras donde está metido. Y el
         // número que trae cada tarjeta depende de qué sea ahí: al contratista
         // se le cuentan sus pendientes, no los de todos —si le aparece 40 y
@@ -578,6 +751,20 @@ async function api(req, env, url, path) {
       const project = await env.DB.prepare(`SELECT * FROM projects WHERE id = ?`).bind(pid).first();
       if (!project) return err('no encontrado', 404);
       const { results: plans } = await env.DB.prepare(`SELECT * FROM plans WHERE project_id = ? ORDER BY sort, created_at`).bind(pid).all();
+      // El cliente: todos los ítems del plano, pero sólo para ubicarse (código,
+      // nombre, tipo, posición), resaltados los que tienen puntos por definir
+      // (decisiones 3 y 4). Ni fase, ni pendientes, ni bitácora, ni quién anda
+      // en la obra. El recorte pasa aquí, no al pintar.
+      if (esCli(user)) {
+        const { results: crudos } = await env.DB.prepare(
+          `SELECT e.id, e.plan_id, e.project_id, e.code, e.name, e.type, e.x, e.y,
+             (SELECT COUNT(*) FROM dudas d WHERE d.element_id = e.id AND d.para = 'cliente' AND d.estado = 'abierta') AS definir
+           FROM elements e JOIN plans p ON p.id = e.plan_id WHERE p.project_id = ? ORDER BY e.code`).bind(pid).all();
+        const elements = crudos.map((e) => ({ ...soloUbicacion(e), definir: e.definir }));
+        const abiertas = await env.DB.prepare(`SELECT COUNT(*) AS n FROM dudas WHERE project_id = ? AND para = 'cliente' AND estado = 'abierta'`).bind(pid).first();
+        return json({ project: { id: project.id, name: project.name, client: project.client, status: project.status }, plans, elements, members: [],
+                      mi_rol: 'cli', mios: elements.filter((e) => e.definir > 0).map((e) => e.id), dudas_abiertas: abiertas ? abiertas.n : 0, etapas: [] });
+      }
       // Al contratista solo le salen en el plano los elementos donde tiene algo
       // asignado, y los números de cada pin cuentan lo suyo. Lo demás no es
       // asunto suyo y de paso no se pierde entre cien pines que no le tocan.
@@ -671,39 +858,51 @@ async function api(req, env, url, path) {
         .bind(id, pid, fd.get('name') || 'Plano', fd.get('file_name') || '', imageKey, sourceKey, +fd.get('width') || 0, +fd.get('height') || 0, sort.s).run();
       return json({ ok: true, id, image_key: imageKey });
     }
+    // Avisarle al cliente que tiene puntos por definir: un correo por cliente
+    // de la obra, cuando el taller aprieta el botón. Nada automático por punto.
+    if (seg[2] === 'avisar-cliente' && m === 'POST') {
+      if (!isStaff(user)) return err('Avisarle al cliente es de quien dirige la obra.', 403);
+      const b = await req.json().catch(() => ({}));
+      if (await yaHecha(env, b.op_id)) return json({ ok: true, repetida: true });
+      const obra = await env.DB.prepare(`SELECT id, name, client FROM projects WHERE id = ?`).bind(pid).first();
+      const cuantos = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM dudas WHERE project_id = ? AND para = 'cliente' AND estado = 'abierta'`).bind(pid).first())?.n || 0;
+      if (!cuantos) return err('No hay puntos abiertos para el cliente en esta obra.', 400);
+      const { results: clientes } = await env.DB.prepare(
+        `SELECT u.id, u.email, u.name FROM project_members pm JOIN users u ON u.id = pm.user_id WHERE pm.project_id = ? AND pm.rol = 'cli' AND u.active = 1`).bind(pid).all();
+      if (!clientes.length) return err('Esta obra no tiene cliente invitado. Invítalo desde la pantalla de inicio.', 400);
+      let enviados = 0; const avisos = [];
+      for (const c of clientes) {
+        const r = await avisaCliente(env, req, c, obra, cuantos);
+        if (r.ok) enviados++; else avisos.push(`${c.email}: ${r.error}`);
+      }
+      await apunta(env, b.op_id);
+      return json({ ok: true, puntos: cuantos, enviados, aviso: avisos.length ? avisos.join(' · ') : null });
+    }
+
     // ----- dudas -----
     // La cola del supervisor: preguntas de obra, la más vieja primero, y se van
     // cerrando. Quien pregunta ve nada más las suyas; quien dirige, todas.
+    //
+    // El cliente ve SÓLO las marcadas para él, todas las de su obra: las que
+    // el taller le pidió definir y las que él mismo abrió. Ni una interna (B.3).
     if (seg[2] === 'dudas' && m === 'GET') {
       const todas = isStaff(user);
+      const cli = esCli(user);
       const q = env.DB.prepare(
-        `SELECT d.*, u.name AS quien, u.company AS quien_empresa, e.code AS element_code, e.name AS element_name, e.plan_id,
+        `SELECT d.*, u.name AS quien, u.company AS quien_empresa, u.role AS quien_rol, e.code AS element_code, e.name AS element_name, e.plan_id,
                 r.name AS resuelta_por_nombre
            FROM dudas d JOIN users u ON u.id = d.user_id
            LEFT JOIN elements e ON e.id = d.element_id
            LEFT JOIN users r ON r.id = d.resuelta_por
-          WHERE d.project_id = ? ${todas ? '' : 'AND d.user_id = ?'}
+          WHERE d.project_id = ? ${cli ? "AND d.para = 'cliente'" : todas ? '' : 'AND d.user_id = ?'}
           ORDER BY CASE d.estado WHEN 'abierta' THEN 0 ELSE 1 END, d.created_at`);
-      const { results: dudas } = await (todas ? q.bind(pid) : q.bind(pid, user.id)).all();
-      // Las respuestas de todas, en una consulta: son pocas y se leen juntas.
-      const ids = dudas.map((d) => d.id);
-      let porDuda = {};
-      if (ids.length) {
-        const { results } = await env.DB.prepare(
-          `SELECT r.*, u.name AS quien, u.role AS quien_rol FROM duda_respuestas r JOIN users u ON u.id = r.user_id
-            WHERE r.duda_id IN (${ids.map(() => '?').join(',')}) ORDER BY r.created_at`).bind(...ids).all();
-        for (const r of results) (porDuda[r.duda_id] = porDuda[r.duda_id] || []).push(r);
-      }
-      dudas.forEach((d) => (d.respuestas = porDuda[d.id] || []));
-      const fd = await photosFor(env, 'duda', ids);
-      const fr = await photosFor(env, 'duda_resp', Object.values(porDuda).flat().map((r) => r.id));
-      dudas.forEach((d) => {
-        d.photos = fd[d.id] || [];
-        d.respuestas.forEach((r) => (r.photos = fr[r.id] || []));
-      });
+      const { results: dudas } = await (todas || cli ? q.bind(pid) : q.bind(pid, user.id)).all();
+      await armaDudas(env, dudas);
       return json({ dudas });
     }
     // Preguntar puede cualquiera que esté en la obra, incluido quien la dirige.
+    // A quién va: lo que abre el cliente es para el cliente; lo que abre quien
+    // dirige es para el cliente sólo si lo marca; lo demás, del taller.
     if (seg[2] === 'dudas' && m === 'POST') {
       const fd = await req.formData();
       const op = String(fd.get('op_id') || '');
@@ -715,12 +914,13 @@ async function api(req, env, url, path) {
       // se podría preguntar sobre lo que hay en la obra de al lado.
       let eid = fd.get('element_id') || null;
       if (eid && (await projectOfElement(env, eid)) !== pid) eid = null;
+      const para = esCli(user) ? 'cliente' : isStaff(user) && fd.get('para') === 'cliente' ? 'cliente' : 'taller';
       const id = uid();
-      await env.DB.prepare(`INSERT INTO dudas (id, project_id, element_id, user_id, texto) VALUES (?,?,?,?,?)`)
-        .bind(id, pid, eid, user.id, texto).run();
+      await env.DB.prepare(`INSERT INTO dudas (id, project_id, element_id, user_id, texto, para) VALUES (?,?,?,?,?,?)`)
+        .bind(id, pid, eid, user.id, texto, para).run();
       const photos = await savePhotos(env, user, 'duda', id, files);
       await apunta(env, op);
-      return json({ ok: true, id, photos });
+      return json({ ok: true, id, photos, para });
     }
 
     if (seg[2] === 'punch' && m === 'GET') {
@@ -811,6 +1011,17 @@ async function api(req, env, url, path) {
       const mio = soloLoSuyo(await rolEnObra(env, user, pid));
       const element = await env.DB.prepare(`SELECT e.*, pl.name AS plan_name FROM elements e JOIN plans pl ON pl.id = e.plan_id WHERE e.id = ?`).bind(eid).first();
       if (!element) return err('no encontrado', 404);
+      // El cliente: el ítem para ubicarse y sus puntos por definir, y nada más
+      // (decisión 4). Ni fase, ni pendientes, ni bitácora, ni responsable.
+      if (esCli(user)) {
+        const { results: dudas } = await env.DB.prepare(
+          `SELECT d.*, u.name AS quien, u.role AS quien_rol, r.name AS resuelta_por_nombre
+             FROM dudas d JOIN users u ON u.id = d.user_id LEFT JOIN users r ON r.id = d.resuelta_por
+            WHERE d.element_id = ? AND d.para = 'cliente'
+            ORDER BY CASE d.estado WHEN 'abierta' THEN 0 ELSE 1 END, d.created_at`).bind(eid).all();
+        await armaDudas(env, dudas);
+        return json({ element: { ...soloUbicacion(element), plan_name: element.plan_name }, recorte: true, cliente: true, dudas, log: [], punch: [], etapas: [], hechas: [] });
+      }
       // Un ítem que no es suyo: sólo para ubicarse (decisión 4). El recorte se
       // hace aquí, y nada más sale: ni un pendiente, ni un renglón, ni una foto.
       if (mio && !(await esSuyo(env, user, eid))) {
@@ -961,7 +1172,10 @@ async function api(req, env, url, path) {
     // Contesta quien dirige la obra, y también quien preguntó: media respuesta
     // casi siempre necesita una aclaración de vuelta.
     if (seg[2] === 'respuestas' && m === 'POST') {
-      if (!isStaff(user) && d.user_id !== user.id) return err('Esta duda no es tuya.', 403);
+      // El cliente contesta sólo lo que es para él: una duda interna no es suya
+      // ni aunque adivine el id.
+      if (esCli(user) && d.para !== 'cliente') return err('sin acceso', 403);
+      if (!isStaff(user) && !esCli(user) && d.user_id !== user.id) return err('Esta duda no es tuya.', 403);
       const fd = await req.formData();
       const op = String(fd.get('op_id') || '');
       if (await yaHecha(env, op)) return json({ ok: true, repetida: true });
@@ -971,8 +1185,19 @@ async function api(req, env, url, path) {
       const id = uid();
       await env.DB.prepare(`INSERT INTO duda_respuestas (id, duda_id, user_id, texto) VALUES (?,?,?,?)`).bind(id, seg[1], user.id, texto).run();
       const photos = await savePhotos(env, user, 'duda_resp', id, files);
+      // Un punto para el cliente se cierra solo con la respuesta del otro lado
+      // (decisiones 1 y 5 de Mike): si lo abrió el taller, lo cierra el
+      // cliente al contestar; si lo abrió el cliente, lo cierra el taller. El
+      // taller puede reabrirlo (decisión 2) con la ruta de estado de siempre.
+      let cerrada = false;
+      if (d.para === 'cliente' && d.estado === 'abierta') {
+        const abrio = await env.DB.prepare(`SELECT role FROM users WHERE id = ?`).bind(d.user_id).first();
+        const loAbrioElCliente = abrio?.role === 'cli';
+        cerrada = (esCli(user) && !loAbrioElCliente) || (isStaff(user) && loAbrioElCliente);
+        if (cerrada) await env.DB.prepare(`UPDATE dudas SET estado = 'resuelta', resuelta_en = ?, resuelta_por = ? WHERE id = ?`).bind(now(), user.id, seg[1]).run();
+      }
       await apunta(env, op);
-      return json({ ok: true, id, photos });
+      return json({ ok: true, id, photos, cerrada });
     }
     // Dar por resuelta es del supervisor: quien pregunta no decide que ya le
     // contestaron bien, igual que en el punchlist cierra quien lo levantó.

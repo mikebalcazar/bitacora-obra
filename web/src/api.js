@@ -159,7 +159,7 @@ export const ini = (n = '') => n.split(/\s+/).filter(Boolean).map((w) => w[0]).j
 export const ST = { pend: 'Pendiente', proc: 'En proceso', ok: 'Resuelto' };
 
 // Los tres roles de cuenta, con el nombre que se usa en obra.
-export const ROLES = { admin: 'Dueño', int: 'Supervisor', con: 'Contratista' };
+export const ROLES = { admin: 'Dueño', int: 'Supervisor', con: 'Contratista', cli: 'Cliente' };
 
 // Y lo que se es dentro de una obra. Quien la dirige lo es en todas; a los
 // demás se lo dice su membresía, obra por obra: la misma persona es contratista
@@ -212,6 +212,8 @@ export const avance = (e, etapas = []) => {
 
 export const esDueno = (u) => u?.role === 'admin';
 export const esContratista = (u) => u?.role === 'con';
+// El cliente del taller (0012): ve el plano de su obra y sus puntos por definir.
+export const esCliente = (u) => u?.role === 'cli';
 export const dirige = (u) => u?.role === 'admin' || u?.role === 'int';
 export const todayISO = (offsetDays = 0) => { const d = new Date(); d.setDate(d.getDate() + offsetDays); return d.toISOString().slice(0, 10); };
 
