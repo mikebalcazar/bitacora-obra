@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { api, leer, escribir, hayRed, fileUrl, FASES, TIPOS, colorTipo, aguado, fmtD, isLate, rasterizePlan, avance, veTodoEn } from './api.js';
+import { api, leer, escribir, hayRed, fileUrl, FASES, TIPOS, colorTipo, aguado, fmtD, isLate, rasterizePlan, avance, veTodoEn, esCliente } from './api.js';
 import Dudas from './Dudas.jsx';
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
@@ -12,7 +12,11 @@ const TYPES = TIPOS.map((t) => t.clave);
 
 export default function Project({ id }) {
   const { user, go, logout, toast } = useApp();
-  const staff = user.role !== 'con';
+  // El cliente (encargo B): ve el plano con sus ítems para ubicarse y los
+  // puntos por definir. Lo demás de esta pantalla no le sale, y el servidor
+  // tampoco se lo manda.
+  const cli = esCliente(user);
+  const staff = !cli && user.role !== 'con';
   const [data, setData] = useState(null);
   const [projects, setProjects] = useState([]);
   const [planId, setPlanId] = useState(null);
@@ -198,19 +202,30 @@ export default function Project({ id }) {
         </section>
         <section>
           <div className="eyebrow">Resumen del plano</div>
-          <div className="stats">
-            <div className="stat"><b>{elements.length}</b><span>ítems</span></div>
-            <div className="stat"><b>{enFase('produccion')}</b><span>en producción</span></div>
-            <div className="stat"><b>{elements.reduce((a, e) => a + e.n_pend + e.n_proc, 0)}</b><span>pendientes</span></div>
-            <div className="stat"><b>{data.elements.length}</b><span>en la obra</span></div>
-          </div>
+          {cli ? (
+            <div className="stats">
+              <div className="stat"><b>{elements.length}</b><span>ítems</span></div>
+              <div className="stat"><b>{data.dudas_abiertas || 0}</b><span>por definir</span></div>
+            </div>
+          ) : (
+            <div className="stats">
+              <div className="stat"><b>{elements.length}</b><span>ítems</span></div>
+              <div className="stat"><b>{enFase('produccion')}</b><span>en producción</span></div>
+              <div className="stat"><b>{elements.reduce((a, e) => a + e.n_pend + e.n_proc, 0)}</b><span>pendientes</span></div>
+              <div className="stat"><b>{data.elements.length}</b><span>en la obra</span></div>
+            </div>
+          )}
         </section>
         <section>
           <div className="eyebrow">Cómo leer un pin</div>
           <div className="legend">
             <span><i className="dot" style={{ background: colorTipo('Mueble') }} />El relleno es el tipo</span>
-            <span><i className="dot aro pend" />Aro rojo: punchlist sin cerrar</span>
-            <span><i className="dot hueco" style={{ background: aguado(colorTipo('Mueble')), borderColor: colorTipo('Mueble') }} />Aguado: en producción</span>
+            {cli
+              ? <span><i className="dot" style={{ background: 'var(--accent)' }} />Resaltado: tiene puntos por definir</span>
+              : <>
+                  <span><i className="dot aro pend" />Aro rojo: punchlist sin cerrar</span>
+                  <span><i className="dot hueco" style={{ background: aguado(colorTipo('Mueble')), borderColor: colorTipo('Mueble') }} />Aguado: en producción</span>
+                </>}
           </div>
         </section>
         <section>
@@ -219,11 +234,11 @@ export default function Project({ id }) {
               <i />{t} <small>{elements.filter((e) => (e.type || 'Otro') === t).length}</small>
             </button>
           ))}
-          <button className={'item' + (fase === 'produccion' ? ' on' : '')} onClick={() => setFase(fase === 'produccion' ? '' : 'produccion')}>En producción <small>{enFase('produccion')}</small></button>
-          <button className={'item' + (fase === 'punchlist' ? ' on' : '')} onClick={() => setFase(fase === 'punchlist' ? '' : 'punchlist')}>Punchlist <small>{enFase('punchlist')}</small></button>
-          <button className={'item' + (vista === 'lista' ? ' on' : '')} onClick={() => setVista(vista === 'lista' ? 'plan' : 'lista')}>Ver la obra en lista <small>{data.elements.length}</small></button>
-          <button className={'item' + (vista === 'dudas' ? ' on' : '')} onClick={() => setVista(vista === 'dudas' ? 'plan' : 'dudas')}>{staff ? 'Dudas por contestar' : 'Mis dudas'} <small>{data.dudas_abiertas || 0}</small></button>
-          <button className={'item' + (drawer ? ' on' : '')} onClick={() => setDrawer(!drawer)}>Ver lista de pendientes <small>{openTotal}</small></button>
+          {!cli && <button className={'item' + (fase === 'produccion' ? ' on' : '')} onClick={() => setFase(fase === 'produccion' ? '' : 'produccion')}>En producción <small>{enFase('produccion')}</small></button>}
+          {!cli && <button className={'item' + (fase === 'punchlist' ? ' on' : '')} onClick={() => setFase(fase === 'punchlist' ? '' : 'punchlist')}>Punchlist <small>{enFase('punchlist')}</small></button>}
+          {!cli && <button className={'item' + (vista === 'lista' ? ' on' : '')} onClick={() => setVista(vista === 'lista' ? 'plan' : 'lista')}>Ver la obra en lista <small>{data.elements.length}</small></button>}
+          <button className={'item' + (vista === 'dudas' ? ' on' : '')} onClick={() => setVista(vista === 'dudas' ? 'plan' : 'dudas')}>{cli ? 'Puntos por definir' : staff ? 'Dudas por contestar' : 'Mis dudas'} <small>{data.dudas_abiertas || 0}</small></button>
+          {!cli && <button className={'item' + (drawer ? ' on' : '')} onClick={() => setDrawer(!drawer)}>Ver lista de pendientes <small>{openTotal}</small></button>}
           {staff && <button className="item" onClick={() => go('/admin')}>Usuarios y accesos</button>}
         </section>
       </aside>
@@ -232,9 +247,9 @@ export default function Project({ id }) {
         <div className="tools">
           <div className="segm">
             <button className={vista === 'plan' ? 'on' : ''} onClick={() => setVista('plan')}>Plano</button>
-            <button className={vista === 'lista' ? 'on' : ''} onClick={() => { setVista('lista'); setDrawer(false); setMview('plan'); }}>Lista</button>
+            {!cli && <button className={vista === 'lista' ? 'on' : ''} onClick={() => { setVista('lista'); setDrawer(false); setMview('plan'); }}>Lista</button>}
             <button className={vista === 'dudas' ? 'on' : ''} onClick={() => { setVista('dudas'); setDrawer(false); setMview('plan'); }}>
-              Dudas{data.dudas_abiertas ? <b className="cuantas">{data.dudas_abiertas}</b> : null}
+              {cli ? 'Por definir' : 'Dudas'}{data.dudas_abiertas ? <b className="cuantas">{data.dudas_abiertas}</b> : null}
             </button>
           </div>
           {/* El nombre del plano era un rótulo muerto y el cambio de plano un
@@ -262,7 +277,7 @@ export default function Project({ id }) {
               </button>
             ))}
           </div>}
-          {vista !== 'dudas' && (
+          {vista !== 'dudas' && !cli && (
             <select className={'btn sm' + (fase ? ' on' : '')} style={{ width: 'auto' }} value={fase} onChange={(ev) => setFase(ev.target.value)} title="Ver una sola fase">
               <option value="">Las dos fases</option>
               {Object.entries(FASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -278,7 +293,7 @@ export default function Project({ id }) {
         {adding && <div className="hint">Toca el plano donde va el ítem · <button className="btn sm" onClick={() => setAdding(false)}>Cancelar</button></div>}
         {moviendo && <div className="hint">Toca el plano donde va ahora {moviendo.code || 'el ítem'} · <button className="btn sm" onClick={() => setMoviendo(null)}>Cancelar</button></div>}
         {vista === 'dudas' ? (
-          <Dudas pid={id} staff={staff} user={user}
+          <Dudas pid={id} staff={staff} user={user} cli={cli}
             onIr={(eid, plid) => { setVista('plan'); selectEl(eid, { planId: plid }); if (window.innerWidth <= 900) setMview('elem'); }} />
         ) : vista === 'lista' ? (
           <Lista items={listados} etapas={etapas} plans={data.plans} sel={sel}
@@ -309,8 +324,10 @@ export default function Project({ id }) {
 
       <nav className="mnav">
         <button className={mview === 'plan' && vista === 'plan' ? 'on' : ''} onClick={() => { setMview('plan'); setVista('plan'); setDrawer(false); }}><i dangerouslySetInnerHTML={{ __html: ICO.plan }} />Plano</button>
-        <button className={vista === 'lista' ? 'on' : ''} onClick={() => { setMview('plan'); setVista('lista'); setDrawer(false); }}><i dangerouslySetInnerHTML={{ __html: ICO.tabla }} />Lista</button>
-        <button className={drawer ? 'on' : ''} onClick={() => { setMview('plan'); setDrawer(!drawer); }}><i dangerouslySetInnerHTML={{ __html: ICO.list }} />Pendientes{openTotal ? <span className="badge">{openTotal}</span> : null}</button>
+        {!cli && <button className={vista === 'lista' ? 'on' : ''} onClick={() => { setMview('plan'); setVista('lista'); setDrawer(false); }}><i dangerouslySetInnerHTML={{ __html: ICO.tabla }} />Lista</button>}
+        {cli
+          ? <button className={vista === 'dudas' ? 'on' : ''} onClick={() => { setMview('plan'); setVista('dudas'); }}><i dangerouslySetInnerHTML={{ __html: ICO.list }} />Por definir{data.dudas_abiertas ? <span className="badge">{data.dudas_abiertas}</span> : null}</button>
+          : <button className={drawer ? 'on' : ''} onClick={() => { setMview('plan'); setDrawer(!drawer); }}><i dangerouslySetInnerHTML={{ __html: ICO.list }} />Pendientes{openTotal ? <span className="badge">{openTotal}</span> : null}</button>}
         <button className={mview === 'elem' ? 'on' : ''} disabled={!sel} onClick={() => sel && setMview('elem')} style={{ opacity: sel ? 1 : .4 }}><i dangerouslySetInnerHTML={{ __html: ICO.elem }} />Ítem</button>
         {staff && <button onClick={() => plan && setReport(true)}><i dangerouslySetInnerHTML={{ __html: ICO.doc }} />Reporte</button>}
       </nav>

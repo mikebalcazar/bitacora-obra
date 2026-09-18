@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api, leer, escribir, fileUrl, FASES, TIPOS, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
 import { Photos, usePending, PhotoInput, PendingStrip } from './Fotos.jsx';
+import { Duda } from './Dudas.jsx';
 
 // staff = puede escribir. veTodo = puede ver la obra completa. No son lo mismo:
 // el trabajador ve todo y no escribe nada, y el contratista ni ve todo ni
@@ -25,6 +26,8 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
   if (!elementId) return <aside className="panel"><div className="empty"><h3>Selecciona un ítem</h3>Toca un pin del plano{staff ? ' o crea uno con + Ítem' : veTodo ? '.' : '. Los tuyos van resaltados; de los demás sólo ves dónde están.'}</div></aside>;
   if (!d) return <aside className="panel"><div className="spin" /></aside>;
   const { element: e, log, punch, etapas = [], hechas = [], contratistas = [] } = d;
+  // El cliente: el ítem para ubicarse y sus puntos por definir (encargo B).
+  if (d.cliente) return <ItemCliente d={d} plan={plan} user={user} onClose={onClose} onChanged={() => { load(); onChanged(); }} />;
   // Un ítem que no es suyo: el servidor ya lo recortó a nombre, código y
   // posición. Aquí sólo se dice, sin inventar lo que no vino.
   if (d.recorte) {
@@ -114,6 +117,61 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
       {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
       {edit && <EditElement e={e} onClose={() => setEdit(false)} onChanged={() => { changed(); }} onDeleted={() => { onChanged(); onClose(); }}
         onReubicar={onReubicar ? () => { setEdit(false); onReubicar(e); } : null} />}
+    </aside>
+  );
+}
+
+// Lo que el cliente ve de un ítem: dónde está, cómo se llama, y los puntos que
+// el taller le pidió definir ahí. Contesta cada uno, y puede preguntar sobre
+// ese ítem. Ni fase, ni pendientes, ni bitácora: el servidor no los mandó.
+function ItemCliente({ d, plan, user, onClose, onChanged }) {
+  const { toast } = useApp();
+  const { element: e, dudas = [] } = d;
+  const pid = plan?.project_id || e.project_id;
+  const [lb, setLb] = useState(null);
+  const [texto, setTexto] = useState('');
+  const [busy, setBusy] = useState(false);
+  const { pending, add, clear, remove } = usePending();
+  const abiertas = dudas.filter((x) => x.estado === 'abierta');
+  const cerradas = dudas.filter((x) => x.estado !== 'abierta');
+
+  async function preguntar() {
+    const t = texto.trim();
+    if (!t && !pending.length) return;
+    setBusy(true);
+    try {
+      const r = await escribir({ ruta: `/projects/${pid}/dudas`, campos: { texto: t, element_id: e.id }, archivos: pending.map((p) => p.file) });
+      setTexto(''); clear();
+      if (!r.subido) toast('Sin señal: tu pregunta se manda sola cuando vuelva.');
+      onChanged();
+    } catch (x) { toast(x.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <aside className="panel">
+      <div className="head">
+        <div className="row" style={{ gap: 6 }}>
+          <button className="btn sm" onClick={onClose} title="Cerrar">←</button>
+          <div className="eyebrow">{e.type} · <span style={{ color: 'var(--accent)' }}>{e.code}</span></div>
+        </div>
+        <h2>{e.name}</h2>
+        <div className="meta"><span>{e.plan_name}</span><span>{abiertas.length ? `${abiertas.length} por definir` : 'Nada por definir'}</span></div>
+      </div>
+      <div className="puntos">
+        {!dudas.length && <div className="empty"><h3>Nada por definir aquí</h3>Si tienes una duda sobre este ítem, pregúntala abajo.</div>}
+        {abiertas.map((x) => <Duda key={x.id} d={x} cli user={user} onCambio={onChanged} setLb={setLb} />)}
+        {cerradas.map((x) => <Duda key={x.id} d={x} cli user={user} onCambio={onChanged} setLb={setLb} />)}
+        <div className="preguntar">
+          <textarea rows={2} value={texto} onChange={(ev) => setTexto(ev.target.value)} placeholder={`¿Qué quieres preguntar sobre ${e.code || e.name}?`} />
+          <PendingStrip pending={pending} remove={remove} />
+          <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            <PhotoInput onFiles={add} />
+            <div className="spacer" />
+            <button className="btn primary sm" disabled={busy || (!texto.trim() && !pending.length)} onClick={preguntar}>{busy ? 'Mandando…' : 'Preguntar'}</button>
+          </div>
+        </div>
+      </div>
+      {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
     </aside>
   );
 }

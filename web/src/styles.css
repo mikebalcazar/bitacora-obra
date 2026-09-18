@@ -449,3 +449,15 @@ a{color:var(--accent)}
 .chip .x{border:0;background:transparent;color:var(--ink2);font-size:14px;line-height:1;padding:0 0 0 2px;cursor:pointer}
 .chip .x:hover{color:var(--pend)}
 select.sm{font-size:12px;padding:3px 6px;border-radius:12px;border:1px solid var(--line);background:var(--surface)}
+
+/* ── la cara de cliente (encargo B, 18-sep-2026) ───────────────────────── */
+.avatar.cli{background:var(--accent);color:var(--accent-ink)}
+.pill.cli{background:var(--accent-soft);color:var(--accent)}
+.para-cliente{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);cursor:pointer}
+.para-cliente input{width:auto;margin:0}
+.puntos{display:flex;flex-direction:column;gap:10px;padding:12px 14px calc(14px + var(--sab));overflow:auto}
+.obras-check{display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.obras-check label{display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer}
+.obras-check input{width:auto;margin:0}
+.lista-clientes{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.lista-clientes div{display:flex;gap:8px;flex-wrap:wrap}
