@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, empaquetada, BASE } from './api.js';
-import { pedirCodigo, entrarASuite, yo, ponerPin, canjearSiVengoDeGoogle, irAGoogle } from './suite.js';
+import { pedirCodigo, entrarASuite, yo, ponerClave, canjearSiVengoDeGoogle, irAGoogle } from './suite.js';
 import Marca from './Marca.jsx';
 
 // La entrada de quell101 es la de la suite 101: el mismo correo y la misma
@@ -8,6 +8,23 @@ import Marca from './Marca.jsx';
 // propia; la suite dice quién es la persona y la base de quell101 dice qué
 // hace en obra. Quien entra a la suite pero no está dado de alta aquí no pasa:
 // dar de alta es decidir un rol, y eso lo hace una persona.
+
+// DESDE EL 16-SEP-2026 SE ENTRA CON GOOGLE O CON CORREO Y CONTRASEÑA, por
+// encargo de Mike: la misma entrada en todas las apps de la suite menos
+// roster101. El código de 6 dígitos al correo sigue existiendo, pero cambió de
+// papel: ya no es una forma de entrar, es cómo se recupera una contraseña
+// olvidada o se pone la primera. Y el PIN se fue de aquí.
+//
+// El PIN NO se fue de la suite, y eso no es olvido: el APK de Android que la
+// gente de obra ya tiene instalado lleva su propia pantalla adentro, con PIN, y
+// la API lo sigue aceptando para no dejarlos afuera el mismo día. Quien use ese
+// APK pone su PIN desde «Mi PIN» en la pantalla principal. Las dos cosas se van
+// cuando ese APK se rearme.
+//
+// Quien entra con un código y todavía no tiene contraseña no puede seguir sin
+// ponerla: el código es de un solo uso y de diez minutos, así que dejarlo pasar
+// sin contraseña es dejarlo sin manera de volver mañana. Con Google no se le
+// pide: Google ya es una forma de entrar.
 
 // El campo de dígitos vive AFUERA de la pantalla, a propósito. Definido adentro,
 // React lo trata como un componente nuevo en cada tecleo: lo destruye, lo vuelve
@@ -34,10 +51,11 @@ const pesa = (b) => (b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(0)} MB` : `$
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState(() => { try { return localStorage.getItem('bo_email') || ''; } catch { return ''; } });
   const [digitos, setDigitos] = useState('');
-  const [modo, setModo] = useState('codigo');     // codigo | pin
-  const [pin1, setPin1] = useState('');
-  const [pin2, setPin2] = useState('');
-  const [paso, setPaso] = useState('correo');     // correo | clave | elige | confirma | sinalta
+  const [clave, setClave] = useState('');
+  const [nueva1, setNueva1] = useState('');
+  const [nueva2, setNueva2] = useState('');
+  // correo → clave → (olvidé) codigo → nueva → dentro. sinalta es la salida.
+  const [paso, setPaso] = useState('correo');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [aviso, setAviso] = useState('');
@@ -69,77 +87,91 @@ export default function Login({ onLogin }) {
       if (x.status === 401 || x.status === 403) { setPaso('sinalta'); return; }
       throw x;
     }
-    if (!quien.tiene_pin) {
+    // Entró con un código y no tiene contraseña: no tiene por dónde volver.
+    // Con Google sí la tiene —Google—, así que no se le pide nada.
+    if (!quien.tiene_clave && quien.entro_con === 'codigo') {
       window.__boUser = user;
-      setAviso('Elige un PIN de seis dígitos.');
-      setPin1(''); setPin2(''); setErr('');
-      setPaso('elige');
+      setNueva1(''); setNueva2(''); setErr('');
+      setAviso('Ponle una contraseña a tu cuenta. Con ella entras aquí y en las demás apps de la suite.');
+      setPaso('nueva');
       return;
     }
     onLogin(user);
   }
 
-  async function seguir(e) {
-    e.preventDefault(); setBusy(true); setErr('');
-    try {
-      await pedirCodigo(email);
-      recuerda();
-      setAviso(`Te mandamos un código a ${email}. Vence en 10 minutos.`);
-      setModo('codigo'); setDigitos(''); setPaso('clave');
-    } catch (x) { setErr(x.message); } finally { setBusy(false); }
+  /* El correo ya no dispara un código: lleva a la contraseña. Y no se le
+   * pregunta a la API si esa persona tiene contraseña antes de pedirla — eso
+   * convertiría la pantalla en un directorio de quién tiene cuenta aquí. */
+  function seguir(e) {
+    e.preventDefault(); setErr('');
+    recuerda();
+    setClave(''); setAviso(''); setPaso('clave');
   }
 
   async function entrar(e) {
     e.preventDefault(); setBusy(true); setErr('');
     try {
-      await entrarASuite(modo === 'codigo' ? { correo: email, codigo: digitos } : { correo: email, pin: digitos });
+      await entrarASuite({ correo: email, clave });
+      recuerda();
+      await terminar();
+    } catch (x) { setErr(x.message); setClave(''); } finally { setBusy(false); }
+  }
+
+  async function entrarConCodigo(e) {
+    e.preventDefault(); setBusy(true); setErr('');
+    try {
+      await entrarASuite({ correo: email, codigo: digitos });
       recuerda();
       await terminar();
     } catch (x) { setErr(x.message); setDigitos(''); } finally { setBusy(false); }
   }
 
-  async function cambiarModo() {
-    setErr('');
-    if (modo === 'codigo') { setModo('pin'); setDigitos(''); setAviso(''); return; }
-    setBusy(true);
+  /** «Olvidé mi contraseña», y también «no tengo todavía»: son lo mismo. */
+  async function mandarCodigo() {
+    setBusy(true); setErr('');
     try {
       await pedirCodigo(email);
-      setModo('codigo'); setDigitos('');
+      recuerda();
       setAviso(`Te mandamos un código a ${email}. Vence en 10 minutos.`);
+      setDigitos(''); setPaso('codigo');
     } catch (x) { setErr(x.message); } finally { setBusy(false); }
   }
 
-  // Se teclea, se pasa de pantalla y se vuelve a teclear de memoria. Confirmar
-  // teniendo el primero a la vista no confirma nada: se copia lo que se ve, y el
-  // dedo que se equivocó las dos veces igual se equivoca.
+  /* Se teclea, se pasa de pantalla y se vuelve a teclear de memoria. Confirmar
+   * teniendo la primera a la vista no confirma nada: se copia lo que se ve, y
+   * el dedo que se equivocó las dos veces igual se equivoca. Es la misma regla
+   * que traía el PIN, y sigue valiendo. */
   function siguiente(e) {
-    e.preventDefault();
-    setErr('');
-    if (pin1.length !== 6) return;
-    setPin2('');
-    setPaso('confirma');
+    e.preventDefault(); setErr('');
+    if (nueva1.length < 10) return;
+    setNueva2(''); setPaso('confirma');
   }
 
-  async function guardarPin(e) {
+  async function guardarClave(e) {
     e.preventDefault(); setErr('');
-    if (pin1 !== pin2) {
-      // No se dice cuál falló ni se deja el primero puesto: si no coincidieron,
-      // uno de los dos está mal y no hay forma de saber cuál.
-      setPin1(''); setPin2(''); setPaso('elige');
+    if (nueva1 !== nueva2) {
+      // No se dice cuál falló ni se deja la primera puesta: si no coincidieron,
+      // una de las dos está mal y no hay forma de saber cuál.
+      setNueva1(''); setNueva2(''); setPaso('nueva');
       setErr('No coincidieron. Vamos otra vez, desde el principio.');
       return;
     }
     setBusy(true);
     try {
-      await ponerPin(pin1);
+      await ponerClave(nueva1);
       onLogin(window.__boUser || {});
     } catch (x) {
-      setErr(x.message); setPin1(''); setPin2(''); setPaso('elige');
+      // La suite dice con palabras por qué una contraseña no pasa (corta, con
+      // tu propio correo dentro, de las obvias). Eso se enseña tal cual: es
+      // más útil que «contraseña inválida».
+      setErr(x.message); setNueva1(''); setNueva2(''); setPaso('nueva');
     } finally { setBusy(false); }
   }
 
-  const alEnviar = { correo: seguir, clave: entrar, elige: siguiente, confirma: guardarPin, sinalta: (e) => e.preventDefault() }[paso];
-  const esCodigo = modo === 'codigo';
+  const alEnviar = {
+    correo: seguir, clave: entrar, codigo: entrarConCodigo,
+    nueva: siguiente, confirma: guardarClave, sinalta: (e) => e.preventDefault(),
+  }[paso];
 
   return (
     <div className="center">
@@ -153,57 +185,84 @@ export default function Login({ onLogin }) {
               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.com" inputMode="email" autoComplete="username" autoCapitalize="off" autoCorrect="off" spellCheck="false" />
             </div>
             {err && <div className="err">{err}</div>}
-            <button className="btn primary block" disabled={busy || !email}>{busy ? 'Un momento…' : 'Continuar'}</button>
-            <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>
-              Te mandamos un código de 6 dígitos. Si ya tienes PIN, en la siguiente pantalla puedes entrar con él.
-            </p>
+            <button className="btn primary block" disabled={!email}>Continuar</button>
             <button type="button" className="btn block" onClick={irAGoogle}>Entrar con Google</button>
           </>
         )}
 
         {paso === 'clave' && (
           <>
-            <h1>{esCodigo ? 'Código' : 'Tu PIN'}</h1>
-            {aviso && esCodigo && <p className="muted" style={{ margin: 0 }}>{aviso}</p>}
-            {!esCodigo && <p className="muted" style={{ margin: 0 }}>El PIN de seis dígitos que pusiste en la suite.</p>}
-            <Digitos
-              key={modo}
-              autoFocus
-              oculto={!esCodigo}
-              valor={digitos}
-              onValor={setDigitos}
-              autoComplete={esCodigo ? 'one-time-code' : 'current-password'}
-            />
+            <h1>Tu contraseña</h1>
+            <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>La de tu cuenta de la suite: la misma de las demás aplicaciones.</p>
+            <div className="field"><label>Contraseña</label>
+              {/* `name` y `autoComplete` van puestos para que el administrador
+                  de contraseñas del teléfono la guarde y la vuelva a poner. En
+                  obra se teclea con una mano y con guantes. */}
+              <input
+                type="password" name="password" required autoFocus
+                value={clave} onChange={(e) => setClave(e.target.value)}
+                autoComplete="current-password" autoCapitalize="off" autoCorrect="off" spellCheck="false"
+              />
+            </div>
             {err && <div className="err">{err}</div>}
-            <button className="btn primary block" disabled={busy || digitos.length !== 6}>{busy ? 'Entrando…' : 'Entrar'}</button>
-            <button type="button" className="btn block" disabled={busy} onClick={cambiarModo}>
-              {esCodigo ? 'Entrar con mi PIN' : 'Mándame un código al correo'}
+            <button className="btn primary block" disabled={busy || !clave}>{busy ? 'Entrando…' : 'Entrar'}</button>
+            <button type="button" className="btn block" disabled={busy} onClick={mandarCodigo}>
+              Olvidé mi contraseña
             </button>
+            <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>
+              Si es tu primera vez y todavía no tienes una, pícale ahí mismo: te
+              mandamos un código al correo y la pones.
+            </p>
+            <button type="button" className="btn block" onClick={() => { setPaso('correo'); setClave(''); setErr(''); setAviso(''); }}>Usar otro correo</button>
+          </>
+        )}
+
+        {paso === 'codigo' && (
+          <>
+            <h1>Código</h1>
+            {aviso && <p className="muted" style={{ margin: 0 }}>{aviso}</p>}
+            <Digitos key="codigo" autoFocus oculto={false} valor={digitos} onValor={setDigitos} autoComplete="one-time-code" />
+            {err && <div className="err">{err}</div>}
+            <button className="btn primary block" disabled={busy || digitos.length !== 6}>{busy ? 'Entrando…' : 'Continuar'}</button>
+            <button type="button" className="btn block" disabled={busy} onClick={mandarCodigo}>Mándame otro</button>
             <button type="button" className="btn block" onClick={() => { setPaso('correo'); setDigitos(''); setErr(''); setAviso(''); }}>Usar otro correo</button>
           </>
         )}
 
-        {paso === 'elige' && (
+        {paso === 'nueva' && (
           <>
-            <h1>Tu PIN</h1>
-            <p className="muted" style={{ margin: 0 }}>{aviso} Con él vas a entrar de ahora en adelante, aquí y en las demás apps de la suite.</p>
-            <Digitos key="elige" autoFocus valor={pin1} onValor={setPin1} autoComplete="new-password" />
+            <h1>Tu contraseña</h1>
+            <p className="muted" style={{ margin: 0 }}>{aviso}</p>
+            <div className="field"><label>Contraseña nueva</label>
+              <input
+                type="password" name="new-password" required autoFocus
+                value={nueva1} onChange={(e) => setNueva1(e.target.value)}
+                autoComplete="new-password" autoCapitalize="off" autoCorrect="off" spellCheck="false"
+              />
+            </div>
             <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>
-              Nada de 123456 ni seis veces el mismo número: son los primeros que alguien probaría.
+              Al menos diez caracteres. Que no lleve tu correo adentro ni sea de
+              las que cualquiera prueba primero.
             </p>
             {err && <div className="err">{err}</div>}
-            <button className="btn primary block" disabled={pin1.length !== 6}>Continuar</button>
+            <button className="btn primary block" disabled={nueva1.length < 10}>Continuar</button>
           </>
         )}
 
         {paso === 'confirma' && (
           <>
             <h1>Otra vez</h1>
-            <p className="muted" style={{ margin: 0 }}>Tecléalo de nuevo, de memoria. Así sabemos que te lo vas a acordar mañana.</p>
-            <Digitos key="confirma" autoFocus valor={pin2} onValor={setPin2} autoComplete="new-password" />
+            <p className="muted" style={{ margin: 0 }}>Tecléala de nuevo, de memoria. Así sabemos que te la vas a acordar mañana.</p>
+            <div className="field"><label>Otra vez</label>
+              <input
+                type="password" name="new-password" required autoFocus
+                value={nueva2} onChange={(e) => setNueva2(e.target.value)}
+                autoComplete="new-password" autoCapitalize="off" autoCorrect="off" spellCheck="false"
+              />
+            </div>
             {err && <div className="err">{err}</div>}
-            <button className="btn primary block" disabled={busy || pin2.length !== 6}>{busy ? 'Guardando…' : 'Guardar PIN y entrar'}</button>
-            <button type="button" className="btn block" onClick={() => { setPin1(''); setPin2(''); setErr(''); setPaso('elige'); }}>Empezar de nuevo</button>
+            <button className="btn primary block" disabled={busy || nueva2.length < 10}>{busy ? 'Guardando…' : 'Guardar y entrar'}</button>
+            <button type="button" className="btn block" onClick={() => { setNueva1(''); setNueva2(''); setErr(''); setPaso('nueva'); }}>Empezar de nuevo</button>
           </>
         )}
 
@@ -214,7 +273,7 @@ export default function Login({ onLogin }) {
               Tu cuenta entró a la suite, pero nadie te ha dado de alta en la bitácora de obra.
               Pídele a quien administra tu empresa que te agregue y vuelve a entrar.
             </p>
-            <button type="button" className="btn block" onClick={() => { setPaso('correo'); setDigitos(''); setErr(''); }}>Usar otro correo</button>
+            <button type="button" className="btn block" onClick={() => { setPaso('correo'); setDigitos(''); setClave(''); setErr(''); }}>Usar otro correo</button>
           </>
         )}
       </form>

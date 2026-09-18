@@ -10,7 +10,7 @@
     "migrate:local": "wrangler d1 migrations apply bitacora-obra --local",
     "migrate:remote": "wrangler d1 migrations apply bitacora-obra --remote",
     "deploy": "wrangler deploy",
-    "prueba": "node pruebas/puerta.mjs && node pruebas/codigo-unico.mjs",
+    "prueba": "node pruebas/puerta.mjs && node pruebas/codigo-unico.mjs && npm run build && node pruebas/entrada.mjs",
     "medir": "node scripts/medir.mjs"
   },
   "devDependencies": {

@@ -69,6 +69,13 @@ export async function entrarASuite(body) {
 
 export const yo = () => suite('/yo');
 export const ponerPin = (pin) => suite('/auth/pin', { method: 'POST', body: { pin } });
+
+/* La contraseña de la cuenta de la suite. Una sola ruta pone y cambia: si ya
+ * hay una, la suite pide la actual… salvo que la sesión se haya abierto con un
+ * código al correo o con Google, que es lo que hace que «olvidé mi contraseña»
+ * no necesite ruta aparte. Se entra con un código y se pone otra. */
+export const ponerClave = (clave, actual) =>
+  suite('/auth/clave', { method: 'POST', body: actual ? { clave, actual } : { clave } });
 export const salirDeSuite = () => suite('/auth/salir', { method: 'POST' }).catch(() => {});
 
 /** La ida a Google. La API devuelve a `volver_a` con un boleto de un solo uso,

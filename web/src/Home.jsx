@@ -27,7 +27,12 @@ export default function Home() {
         <Marca alto={19} />
         <div className="spacer" />
         {staff && <button className="btn sm" onClick={() => go('/admin')}>Usuarios y accesos</button>}
-        <button className="btn sm" onClick={() => setPin(true)}>Mi PIN</button>
+        {/* Desde el 16-sep-2026 el navegador entra con contraseña, no con PIN
+            (encargo de Mike: Google o correo y contraseña en todas las apps).
+            Este botón se queda porque el APK de Android que la gente de obra
+            ya tiene instalado lleva su propia pantalla adentro, con PIN, y sin
+            esto no habría dónde ponerlo. Se va cuando ese APK se rearme. */}
+        <button className="btn sm" onClick={() => setPin(true)}>PIN de la app de Android</button>
         <button className="btn sm" onClick={logout} title={user.email}>Salir</button>
       </div>
       <div className="row"><h1 style={{ fontSize: 20 }}>Proyectos</h1><div className="spacer" />{staff && <button className="btn primary sm" onClick={() => setCreating(true)}>+ Proyecto</button>}</div>
@@ -88,7 +93,7 @@ function CambiarPin({ onClose }) {
         <h2>{eligiendo ? 'Tu PIN nuevo' : 'Otra vez'}</h2>
         <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>
           {eligiendo
-            ? 'Seis dígitos. Nada de 123456 ni seis veces el mismo número. Es el PIN de tu cuenta de la suite: el mismo con el que entras a todas las aplicaciones.'
+            ? 'Seis dígitos. Nada de 123456 ni seis veces el mismo número. Sirve para entrar desde la aplicación de Android que ya tienes instalada; en el navegador se entra con tu contraseña.'
             : 'Tecléalo de nuevo, de memoria. Así sabemos que te lo vas a acordar mañana.'}
         </p>
         <input
