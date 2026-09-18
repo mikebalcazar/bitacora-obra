@@ -29,6 +29,8 @@ const ERRORES = {
   google_no_configurado: 'Entrar con Google todavía no está prendido. Entra con tu correo.',
   origen_no_permitido: 'Esta dirección no está dada de alta para entrar con Google. Entra con tu correo.',
   entrada_invalida: 'El boleto de Google ya no sirve. Vuelve a intentar.',
+  org_inactiva: 'La empresa está suspendida. Avísale a quien la administra.',
+  org_sin_pago: 'La suscripción de la empresa venció. Avísale a quien la administra.',
 };
 
 export class ErrorSuite extends Error {
