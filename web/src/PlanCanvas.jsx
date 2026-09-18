@@ -14,7 +14,7 @@ import { pdfjs, esPdf } from './pdf.js';
 // Encima, si el plano llegó en PDF, se dibuja la página del PDF a la escala en
 // que se está viendo: al ser dibujo y no fotografía, las líneas finas y la letra
 // chica salen limpias a cualquier acercamiento.
-export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick, onClick }) {
+export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = null, onPick, onClick }) {
   const box = useRef(null);
   const [v, setV] = useState({ x: 0, y: 0, s: 1 });
   const [drag, setDrag] = useState(false);
@@ -284,7 +284,8 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, onPick,
           const tinte = colorTipo(e.type);
           const enProd = (e.fase || 'produccion') === 'produccion';
           return (
-            <div key={e.id} className={'pin' + (abierto ? ' abierto' : '') + (enProd ? ' prod' : '') + (e.id === sel ? ' sel' : '') + (flash && e.id === sel ? ' flash' : '')}
+            <div key={e.id} className={'pin' + (abierto ? ' abierto' : '') + (enProd ? ' prod' : '') + (e.id === sel ? ' sel' : '') + (flash && e.id === sel ? ' flash' : '')
+                + (mios ? (mios.includes(e.id) ? ' mio' : ' ajeno') : '')}
               style={{
                 left: e.x * plan.width, top: e.y * plan.height, transform: `translate(-50%,-50%) scale(${1 / v.s})`,
                 background: enProd ? aguado(tinte) : tinte,
