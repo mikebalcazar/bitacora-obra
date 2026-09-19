@@ -87,9 +87,12 @@ export default function Login({ onLogin }) {
       if (x.status === 401 || x.status === 403) { setPaso('sinalta'); return; }
       throw x;
     }
-    // Entró con un código y no tiene contraseña: no tiene por dónde volver.
-    // Con Google sí la tiene —Google—, así que no se le pide nada.
-    if (!quien.tiene_clave && quien.entro_con === 'codigo') {
+    // Entró con un código y no tiene contraseña ni Google ligado: no tiene por
+    // dónde volver mañana. Con Google sí la tiene —Google—, así que no se le
+    // pide nada, ni al entrar con él ni después con un código. `tiene_google`
+    // llegó con el contrato 0.17.2; una API vieja no lo manda y esto se
+    // comporta como antes.
+    if (!quien.tiene_clave && !quien.tiene_google && quien.entro_con === 'codigo') {
       window.__boUser = user;
       setNueva1(''); setNueva2(''); setErr('');
       setAviso('Ponle una contraseña a tu cuenta. Con ella entras aquí y en las demás apps de la suite.');
