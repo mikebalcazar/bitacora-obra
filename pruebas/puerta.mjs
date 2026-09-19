@@ -1,16 +1,15 @@
 /* La puerta de quell101, probada en una mesa de trabajo.
  *
- * El Worker es un módulo con `export default { fetch }`, así que se puede
- * llamar aquí mismo con un `env` de mentiras: una API que contesta lo que se le
- * diga y una base con tres renglones. Lo que se prueba es lo único que cambió
- * con la mudanza —quién pasa la puerta y quién no—, y se prueba sobre todo lo
- * que NO debe pasar: eso es lo que un despliegue no enseña hasta que ya es
- * tarde.
+ * Desde el 19-sep este Worker no tiene base ni motor: es el cascarón que
+ * sirve la pantalla y reenvía todo a la suite. Lo que se prueba aquí es lo
+ * único que decide él: a QUÉ empresa le toca cada petición, qué le manda a la
+ * suite y qué contesta sin preguntarle a nadie. Y sobre todo lo que NO debe
+ * pasar: una petición sin sesión no viaja a ningún lado.
  *
  *   node pruebas/puerta.mjs
  */
 
-import worker from '../worker/index.js';
+import worker, { empresaDe } from '../worker/index.js';
 
 let fallas = 0, revisadas = 0;
 const rev = (ok, texto, extra = '') => {
@@ -22,218 +21,121 @@ const rev = (ok, texto, extra = '') => {
 
 // Quién es cada galleta para la suite. `null` = la suite dice que no.
 const SUITE = {
-  'duena': { usuario: { id: 'u1', correo: 'mike@forespot.com' }, superadmin: true, orgs: [], tiene_pin: true },
-  // Como la guarda la suite de verdad: llaves cortas, no nombres de app. Fue
-  // el error que se coló a producción el 16-sep y que la lista vacía de Mike y
-  // de Fer tapó, porque vacía quiere decir todas.
-  'supervisora': { usuario: { id: 'u2', correo: 'fer@forespot.com' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'staff', apps: ['quell', 'peek'] }], tiene_pin: true },
-  'todas-las-apps': { usuario: { id: 'u3', correo: 'goyomonroy23807@gmail.com' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'staff', apps: [] }], tiene_pin: false },
-  'nombre_largo': { usuario: { id: 'u7', correo: 'fer@forespot.com' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'staff', apps: ['quell101'] }], tiene_pin: true },
-  'sin-quell': { usuario: { id: 'u4', correo: 'solo-dash@ejemplo.mx' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'socio', apps: ['dash'] }], tiene_pin: true },
-  'sin-alta-aqui': { usuario: { id: 'u5', correo: 'nadie@ejemplo.mx' }, superadmin: false, orgs: [{ id: 'forespot', nombre: 'Forespot', rol: 'staff', apps: ['quell101'] }], tiene_pin: true },
+  'duena': { usuario: { id: 'u1', correo: 'mike@forespot.com' }, superadmin: true, orgs: [{ id: 'otra', apps: [] }, { id: 'forespot', apps: [] }] },
+  'supervisora': { usuario: { id: 'u2', correo: 'fer@forespot.com' }, superadmin: false, orgs: [{ id: 'forespot', rol: 'staff', apps: ['quell', 'peek'] }] },
+  'todas-las-apps': { usuario: { id: 'u3', correo: 'goyo@ejemplo.mx' }, superadmin: false, orgs: [{ id: 'forespot', rol: 'staff', apps: [] }] },
+  'de-otra-empresa': { usuario: { id: 'u6', correo: 'ajena@ejemplo.mx' }, superadmin: false, orgs: [{ id: 'muebles-lopez', rol: 'staff', apps: ['quell101'] }] },
+  'dos-empresas': { usuario: { id: 'u8', correo: 'dos@ejemplo.mx' }, superadmin: false, orgs: [{ id: 'muebles-lopez', rol: 'staff', apps: ['quell'] }, { id: 'forespot', rol: 'staff', apps: ['quell'] }] },
+  'sin-quell': { usuario: { id: 'u4', correo: 'solo-dash@ejemplo.mx' }, superadmin: false, orgs: [{ id: 'forespot', rol: 'socio', apps: ['dash'] }] },
+  'cliente': { usuario: { id: 'u9', correo: 'cliente@ejemplo.mx' }, superadmin: false, orgs: [], acceso: { tipo: 'cliente', org_id: 'forespot', ref_id: 'c1' } },
 };
 
-// Los tres renglones de `users` que hay hoy en producción.
-const USERS = [
-  { id: '196440e4', email: 'mike@forespot.com', name: 'mike', role: 'admin', company: '', active: 1, pin_hash: 'x' },
-  { id: 'c8a6aafe', email: 'fer@forespot.com', name: 'Fer Balcázar', role: 'int', company: 'Taller101', active: 1, pin_hash: 'x' },
-  { id: '0d45d7f0', email: 'goyomonroy23807@gmail.com', name: 'Goyo Monroy', role: 'con', company: 'taller101', active: 1, pin_hash: null },
-];
-
-// La sesión vieja que llevan adentro el APK y la app de Windows ya instaladas.
-const SESION_VIEJA = { token: 'token-viejo-del-apk', user: USERS[1] };
-
-let pedidasALaSuite = [];
-let escrito = [];
-let codigoOcupado = null;   // el código que la base va a rechazar por repetido
-
+let pedidas = [];
 function mundo() {
-  pedidasALaSuite = [];
-  escrito = [];
+  pedidas = [];
   return {
     APP_NAME: 'quell101',
+    ORG_ID: 'forespot',
     API: {
       async fetch(req) {
         const u = new URL(req.url);
-        pedidasALaSuite.push({ ruta: u.pathname, app: req.headers.get('X-App'), metodo: req.method });
-        if (u.pathname !== '/yo') return new Response(JSON.stringify({ ok: true, data: { eco: u.pathname } }), { status: 200 });
-        const galleta = /(?:^|;\s*)s101=([^;]+)/.exec(req.headers.get('cookie') || '')?.[1];
-        const llevado = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '') || null;
-        const quien = SUITE[galleta ?? ''] ?? SUITE[llevado ?? ''] ?? null;
-        if (!quien) return new Response(JSON.stringify({ ok: false, error: 'sin_sesion' }), { status: 401 });
-        return new Response(JSON.stringify({ ok: true, data: quien }), { status: 200 });
+        pedidas.push({ ruta: u.pathname + u.search, app: req.headers.get('X-App'), metodo: req.method, sitio: req.headers.get('X-Sitio'), auth: req.headers.get('authorization') });
+        if (u.pathname === '/yo') {
+          const galleta = /(?:^|;\s*)s101=([^;]+)/.exec(req.headers.get('cookie') || '')?.[1];
+          const bearer = /^Bearer (.+)$/.exec(req.headers.get('authorization') || '')?.[1];
+          const quien = SUITE[galleta ?? bearer ?? ''] ?? null;
+          return quien
+            ? new Response(JSON.stringify({ ok: true, data: quien }), { status: 200 })
+            : new Response(JSON.stringify({ ok: false, error: 'sin_sesion' }), { status: 401 });
+        }
+        // El motor, del otro lado: contesta con la ruta que le llegó.
+        return new Response(JSON.stringify({ eco: u.pathname, metodo: req.method, cuerpo: req.method === 'POST' ? await req.text() : null }), { status: 200, headers: { 'content-type': 'application/json' } });
       },
     },
-    DB: {
-      prepare(sql) {
-        return {
-          bind(...args) {
-            return {
-              async first() {
-                if (/FROM users WHERE email/.test(sql)) {
-                  return USERS.find((u) => u.email === args[0] && u.active) ?? null;
-                }
-                if (/FROM sessions s JOIN users u/.test(sql)) {
-                  return args[0] === SESION_VIEJA.token ? SESION_VIEJA.user : null;
-                }
-                if (/SELECT project_id FROM plans/.test(sql)) return { project_id: 'obra-a' };
-                return null;
-              },
-              async all() { return { results: [] }; },
-              async run() {
-                // La base rechaza el código repetido con este mensaje exacto;
-                // está copiado de lo que devolvió SQLite de verdad en
-                // pruebas/codigo-unico.mjs.
-                if (codigoOcupado && /INSERT INTO elements/.test(sql) && args.includes(codigoOcupado)) {
-                  throw new Error('D1_ERROR: UNIQUE constraint failed: elements.project_id, elements.code: SQLITE_CONSTRAINT');
-                }
-                escrito.push({ sql, args });
-                return { success: true };
-              },
-            };
-          },
-        };
-      },
-      async batch() { return []; },
-    },
-    FILES: { async get() { return null; }, async head() { return null; } },
+    FILES: { async head() { return null; }, async get() { return null; } },
     ASSETS: { async fetch() { return new Response('el sitio', { status: 200 }); } },
   };
 }
+const pide = (env, quien, ruta, { metodo = 'GET', cuerpo = null, cabeceras = {} } = {}) =>
+  worker.fetch(new Request(`https://bitacora-obra.mike-929.workers.dev${ruta}`, {
+    method: metodo,
+    headers: { ...(quien ? { Cookie: `s101=${quien}` } : {}), ...(cuerpo ? { 'Content-Type': 'application/json' } : {}), ...cabeceras },
+    body: cuerpo ? JSON.stringify(cuerpo) : undefined,
+  }), env);
+const lee = async (p) => { const r = await p; return { estado: r.status, cuerpo: await r.json().catch(() => ({})) }; };
 
-const pide = (ruta, cabeceras = {}, env = mundo()) =>
-  worker.fetch(new Request(`https://bitacora-obra.mike-929.workers.dev${ruta}`, { headers: cabeceras }), env);
-
-/* ─────────────── lo que se prueba ─────────────── */
-
-console.log('\n== la puerta de la suite ==');
+/* ─────────────── a qué empresa le toca ─────────────── */
+console.log('\n== de qué empresa es cada quien ==');
 {
   const env = mundo();
-  const r = await worker.fetch(new Request('https://bitacora-obra.mike-929.workers.dev/s101/auth/codigo', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-App': 'me-quiero-hacer-pasar-por-otro' }, body: '{"correo":"x@y.mx"}',
-  }), env);
-  rev(r.status === 200, '/s101/auth/codigo llega a la API', String(r.status));
-  rev(pedidasALaSuite[0]?.ruta === '/auth/codigo', 'y llega sin el prefijo', String(pedidasALaSuite[0]?.ruta));
-  rev(pedidasALaSuite[0]?.app === 'quell101', 'el Worker pone X-App y pisa lo que mandó la app', String(pedidasALaSuite[0]?.app));
-  rev(pedidasALaSuite[0]?.metodo === 'POST', 'y no se pierde el método', String(pedidasALaSuite[0]?.metodo));
+  rev(empresaDe(SUITE.duena, env) === 'forespot', 'el dueño de la suite (miembro de todas) cae en la empresa de este sitio (ORG_ID)');
+  rev(empresaDe(SUITE.supervisora, env) === 'forespot', 'una miembro con quell en su lista: su empresa');
+  rev(empresaDe(SUITE['todas-las-apps'], env) === 'forespot', 'lista vacía quiere decir todas las apps');
+  rev(empresaDe(SUITE['de-otra-empresa'], env) === 'muebles-lopez', 'alguien de otra empresa entra a la suya, aunque este sitio sea de forespot');
+  rev(empresaDe(SUITE['dos-empresas'], env) === 'forespot', 'con dos empresas manda la de este sitio');
+  rev(empresaDe(SUITE['sin-quell'], env) === null, 'sin quell en la lista no hay empresa a la que tocar');
+  rev(empresaDe(SUITE.cliente, env) === 'forespot', 'el cliente va a la empresa de su acceso');
+  rev(empresaDe(null, env) === null, 'sin sesión no hay empresa');
 }
 
-console.log('\n== quién pasa ==');
-for (const [galleta, quien, espera] of [
-  ['duena', 'la dueña de la suite', 200],
-  ['supervisora', 'quien trae la llave «quell» en su lista de apps', 200],
-  ['nombre_largo', 'quien la trae escrita como «quell101»', 200],
-  ['todas-las-apps', 'quien trae la lista vacía, que quiere decir todas', 200],
-]) {
-  const r = await pide('/api/me', { Cookie: `s101=${galleta}` });
-  const cuerpo = await r.json().catch(() => ({}));
-  rev(r.status === espera, `${quien} entra`, `${r.status} ${cuerpo.user?.email ?? cuerpo.error ?? ''}`);
-  if (r.status === 200) {
-    rev(cuerpo.user?.email === SUITE[galleta].usuario.correo, '  y es quien dijo la suite, con su rol de esta base', `${cuerpo.user?.email} · ${cuerpo.user?.role}`);
-  }
-}
-
-console.log('\n== quién no pasa ==');
-for (const [cabeceras, quien] of [
-  [{}, 'sin nada'],
-  [{ Cookie: 's101=inventada' }, 'con una galleta que la suite no reconoce'],
-  [{ Authorization: 'Bearer inventado' }, 'con un token que la suite no reconoce'],
-  [{ Cookie: 's101=sin-quell' }, 'quien entra a la suite pero sólo trae «dash» en sus apps'],
-  [{ Cookie: 's101=sin-alta-aqui' }, 'quien entra a la suite pero nadie lo dio de alta en la obra'],
-]) {
-  const r = await pide('/api/me', cabeceras);
-  rev(r.status === 401, `${quien}, no`, String(r.status));
-}
-
-console.log('\n== la puerta vieja, cerrada ==');
+/* ─────────────── lo que viaja y lo que no ─────────────── */
+console.log('\n== la puerta ==');
 {
-  /* Hasta el 16-sep aquí se comprobaba lo contrario: que el token viejo del APK
-   * SIGUIERA entrando. Mike mandó cerrar esa puerta, y lo que había que medir
-   * cambió de signo. Se deja dicho para que nadie lea esta prueba y crea que
-   * alguien se equivocó de sentido.
-   *
-   * Lo que se mide ahora es lo único que cierra la puerta de verdad: que un
-   * token que ESTÁ en la tabla `sessions` y no ha vencido tampoco pase. Quitar
-   * las rutas que reparten tokens y dejar la consulta habría dejado adentro a
-   * los que ya andaban por ahí, con noventa días de vida cada uno. */
-  const r = await pide('/api/me', { Authorization: `Bearer ${SESION_VIEJA.token}` });
-  rev(r.status === 401, 'un token viejo del APK, aunque siga vivo en la base, ya no entra', String(r.status));
+  let env = mundo();
+  const sin = await lee(pide(env, null, '/api/me'));
+  rev(sin.estado === 401, 'sin sesión, /api/me contesta 401', String(sin.estado));
+  rev(pedidas.length === 0, 'y no le pregunta nada a la suite (sin galleta ni token no hay a quién)');
 
-  const conGalleta = await pide('/api/me', { cookie: `bo_session=${SESION_VIEJA.token}` });
-  rev(conGalleta.status === 401, 'ni con la galleta vieja de la bitácora', String(conGalleta.status));
+  env = mundo();
+  const nadie = await lee(pide(env, 'inventada', '/api/me'));
+  rev(nadie.estado === 401 && pedidas.length === 1 && pedidas[0].ruta === '/yo', 'con una galleta que la suite no reconoce: 401, y sólo se preguntó /yo');
 
-  // Y las rutas que repartían los tokens contestan 410 —«existía y se fue»— y
-  // no 404, que es lo que diría un servidor roto. La app instalada va a ver una
-  // razón en vez de un error sin nombre.
-  const manda = (ruta, cuerpo, cabeceras = {}) => worker.fetch(new Request(
-    `https://bitacora-obra.mike-929.workers.dev${ruta}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json', ...cabeceras }, body: JSON.stringify(cuerpo) },
-  ), mundo());
+  env = mundo();
+  const fer = await lee(pide(env, 'supervisora', '/api/projects/abc?x=1'));
+  rev(fer.estado === 200 && fer.cuerpo.eco === '/orgs/forespot/quell/projects/abc', 'una miembro: /api/… viaja a /orgs/forespot/quell/…', fer.cuerpo.eco);
+  rev(pedidas[1]?.ruta === '/orgs/forespot/quell/projects/abc?x=1' && pedidas[1].app === 'quell101', 'con la consulta intacta y X-App puesto por el Worker', pedidas[1]?.ruta);
+  rev(pedidas[1]?.sitio === 'https://bitacora-obra.mike-929.workers.dev', 'y le dice al motor dónde vive el sitio, para las ligas de los correos', pedidas[1]?.sitio);
 
-  for (const [ruta, cuerpo] of [
-    ['/api/auth/pin', { email: 'fer@ejemplo.mx', pin: '482913' }],
-    ['/api/auth/request', { email: 'fer@ejemplo.mx' }],
-    ['/api/auth/verify', { email: 'fer@ejemplo.mx', code: '123456' }],
-    ['/api/auth/logout', {}],
-  ]) {
-    const v = await manda(ruta, cuerpo);
-    const j = await v.json().catch(() => ({}));
-    rev(v.status === 410 && j.error === 'esta_puerta_se_cerro',
-      `${ruta} contesta 410 y dice a dónde ir`, `${v.status} ${j.error ?? ''}`);
-  }
+  env = mundo();
+  const post = await lee(pide(env, 'supervisora', '/api/projects', { metodo: 'POST', cuerpo: { name: 'Obra' } }));
+  rev(post.cuerpo.metodo === 'POST' && post.cuerpo.cuerpo === '{"name":"Obra"}', 'un POST viaja con su método y su cuerpo');
 
-  // Y la ruta que guardaba el PIN de esta base también se fue: escribía en una
-  // columna que desde la mudanza nadie lee, y decía «PIN cambiado».
-  const pin = await manda('/api/pin', { pin: '482913' }, { Authorization: 'Bearer supervisora' });
-  rev(pin.status === 404, 'y la ruta del PIN propio ya no existe: el PIN es de la suite', String(pin.status));
-}
+  env = mundo();
+  const ajena = await lee(pide(env, 'de-otra-empresa', '/api/me'));
+  rev(ajena.cuerpo.eco === '/orgs/muebles-lopez/quell/me', 'alguien de otra empresa toca la puerta de SU empresa', ajena.cuerpo.eco);
 
-console.log('\n== los archivos ==');
-{
-  // La etiqueta <img> no puede mandar encabezados: para /files/ el token va en
-  // la dirección. Con uno bueno se llega al archivo (que aquí no existe, 404);
-  // con uno inventado se queda en la puerta (401).
-  const bueno = await pide('/files/foto.jpg?t=supervisora');
-  rev(bueno.status === 404, 'con un token bueno en la dirección se pasa la puerta', `${bueno.status} (404 = pasó y el archivo no existe)`);
-  const malo = await pide('/files/foto.jpg?t=inventado');
-  rev(malo.status === 401, 'con uno inventado, no', String(malo.status));
-  const enOtraRuta = await pide('/api/me?t=supervisora');
-  rev(enOtraRuta.status === 401, 'y el token en la dirección sólo vale para /files/', String(enOtraRuta.status));
-}
+  env = mundo();
+  const sinQuell = await lee(pide(env, 'sin-quell', '/api/me'));
+  rev(sinQuell.estado === 401 && pedidas.length === 1, 'sin quell en su lista: 401 aquí mismo, sin molestar al motor');
 
-console.log('\n== el código repetido del ítem ==');
-{
-  const alta = (code, env) => worker.fetch(new Request('https://bitacora-obra.mike-929.workers.dev/api/plans/pa/elements', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: 's101=supervisora' },
-    body: JSON.stringify({ name: 'Mueble nuevo', code, x: 0.5, y: 0.5 }),
-  }), env);
+  env = mundo();
+  const cli = await lee(pide(env, 'cliente', '/api/projects'));
+  rev(cli.cuerpo.eco === '/orgs/forespot/quell/projects', 'el cliente va a la empresa de su acceso', cli.cuerpo.eco);
 
-  codigoOcupado = null;
-  const env1 = mundo();
-  const bien = await alta('MW-08', env1);
-  rev(bien.status === 200, 'el supervisor levanta un ítem con un código libre', String(bien.status));
-  const ins = escrito.find((e) => /INSERT INTO elements/.test(e.sql));
-  rev(/project_id/.test(ins?.sql ?? ''), 'y el ítem se guarda con su obra', ins?.sql?.includes('project_id') ? 'project_id va en el INSERT' : 'NO va');
-  rev(ins?.args?.[2] === 'obra-a', 'con la obra del plano, no con lo que mande la pantalla', String(ins?.args?.[2]));
+  env = mundo();
+  const foto = await lee(pide(env, null, '/files/orgs/forespot/quell/plans/p/x.png?t=todas-las-apps'));
+  rev(foto.cuerpo.eco === '/orgs/forespot/quell/files/orgs/forespot/quell/plans/p/x.png', 'un archivo con el token en la dirección (app empacada) viaja a /files de la suite', foto.cuerpo.eco);
+  rev(pedidas[1]?.auth === 'Bearer todas-las-apps' && !pedidas[1].ruta.includes('t='), 'el token va como Authorization y no se queda en la dirección');
 
-  codigoOcupado = 'MW-07';
-  const choque = await alta('MW-07', mundo());
-  const cuerpo = await choque.json().catch(() => ({}));
-  rev(choque.status === 409, 'y si el código ya existe en la obra, contesta 409', String(choque.status));
-  rev(/ya hay un ítem con el código MW-07/.test(cuerpo.error ?? ''), 'con palabras, no con un «error interno»', String(cuerpo.error));
+  env = mundo();
+  const fotoSin = await lee(pide(env, null, '/files/loquesea?t=inventado'));
+  rev(fotoSin.estado === 401, 'un archivo con un token inventado: 401', String(fotoSin.estado));
 
-  // Un espacio de más no es un código distinto.
-  codigoOcupado = 'MW-07';
-  const conEspacios = await alta('  MW-07  ', mundo());
-  rev(conEspacios.status === 409, 'y «  MW-07  » tampoco se cuela: se recortan los espacios', String(conEspacios.status));
-  codigoOcupado = null;
-}
+  env = mundo();
+  const salud = await lee(pide(env, null, '/api/salud'));
+  rev(salud.estado === 200 && salud.cuerpo.app === 'quell101' && salud.cuerpo.datos === 'suite' && pedidas.length === 0, '/api/salud contesta aquí, sin sesión y sin tocar la suite');
+  const apps = await lee(pide(env, null, '/api/apps'));
+  rev(apps.estado === 200 && pedidas.length === 0, '/api/apps también');
+  const vieja = await lee(pide(env, null, '/api/auth/pin', { metodo: 'POST', cuerpo: { email: 'x', pin: '1' } }));
+  rev(vieja.estado === 410 && vieja.cuerpo.error === 'esta_puerta_se_cerro', 'la puerta vieja sigue diciendo 410 con palabras');
 
-console.log('\n== el sitio ==');
-{
-  const r = await pide('/');
-  rev(r.status === 200 && (await r.text()) === 'el sitio', 'lo que no es ruta del Worker lo sirven los archivos');
+  env = mundo();
+  const suite = await lee(pide(env, null, '/s101/salud'));
+  rev(pedidas[0]?.ruta === '/salud' && pedidas[0].app === 'quell101', '/s101/* se reenvía tal cual a la suite con X-App', pedidas[0]?.ruta);
+
+  env = mundo();
+  const sitio = await pide(env, null, '/una/pantalla');
+  rev(sitio.status === 200 && (await sitio.text()) === 'el sitio', 'lo demás es el sitio');
 }
 
 console.log(`\n${revisadas} revisadas · ${fallas} fallas`);

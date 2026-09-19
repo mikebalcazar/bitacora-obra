@@ -7,10 +7,9 @@
     "build": "npm --prefix web run build",
     "dev": "npm --prefix web run dev",
     "dev:worker": "wrangler dev --local --var DEV:1",
-    "migrate:local": "wrangler d1 migrations apply bitacora-obra --local",
-    "migrate:remote": "wrangler d1 migrations apply bitacora-obra --remote",
     "deploy": "wrangler deploy",
-    "prueba": "node pruebas/puerta.mjs && node pruebas/codigo-unico.mjs && node pruebas/obra.mjs && npm run build && node pruebas/entrada.mjs",
+    "prueba": "node pruebas/puerta.mjs && npm run build && node pruebas/entrada.mjs",
+    "humo": "node scripts/humo.mjs",
     "medir": "node scripts/medir.mjs"
   },
   "devDependencies": {
