@@ -49,11 +49,14 @@ rev(/ponerClave/.test(login), 'pone la contraseña por la ruta de la suite');
 rev(/irAGoogle/.test(login), 'y Google sigue ahí');
 
 /* La regla que sostiene el «olvidé mi contraseña»: quien entra con un código y
- * no tiene contraseña no puede seguir sin ponerla, porque el código es de un
- * solo uso y de diez minutos. Con Google NO se le pide: Google ya es una forma
- * de entrar, y pedirle una contraseña a quien no la necesita es un estorbo. */
-rev(/!quien\.tiene_clave\s*&&\s*quien\.entro_con\s*===\s*'codigo'/.test(login),
-  'a quien entró con código y no tiene contraseña se le pide ponerla');
+ * no tiene contraseña NI Google ligado no puede seguir sin ponerla, porque el
+ * código es de un solo uso y de diez minutos. Con Google NO se le pide, ni al
+ * entrar con él ni después con un código: Google ya es una forma de entrar, y
+ * pedirle una contraseña a quien no la necesita es un estorbo (contrato
+ * 0.17.2; antes se la pedía a quien tenía Google ligado y ningún hueco por
+ * donde volver que cubrir). */
+rev(/!quien\.tiene_clave\s*&&\s*!quien\.tiene_google\s*&&\s*quien\.entro_con\s*===\s*'codigo'/.test(login),
+  'a quien entró con código y no tiene contraseña ni Google se le pide ponerla');
 /* Ésta es una guarda, no una prueba: con la pantalla vieja pasaba igual,
  * porque ahí ni existía `tiene_clave`. Sirve para el día que alguien escriba
  * `if (!quien.tiene_clave)` sin la otra mitad y le empiece a pedir contraseña
