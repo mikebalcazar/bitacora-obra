@@ -141,11 +141,11 @@ async function medir() {
 
   const salud101 = await traer('/api/salud');
   rev(salud101.estado === 200 && salud101.cuerpo?.app === 'quell101', 'el Worker se nombra quell101', String(salud101.cuerpo?.app));
+  rev(salud101.cuerpo?.datos === 'suite', 'y dice que sus datos viven en la suite (desde el 19-sep no hay base propia)', String(salud101.cuerpo?.datos));
+  rev(salud.cuerpo?.contrato >= '0.16.0', 'la API de producción ya trae a quell101 adentro (contrato 0.16.0 o más)', String(salud.cuerpo?.contrato));
 
-  // La migración 0010 corre en el despliegue, antes de publicar. Si algún día
-  // apareciera un código repetido nuevo, fallaría ahí y no aquí; esto es la
-  // otra mitad: que levantar un ítem siga pidiendo sesión, con cerradura o sin
-  // ella.
+  // Levantar un ítem sigue pidiendo sesión; la cerradura del código vive
+  // ahora en la base por empresa de la suite (migración 0006).
   const item = await traer('/api/plans/loquesea/elements', { method: 'POST', body: { name: 'x', code: 'X-1', x: 0.5, y: 0.5 } });
   rev(item.estado === 401, 'levantar un ítem sin sesión sigue contestando 401', String(item.estado));
 }

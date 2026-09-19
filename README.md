@@ -8,8 +8,8 @@ almacén siguen llamándose `bitacora-obra`: son direcciones, no rótulos, y
 cambiarlas crearía recursos nuevos y vacíos, con la obra guardada en los viejos.
 
 - **Frontend**: PWA instalable (React + Vite) — `web/`
-- **Backend**: Cloudflare Worker + D1 (SQLite) + R2 (fotos y planos) — `worker/`, `migrations/`
-- **Deploy**: push a `main` → GitHub Actions → `wrangler deploy` (crea D1/R2 si no existen, aplica migraciones)
+- **Backend**: desde el 19-sep-2026 los datos viven en la **base por empresa de la suite** (`suite101-api`, migración 0006, motor en `src/quell/`). El Worker de aquí (`worker/`) es el cascarón: sirve la pantalla y reenvía `/api/*` y `/files/*` a la suite. El bucket R2 se queda sólo para los instaladores.
+- **Deploy**: push a `main` → GitHub Actions → staging (`bitacora-obra-staging`, contra la API de staging y la empresa demo, con humo de punta a punta) → producción
 
 ## Las llaves (Settings → Secrets and variables → Actions)
 

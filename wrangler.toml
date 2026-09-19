@@ -15,26 +15,48 @@ run_worker_first = ["/api/*", "/files/*", "/descargas/*", "/s101/*"]
 
 [vars]
 APP_NAME = "quell101"
-# La empresa de la suite cuya base es ésta. quell101 todavía tiene una sola
-# base; cuando se mude a la base por empresa, esto se va con la mudanza.
+# La empresa de la suite de este sitio. Desde el 19-sep quell101 no tiene base:
+# sus datos viven en la base por empresa de la suite, y esta es la empresa que
+# se abre por omisión a quien es miembro de varias (y al dueño de la suite).
 ORG_ID = "forespot"
-MAIL_FROM = "quell101 <bitacora@envios.taller101.mx>"
-DEV = ""
 
-[[d1_databases]]
-binding = "DB"
-database_name = "bitacora-obra"
-database_id = "__D1_ID__"
-migrations_dir = "migrations"
+# DESDE EL 19-SEP-2026 AQUÍ NO HAY D1. La base `bitacora-obra` se quedó en
+# Cloudflare, sin tocar, como red de seguridad de la mudanza; se borra cuando
+# lleve unos días de más. Sus datos están en la base por empresa de la suite.
 
+# El bucket se queda sólo para los instaladores (apps/*): los planos y las
+# fotos viven en el bucket de la suite, bajo orgs/{empresa}/quell/.
 [[r2_buckets]]
 binding = "FILES"
 bucket_name = "bitacora-obra-files"
 
 # La puerta de la suite, desde el mismo origen. No hay URL: es un *service
 # binding*, o sea una llamada de Worker a Worker que nunca sale a internet.
-# Todo `/s101/*` va a dar ahí con la cabecera `X-App: quell101` puesta por el
-# Worker.
+# Todo `/s101/*`, `/api/*` y `/files/*` va a dar ahí con `X-App: quell101`.
 [[services]]
 binding = "API"
 service = "suite101-api"
+
+# ─────────────── staging ───────────────
+# Mismo código, contra la API de staging y la empresa `demo`. Es lo que
+# quell101 no tenía: un lugar donde entrar y escribir sin tocar la obra real.
+[env.staging]
+name = "bitacora-obra-staging"
+
+[env.staging.assets]
+directory = "./web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/files/*", "/descargas/*", "/s101/*"]
+
+[env.staging.vars]
+APP_NAME = "quell101"
+ORG_ID = "demo"
+
+[[env.staging.r2_buckets]]
+binding = "FILES"
+bucket_name = "bitacora-obra-files"
+
+[[env.staging.services]]
+binding = "API"
+service = "suite101-api-staging"

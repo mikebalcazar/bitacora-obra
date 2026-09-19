@@ -59,49 +59,33 @@ jobs:
       - name: Armar la aplicación
         run: npm run build
 
-      # La base y el almacén de fotos se crean solos la primera vez. De la
-      # segunda en adelante ya existen y este paso nada más los encuentra.
-      - name: Preparar base de datos y almacén de archivos
-        run: |
-          set -e
-          npx wrangler d1 create bitacora-obra 2>/dev/null || echo "La base ya existía."
-          npx wrangler r2 bucket create bitacora-obra-files 2>/dev/null || echo "El almacén ya existía."
-          D1_ID=$(npx wrangler d1 list --json | node -e '
-            let s = "";
-            process.stdin.on("data", (d) => (s += d)).on("end", () => {
-              const fila = JSON.parse(s.slice(s.indexOf("["))).find((d) => d.name === "bitacora-obra");
-              if (!fila) { console.error("No apareció la base bitacora-obra."); process.exit(1); }
-              console.log(fila.uuid || fila.id);
-            });
-          ')
-          if [ -z "$D1_ID" ]; then echo "No pude resolver el identificador de la base."; exit 1; fi
-          sed -i "s/__D1_ID__/$D1_ID/" wrangler.toml
-          echo "Base: $D1_ID"
+      # DESDE EL 19-SEP AQUÍ NO HAY BASE: los datos de quell101 viven en la
+      # base por empresa de la suite. El bucket se queda sólo para los
+      # instaladores; se crea si no existe.
+      - name: Preparar el almacén de instaladores
+        run: npx wrangler r2 bucket create bitacora-obra-files 2>/dev/null || echo "El almacén ya existía."
 
-      - name: Aplicar las migraciones
-        run: npx wrangler d1 migrations apply bitacora-obra --remote
+      # Primero staging: mismo código, contra la API de staging y la empresa
+      # demo. Ahí se entra y se escribe de verdad (el humo de abajo). Si eso no
+      # pasa, producción no se toca.
+      - name: Publicar staging
+        run: npx wrangler deploy --env staging
+
+      - name: Humo en staging (entrar, levantar obra, plano, ítem, borrar)
+        run: |
+          sleep 12
+          node scripts/humo.mjs
 
       - name: Publicar
         run: npx wrangler deploy
 
-      # El secreto se vuelve a mandar en cada despliegue: así el estado del
-      # Worker siempre coincide con lo que está guardado en GitHub, y si alguien
-      # rota la llave basta cambiar el secreto y volver a publicar.
-      - name: Actualizar secretos del Worker
-        env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-        run: |
-          set -e
-          if [ -n "$RESEND_API_KEY" ]; then
-            printf '%s' "$RESEND_API_KEY" | npx wrangler secret put RESEND_API_KEY
-          else
-            echo "Sin RESEND_API_KEY: los códigos de acceso NO se envían por correo."
-          fi
+      # El correo de quell101 lo manda la suite desde el 19-sep (invitaciones,
+      # avisos): este Worker ya no necesita RESEND_API_KEY.
 
-      # La puerta de la suite, medida desde afuera: que el enlace de servicio
-      # llegue a la API, que nada abra sin sesión y que la puerta vieja siga en
-      # pie para las apps ya instaladas. Aquí NO se entra y NO se escribe:
-      # quell101 no tiene staging y su base es la obra de verdad.
+      # Producción, medida desde afuera: que el enlace de servicio llegue a la
+      # API, que nada abra sin sesión y que la puerta vieja siga cerrada. Aquí
+      # NO se entra y NO se escribe: es la obra de verdad. Lo que se escribe se
+      # escribió arriba, en staging.
       - name: Medir la puerta de la suite
         id: medir
         continue-on-error: true
