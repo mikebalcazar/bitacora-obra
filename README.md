@@ -30,7 +30,8 @@ compartir para que el código de acceso le llegue a cualquiera; con el remitente
 de prueba de Resend solo llegaba a tu propio correo.
 
 **No se pide la cuenta de Cloudflare por separado:** el token ya dice a qué cuenta
-pertenece. La base D1 y el almacén R2 se crean solos en el primer despliegue.
+pertenece. El almacén R2 (instaladores) se crea solo en el primer despliegue.
+Los datos viven en la base por empresa de la suite, que es de `suite101-api`.
 
 ### Las dos plataformas viven separadas
 
@@ -41,15 +42,18 @@ distinto, y borrar o mudar una no le hace nada a la otra:
 |---|---|---|
 | Repositorio | `bitacora-obra` | `t101-portal-trabajadores` |
 | Worker | `bitacora-obra` | `t101-portal` |
-| Base D1 | `bitacora-obra` | `t101-trabajadores` |
-| Archivos R2 | `bitacora-obra-files` | `t101-documentos` |
+| Datos | la base por empresa de la suite (`quell_*`) | `t101-trabajadores` (D1) |
+| Archivos R2 | `suite101` (planos y fotos, bajo `orgs/{empresa}/quell/`) · `bitacora-obra-files` (instaladores) | `t101-documentos` |
 | Secretos | Los de este repositorio | Los de aquel repositorio |
 
 Lo único que comparten es la **cuenta** de Cloudflare y la de Resend, porque son
 tuyas. Si quieres que ni eso se toque, saca un token de Cloudflare aparte para
 esta plataforma y pégalo aquí: el día que canceles uno, el otro sigue publicando.
 Para dar de baja esta plataforma sin rozar la otra: borra el Worker
-`bitacora-obra`, la base `bitacora-obra` y el bucket `bitacora-obra-files`.
+`bitacora-obra` y el bucket `bitacora-obra-files`. Los datos de cada empresa se
+quedan en su base de la suite (apagar la app no los borra). La base D1 vieja
+`bitacora-obra` quedó en Cloudflare como red de seguridad de la mudanza del
+19-sep-2026; se borra cuando lleve unos días de más.
 
 ## Cómo se entra
 La puerta es la de la **suite 101**, la misma que dash101, peek101 y las demás:
@@ -76,8 +80,7 @@ para ellas.
 ## Desarrollo local
 ```
 npm ci && npm --prefix web ci
-sed 's/__D1_ID__/local/' wrangler.toml > wrangler.local.toml
-npx wrangler d1 migrations apply bitacora-obra --local -c wrangler.local.toml
-npm run build && npx wrangler dev --local -c wrangler.local.toml --var DEV:1
+npm run prueba          # la puerta del cascarón, el build y la pantalla de entrada
+npm run humo            # de punta a punta contra staging (bitacora-obra-staging)
 ```
-En modo `DEV=1` el código de acceso se muestra en pantalla.
+El motor y sus pruebas viven en `suite101-api` (`src/quell/`, `pruebas/quell.spec.ts`).
