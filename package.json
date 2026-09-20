@@ -8,7 +8,7 @@
     "dev": "npm --prefix web run dev",
     "dev:worker": "wrangler dev --local --var DEV:1",
     "deploy": "wrangler deploy",
-    "prueba": "node pruebas/puerta.mjs && npm run build && node pruebas/entrada.mjs",
+    "prueba": "node pruebas/puerta.mjs && npm run build && node pruebas/entrada.mjs && node pruebas/impresion.mjs",
     "humo": "node scripts/humo.mjs",
     "medir": "node scripts/medir.mjs"
   },

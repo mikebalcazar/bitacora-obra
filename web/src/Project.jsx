@@ -281,6 +281,14 @@ export default function Project({ id }) {
               <span className="flecha">▾</span>
             </button>
           )}
+          {/* Imprimir el plano. Mike, 20-sep: lo que se lleva a obra es una
+              hoja, y la hoja tiene que leerse: el plano va más claro, los
+              círculos conservan su color y el código sale en letra de
+              imprenta. El encuadre lo hace solo el lienzo al oír
+              `beforeprint`; aquí nada más se pide la impresión. */}
+          {vista === 'plan' && plan && (
+            <button className="btn sm" onClick={() => window.print()} title="Imprimir este plano con los códigos">Imprimir</button>
+          )}
           <div className="spacer" />
           {/* En escritorio los interruptores viven en la barra lateral, a la
               vista siempre; repetirlos aquí arriba era decir dos veces lo
