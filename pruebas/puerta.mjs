@@ -133,6 +133,25 @@ console.log('\n== la puerta ==');
   const suite = await lee(pide(env, null, '/s101/salud'));
   rev(pedidas[0]?.ruta === '/salud' && pedidas[0].app === 'quell101', '/s101/* se reenvía tal cual a la suite con X-App', pedidas[0]?.ruta);
 
+  /* Los «ítems sin ubicar» son de la empresa, no del motor de obra: la cuenta
+   * la hace la suite en /orgs/:o/obras/:id/sin-ubicar (contrato 0.24.0). Lo
+   * que este Worker decide es a dónde va, y eso es lo que se mide: que NO
+   * lleve el prefijo `/quell` —si lo llevara, la suite contestaría 404 y la
+   * pantalla se quedaría siempre sin lista, en silencio—. */
+  env = mundo();
+  await lee(pide(env, 'supervisora', '/api/projects/OBRA-1/sin-ubicar'));
+  rev(pedidas[1]?.ruta === '/orgs/forespot/obras/OBRA-1/sin-ubicar',
+      'los ítems sin ubicar van a /obras/:id/sin-ubicar, sin pasar por /quell', pedidas[1]?.ruta);
+
+  env = mundo();
+  await lee(pide(env, 'supervisora', '/api/projects/OBRA-1/punch'));
+  rev(pedidas[1]?.ruta === '/orgs/forespot/quell/projects/OBRA-1/punch',
+      'y lo demás de la obra sigue yendo al motor, con /quell', pedidas[1]?.ruta);
+
+  env = mundo();
+  const sinSesion = await lee(pide(env, null, '/api/projects/OBRA-1/sin-ubicar'));
+  rev(sinSesion.estado === 401, 'sin sesión no viaja a ningún lado', String(sinSesion.estado));
+
   env = mundo();
   const sitio = await pide(env, null, '/una/pantalla');
   rev(sitio.status === 200 && (await sitio.text()) === 'el sitio', 'lo demás es el sitio');

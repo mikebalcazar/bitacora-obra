@@ -33,6 +33,11 @@ export default function Project({ id }) {
   const [fase, setFase] = useState('');   // '' = las dos fases
   const [drawer, setDrawer] = useState(false);
   const [openItems, setOpenItems] = useState(null);
+  /* Los «ítems sin ubicar»: lo que se vendió en dash101 y todavía no tiene
+   * pin en ningún plano. Mike, 20-sep: «deben de aparecer en una lista de
+   * "ítems sin ubicar", para ir seleccionando y ubicando cada ítem en su
+   * lugar». La cuenta la hace la suite, no esta pantalla. */
+  const [sinUbicar, setSinUbicar] = useState([]);
   const [mview, setMview] = useState('plan'); // móvil: plan | pend | elem
   // El plano contesta "dónde"; la lista contesta "cómo van". Son la misma obra
   // vista de dos maneras y comparten los mismos filtros, así que apagar un tipo
@@ -56,6 +61,18 @@ export default function Project({ id }) {
     } catch (e) { toast(e.message); go('/'); }
   }, [id]);
   useEffect(() => { load(); leer('/projects').then((r) => setProjects(r.projects)).catch(() => {}); }, [load]);
+
+  /* Se pide aparte y con `catch` mudo a propósito: una obra sin proyecto
+   * ligado en dash101 contesta 409 `sin_liga`, y eso no es un error que
+   * enseñarle a nadie en obra —simplemente no hay lista—. Tampoco pasa por
+   * la caché de la fila: es una cuenta que cambia con cada pin que se clava,
+   * y una cuenta vieja aquí haría poner una puerta de más. */
+  const cargarSinUbicar = useCallback(() => {
+    api.get(`/projects/${id}/sin-ubicar`)
+      .then((r) => setSinUbicar(r?.data?.items || []))
+      .catch(() => setSinUbicar([]));
+  }, [id]);
+  useEffect(() => { cargarSinUbicar(); }, [cargarSinUbicar]);
 
   // Bajar los planos de la obra en cuanto se abre, con señal. Se quedan en la
   // caché del navegador, así que el día que se entre al sótano el plano ya está
@@ -146,7 +163,7 @@ export default function Project({ id }) {
       },
     }).catch((e) => { toast(e.message); return null; });
     if (!r) return;
-    setNewAt(null); await load();
+    setNewAt(null); await load(); cargarSinUbicar();
     if (r.subido && r.r?.id) selectEl(r.r.id);
     else toast('Sin señal: el ítem se sube solo cuando vuelva.');
   }
@@ -332,7 +349,7 @@ export default function Project({ id }) {
         {staff && <button onClick={() => plan && setReport(true)}><i dangerouslySetInnerHTML={{ __html: ICO.doc }} />Reporte</button>}
       </nav>
 
-      {newAt && <NewElementModal elements={data.elements} members={data.members} onCancel={() => setNewAt(null)} onOk={createElement} />}
+      {newAt && <NewElementModal elements={data.elements} members={data.members} sinUbicar={sinUbicar} onCancel={() => setNewAt(null)} onOk={createElement} />}
       {report && <ReportModal hasSel={!!sel} onCancel={() => setReport(false)} onOk={generateReport} />}
       {repView && <ReportView {...repView} onClose={() => setRepView(null)} />}
       {editPlan && <EditPlanModal plan={editPlan} onClose={() => setEditPlan(null)} onChanged={load} />}
@@ -418,19 +435,43 @@ function Lista({ items, etapas, plans, sel, onIr }) {
   );
 }
 
-function NewElementModal({ elements, members, onCancel, onOk }) {
+function NewElementModal({ elements, members, sinUbicar = [], onCancel, onOk }) {
   // El código se propone por obra según el tipo (MW-, PT-, FX-), sin contar
   // los prefijos viejos y sin rellenar huecos. Es una propuesta: si el taller
   // quiere otro a mano, puede; la base avisa si choca. En cuanto la persona
   // toca la clave, cambiar de tipo ya no se la pisa.
-  const [f, setF] = useState({ code: siguienteCodigo(elements, 'Mueble'), type: 'Mueble', name: '', resp: '' });
+  const [f, setF] = useState({ code: siguienteCodigo(elements, 'Mueble'), type: 'Mueble', name: '', resp: '', item_id: '' });
   const [claveTocada, setClaveTocada] = useState(false);
   const cambiaTipo = (type) => setF({ ...f, type, code: claveTocada ? f.code : siguienteCodigo(elements, type) });
   const resps = [...new Set(members.map((m) => m.company || m.name).filter(Boolean))];
+
+  /* «Ítems sin ubicar»: lo vendido en dash101 que todavía no tiene pin.
+   * Escoger uno llena el nombre y amarra la pieza a ese ítem, para que la
+   * cuenta de cuántas faltan baje sola. No es obligatorio: una obra tiene
+   * piezas que nadie cotizó, y ésas se siguen levantando a mano. */
+  const escoger = (item_id) => {
+    const it = sinUbicar.find((x) => x.id === item_id);
+    if (!it) { setF({ ...f, item_id: '' }); return; }
+    setF({ ...f, item_id, name: f.name.trim() || it.nombre });
+  };
+
   return (
     <div className="ov" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <form className="modal" onSubmit={(e) => { e.preventDefault(); onOk(f); }}>
         <div><div className="eyebrow">Nuevo ítem</div><h2>Ubicado en el plano</h2></div>
+        {sinUbicar.length > 0 && (
+          <div className="field">
+            <label>¿Es uno de los vendidos? <small className="muted">ítems sin ubicar</small></label>
+            <select value={f.item_id || ''} onChange={(e) => escoger(e.target.value)}>
+              <option value="">No — es una pieza de obra</option>
+              {sinUbicar.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.nombre} — faltan {i.faltan} de {i.cantidad}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="two">
           <div className="field"><label>Clave <small className="muted">propuesta por obra</small></label><input value={f.code} onChange={(e) => { setClaveTocada(true); setF({ ...f, code: e.target.value }); }} /></div>
           <div className="field"><label>Tipo</label><select value={f.type} onChange={(e) => cambiaTipo(e.target.value)}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>

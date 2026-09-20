@@ -78,13 +78,13 @@ export function empresaDe(yo, env) {
 }
 
 /** /api/* y /files/* → la suite, a /orgs/{empresa}/quell/… */
-async function aLaSuite(req, env, url, ruta) {
+async function aLaSuite(req, env, url, ruta, prefijo = '/quell') {
   if (!env.API) return err('La puerta de la suite no está conectada.', 503);
   const yo = await laSuiteDiceQuien(req, env, url);
   if (!yo) return err('no autorizado', 401);
   const empresa = empresaDe(yo, env);
   if (!empresa) return err('no autorizado', 401);
-  const destino = new URL(`https://suite101-api/orgs/${encodeURIComponent(empresa)}/quell${ruta}`);
+  const destino = new URL(`https://suite101-api/orgs/${encodeURIComponent(empresa)}${prefijo}${ruta}`);
   destino.search = url.search;
   destino.searchParams.delete('t');
   const h = credenciales(req, url);
@@ -218,6 +218,26 @@ async function api(req, env, url, path) {
              + 'abre la bitácora en el navegador mientras se rearman.',
       donde: new URL('/', url).toString(),
     }, 410);
+  }
+
+  /* Los «ítems sin ubicar» NO son del motor de obra.
+   *
+   * Mike, 20-sep: «cuando se genera un nuevo proyecto con su cantidad de
+   * ítems, en quell […] deben de aparecer en una lista de "ítems sin ubicar".
+   * Para ir seleccionando y ubicando cada ítem en su lugar.»
+   *
+   * Eso son los ítems VENDIDOS del proyecto de dash101 ligado a esta obra, y
+   * los cuenta la suite en `/orgs/:o/obras/:id/sin-ubicar` (contrato 0.24.0):
+   * cantidad menos las piezas que ya tienen pin en un plano. La cuenta la
+   * hace allá a propósito —dos personas ubicando a la vez, cada una con su
+   * cuenta, acaban con 21 puertas de un ítem de 20—.
+   *
+   * Se expone aquí bajo `projects` para que la pantalla siga hablando como
+   * habla, y va sin el prefijo `/quell` porque la ruta es de la empresa, no
+   * del motor. Contesta envuelto —`{ok, data}`, como toda la suite—, a
+   * diferencia del motor, que contesta pelón. */
+  if (seg[0] === 'projects' && seg[1] && seg[2] === 'sin-ubicar' && !seg[3] && m === 'GET') {
+    return aLaSuite(req, env, url, `/obras/${encodeURIComponent(seg[1])}/sin-ubicar`, '');
   }
 
   // Todo lo demás es del motor, que vive en la suite.
