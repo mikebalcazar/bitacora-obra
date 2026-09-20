@@ -306,7 +306,11 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
           const enProd = (e.fase || 'produccion') === 'produccion';
           return (
             <div key={e.id} className={'pin' + (abierto ? ' abierto' : '') + (enProd ? ' prod' : '') + (e.id === sel ? ' sel' : '') + (flash && e.id === sel ? ' flash' : '')
-                + (mios ? (mios.includes(e.id) ? ' mio' : ' ajeno') : '')}
+                + (mios ? (mios.includes(e.id) ? ' mio' : ' ajeno') : '')
+                /* Fuera del alcance: hueco y punteado. No se borra del plano
+                   —la pieza existe y alguien la puede estar buscando— pero
+                   tampoco se ve como algo que se esté fabricando. */
+                + ((e.alcance && e.alcance !== 'dentro') ? ' fuera' : '')}
               style={{
                 left: e.x * plan.width, top: e.y * plan.height, transform: `translate(-50%,-50%) scale(${1 / v.s})`,
                 background: enProd ? aguado(tinte) : tinte,

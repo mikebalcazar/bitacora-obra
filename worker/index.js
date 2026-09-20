@@ -240,6 +240,21 @@ async function api(req, env, url, path) {
     return aLaSuite(req, env, url, `/obras/${encodeURIComponent(seg[1])}/sin-ubicar`, '');
   }
 
+  /* Aprobar y cancelar un ítem TAMPOCO son del motor de obra.
+   *
+   * Mike, 20-sep: «se debe poder cancelar algún ítem ya sea desde quell o
+   * desde dash, y se refleja en los 2». Se refleja solo porque es el MISMO
+   * ítem en la misma base: no hay nada que sincronizar, hay una sola fila.
+   *
+   * Va sin el prefijo `/quell` —la ruta es de la empresa, no del motor— y
+   * la suite revisa ahí el permiso y pone las fechas del alcance. Aquí no
+   * se decide nada: si esta puerta escribiera el estado por su cuenta, la
+   * regla de «para considerarse cancelado tiene que haber estado aprobado
+   * primero» viviría en dos lados. */
+  if (seg[0] === 'items' && seg[1] && (seg[2] === 'aprobar' || seg[2] === 'cancelar') && !seg[3] && m === 'POST') {
+    return aLaSuite(req, env, url, `/items/${encodeURIComponent(seg[1])}/${seg[2]}`, '');
+  }
+
   // Todo lo demás es del motor, que vive en la suite.
   return aLaSuite(req, env, url, `/${seg.join('/')}`);
 }

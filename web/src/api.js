@@ -176,6 +176,19 @@ export const veTodoEn = (user, miRol) => dirige(user) || miRol === 'tra';
 // punchlist empieza el día que se entrega y hay algo que corregir.
 export const FASES = { produccion: 'Producción', punchlist: 'Punchlist' };
 
+/* El alcance de un ítem, tal como lo manda la API en cada pieza del plano
+ * (contrato 0.31.0). Aquí sólo están los NOMBRES: la regla —«para que un
+ * ítem se considere cancelado tiene que haber estado aprobado primero»—
+ * vive en el contrato de la suite y la resuelve el servidor. Esta pantalla
+ * la lee; no la vuelve a sacar. */
+export const ALCANCES = {
+  dentro: 'En proceso',
+  no_aprobado: 'No aprobados',
+  cancelado: 'Cancelados',
+  descartado: 'Descartados',
+  todos: 'Todos',
+};
+
 // Los tipos de ítem y su color. El color es lo que hace legible un plano lleno:
 // de un vistazo se ve dónde están las puertas y dónde los muebles, sin leer una
 // sola etiqueta. Son tres tonos bien separados entre sí y separados también de

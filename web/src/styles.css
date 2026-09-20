@@ -524,3 +524,13 @@ select.sm{font-size:12px;padding:3px 6px;border-radius:12px;border:1px solid var
     print-color-adjust: exact;
   }
 }
+
+/* El alcance, cuando el ítem NO está dentro (contrato 0.31.0). Se pinta
+   apagado a propósito: es un ítem que está en el plano pero no en el
+   trabajo, y tiene que leerse como una nota al margen, no como un aviso. */
+.pill.fuera{background:var(--surface2);color:var(--ink3);border:1px solid var(--line)}
+/* Y su pin, en el plano: mismo color de tipo, pero hueco y con el borde
+   punteado. Borrarlo del dibujo sería peor —la pieza existe y alguien la
+   puede estar buscando—; dejarlo igual que los demás diría que se está
+   fabricando. */
+.pin.fuera{background:transparent !important;border-style:dashed;opacity:.72}
