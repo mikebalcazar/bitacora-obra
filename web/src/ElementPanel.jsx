@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, leer, escribir, fileUrl, FASES, TIPOS, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
+import { api, leer, escribir, fileUrl, FASES, ALCANCES, TIPOS, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
 import { Photos, usePending, PhotoInput, PendingStrip } from './Fotos.jsx';
 import { Duda } from './Dudas.jsx';
@@ -96,12 +96,23 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
         <h2>{e.name}</h2>
         <div className="meta">
           <span className={'pill fase ' + e.fase}>{FASES[e.fase] || 'Producción'}</span>
+          {/* El alcance, cuando NO está dentro. Dentro no se pinta: la obra
+              es lo que se está fabricando, y una etiqueta que sale siempre
+              deja de leerse. Lo dice la API, resuelto (contrato 0.31.0). */}
+          {e.alcance && e.alcance !== 'dentro' && (
+            <span className="pill fuera">{ALCANCES[e.alcance] || e.alcance}</span>
+          )}
+          {/* La descripción del ítem: es uno de los cinco campos que Mike
+              pidió homologar entre quell, dash y quote (20-sep). Viaja de
+              ida y de sólo lectura; se edita en dash101, que es donde vive. */}
+          {e.item_descripcion && <span title="Descripción del ítem, de dash101">{e.item_descripcion}</span>}
           {e.resp && <span>Resp. <b style={{ fontWeight: 500, color: 'var(--ink2)' }}>{e.resp}</b></span>}
           {!staff && contratistas.length > 0 && <span>Contratistas: <b style={{ fontWeight: 500, color: 'var(--ink2)' }}>{contratistas.map((c) => c.name).join(', ')}</b></span>}
           <span>{e.plan_name}</span>
           <span>{e.fase === 'punchlist' && e.entregado_en ? `Entregado ${fmtD(e.entregado_en)}` : `Creado ${fmtD(e.created_at)}`}</span>
         </div>
         {staff && <Contratistas e={e} contratistas={contratistas} members={members} onChanged={changed} />}
+        {staff && e.item_id && <Alcance e={e} onChanged={changed} />}
         <div className="tabs">
           {veTodo && <button className={'tab' + (tab === 'log' ? ' on' : '')} onClick={() => setTab('log')}>Bitácora <span className="n">{log.length}</span></button>}
           <button className={'tab' + (tab === 'punch' ? ' on' : '')} onClick={() => setTab('punch')}>{veTodo ? 'Punchlist' : 'Pendientes del ítem'} <span className="n">{open}/{punch.length}</span></button>
@@ -543,6 +554,69 @@ function EditElement({ e, onClose, onChanged, onDeleted, onReubicar }) {
           : <button type="button" className="btn danger" onClick={async () => { await api.del(`/elements/${e.id}`).catch((x) => toast(x.message)); onDeleted(); }}>Confirmar borrado definitivo</button>}
         <div className="acts"><button type="button" className="btn" onClick={onClose}>Cancelar</button><button className="btn primary">Guardar</button></div>
       </form>
+    </div>
+  );
+}
+
+/* Sacar un ítem del alcance, o meterlo, desde la obra.
+ *
+ * Mike, 20-sep: «se debe poder cancelar algún ítem ya sea desde quell o
+ * desde dash, y se refleja en los 2». Se refleja solo: es el MISMO ítem en
+ * la misma base de la empresa, no hay nada que sincronizar.
+ *
+ * La regla de qué queda CANCELADO y qué DESCARTADO —«para considerarse
+ * cancelado tiene que haber estado aprobado primero»— la aplica la suite y
+ * la contesta; aquí se dice la palabra que ella devuelve, no se vuelve a
+ * sacar la cuenta.
+ *
+ * En dos pasos y con motivo: cancelar saca el ítem del precio de venta del
+ * proyecto, y «por qué se cayó esto» no tiene otra respuesta tres meses
+ * después. */
+function Alcance({ e, onChanged }) {
+  const [abierto, setAbierto] = React.useState(false);
+  const [motivo, setMotivo] = React.useState('');
+  const [yendo, setYendo] = React.useState(false);
+  const [dicho, setDicho] = React.useState('');
+  const fuera = (e.alcance || 'dentro') !== 'dentro';
+
+  const mover = async (que) => {
+    setYendo(true);
+    try {
+      const r = await api.post(`/items/${e.item_id}/${que}`, que === 'cancelar' ? { motivo } : {});
+      const como = r?.data?.alcance;
+      setDicho(que === 'aprobar'
+        ? 'Aprobado: vuelve al alcance de la obra.'
+        : como === 'descartado'
+          ? 'Descartado: nunca estuvo aprobado, así que no cuenta como cancelado.'
+          : 'Cancelado: sale del precio de venta del proyecto.');
+      setAbierto(false); setMotivo('');
+      onChanged();
+    } catch (err) {
+      setDicho(err.message || 'No se pudo.');
+    } finally {
+      setYendo(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', margin: '4px 0 8px' }}>
+      {fuera ? (
+        <button className="btn sm" disabled={yendo} onClick={() => mover('aprobar')}>
+          {yendo ? 'Un momento…' : 'Regresar al alcance'}
+        </button>
+      ) : !abierto ? (
+        <button className="btn sm" onClick={() => setAbierto(true)}>Sacar del alcance</button>
+      ) : (
+        <>
+          <input className="inp sm" style={{ width: 160 }} value={motivo} placeholder="¿Por qué?"
+            onChange={(ev) => setMotivo(ev.target.value)} aria-label="Motivo" />
+          <button className="btn sm danger" disabled={yendo} onClick={() => mover('cancelar')}>
+            {yendo ? 'Un momento…' : 'Confirmar'}
+          </button>
+          <button className="btn sm" onClick={() => setAbierto(false)}>Cancelar</button>
+        </>
+      )}
+      {dicho && <span style={{ fontSize: 12, color: 'var(--ink3)' }}>{dicho}</span>}
     </div>
   );
 }

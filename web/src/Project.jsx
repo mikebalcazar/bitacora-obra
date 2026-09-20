@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { api, leer, escribir, hayRed, fileUrl, FASES, TIPOS, colorTipo, aguado, fmtD, isLate, rasterizePlan, avance, veTodoEn, esCliente } from './api.js';
+import { api, leer, escribir, hayRed, fileUrl, FASES, ALCANCES, TIPOS, colorTipo, aguado, fmtD, isLate, rasterizePlan, avance, veTodoEn, esCliente } from './api.js';
 import Dudas from './Dudas.jsx';
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
@@ -31,6 +31,19 @@ export default function Project({ id }) {
   // que nadie tenga que acordarse de encenderlo.
   const [apagados, setApagados] = useState(() => new Set());
   const [fase, setFase] = useState('');   // '' = las dos fases
+  /* EL ALCANCE. Mike, 20-sep: «los no aprobados, a pesar de que tienen precio
+   * y toda la info, NO APARECEN en quell al menos que veas la vista de ítems
+   * fuera de alcance», y «en el filtro de vista de ítems fuera de alcance
+   * debe venir dividido entre no aprobados y cancelados».
+   *
+   * Por omisión 'dentro': la obra enseña lo que se está fabricando. Lo que
+   * no se aprobó todavía y lo que se canceló siguen dibujados en el plano
+   * —la pieza no se borra— pero no estorban hasta que alguien los pide.
+   *
+   * Quién es qué lo dice la API en cada pieza (`alcance`), no esta pantalla:
+   * la regla de «para considerarse cancelado tiene que haber estado aprobado
+   * primero» vive en el contrato y aquí sólo se lee. */
+  const [alcance, setAlcance] = useState('dentro');
   const [drawer, setDrawer] = useState(false);
   const [openItems, setOpenItems] = useState(null);
   /* Los «ítems sin ubicar»: lo que se vendió en dash101 y todavía no tiene
@@ -110,11 +123,16 @@ export default function Project({ id }) {
   }, [data]);
   const filtra = (lista) => lista
     .filter((e) => !apagados.has(e.type || 'Otro'))
-    .filter((e) => !fase || (e.fase || 'produccion') === fase);
+    .filter((e) => !fase || (e.fase || 'produccion') === fase)
+    .filter((e) => alcance === 'todos' || (e.alcance || 'dentro') === alcance);
   const shown = filtra(elements);
+  /* Cuántos hay de cada alcance, para poder decirlo en el propio filtro: un
+   * selector que no dice cuántos hay detrás obliga a probar las tres
+   * opciones para encontrar la que tiene algo. */
+  const cuantosAlcance = (a) => (data?.elements || []).filter((e) => (e.alcance || 'dentro') === a).length;
   // La lista es de toda la obra y no de un plano: un ítem se atora en compras
   // sin que importe en qué hoja está dibujado.
-  const listados = useMemo(() => filtra(data?.elements || []), [data, apagados, fase]);
+  const listados = useMemo(() => filtra(data?.elements || []), [data, apagados, fase, alcance]);
   const etapas = data?.etapas || [];
   const enFase = (f) => elements.filter((e) => (e.fase || 'produccion') === f).length;
   const prende = (t) => setApagados((s0) => { const n = new Set(s0); n.has(t) ? n.delete(t) : n.add(t); return n; });
@@ -308,11 +326,20 @@ export default function Project({ id }) {
               {Object.entries(FASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           )}
+          {vista !== 'dudas' && !cli && (
+            <select className={'btn sm' + (alcance !== 'dentro' ? ' on' : '')} style={{ width: 'auto' }}
+              value={alcance} onChange={(ev) => setAlcance(ev.target.value)} title="Ver los que están fuera del alcance">
+              <option value="dentro">En proceso ({cuantosAlcance('dentro')})</option>
+              <option value="no_aprobado">Fuera: no aprobados ({cuantosAlcance('no_aprobado')})</option>
+              <option value="cancelado">Fuera: cancelados ({cuantosAlcance('cancelado')})</option>
+              <option value="todos">Todos</option>
+            </select>
+          )}
         </div>
-        {(apagados.size > 0 || fase) && !adding && vista !== 'dudas' && (
+        {(apagados.size > 0 || fase || alcance !== 'dentro') && !adding && vista !== 'dudas' && (
           <div className="hint">
-            Viendo {vista === 'lista' ? listados.length : shown.length} de {vista === 'lista' ? data.elements.length : elements.length} ítems{apagados.size ? ` · sin ${[...apagados].join(', ').toLowerCase()}` : ''}{fase ? ` · ${FASES[fase]}` : ''}
-            <button className="btn sm" onClick={() => { setApagados(new Set()); setFase(''); }}>Ver todos</button>
+            Viendo {vista === 'lista' ? listados.length : shown.length} de {vista === 'lista' ? data.elements.length : elements.length} ítems{apagados.size ? ` · sin ${[...apagados].join(', ').toLowerCase()}` : ''}{fase ? ` · ${FASES[fase]}` : ''}{alcance !== 'dentro' ? ` · ${ALCANCES[alcance]}` : ''}
+            <button className="btn sm" onClick={() => { setApagados(new Set()); setFase(''); setAlcance('dentro'); }}>Ver todos</button>
           </div>
         )}
         {adding && <div className="hint">Toca el plano donde va el ítem · <button className="btn sm" onClick={() => setAdding(false)}>Cancelar</button></div>}
