@@ -461,3 +461,66 @@ select.sm{font-size:12px;padding:3px 6px;border-radius:12px;border:1px solid var
 .obras-check input{width:auto;margin:0}
 .lista-clientes{display:flex;flex-direction:column;gap:4px;font-size:13px}
 .lista-clientes div{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ═══════════════ imprimir el plano ═══════════════
+ *
+ * Mike, 20-sep-2026: «quiero poder imprimir el plano de quell pero enfocado
+ * a que la impresión salga, con el plano ligeramente claro (un 75% de
+ * opacidad) y los círculos de ítems en sus colores bien, pero el código del
+ * ítem en letra más legible, de unos 6-8 pts».
+ *
+ * Tres cosas que hay que decirle al navegador o no salen:
+ *
+ *   · `print-color-adjust: exact`. Por omisión, al imprimir se tiran los
+ *     fondos de color «para ahorrar tinta», y los círculos saldrían todos
+ *     blancos. El color del círculo ES el dato —de qué tipo es el ítem—, así
+ *     que aquí se pide explícito;
+ *   · el plano al 75 %. Va sobre el lienzo, no sobre la hoja entera: si se
+ *     aguara todo, los círculos y el código se aguarían con él y estaríamos
+ *     peor que antes;
+ *   · el código en puntos, no en píxeles. El pin se dibuja dentro de dos
+ *     transformaciones que se cancelan (el mundo va a escala `s` y el pin a
+ *     `1/s`), así que un tamaño en `pt` llega a la hoja como esos puntos y
+ *     no como lo que quedó del zoom.
+ *
+ * El encuadre no se hace aquí: el lienzo se ajusta solo al oír `beforeprint`
+ * (web/src/PlanCanvas.jsx). Sin eso se imprimiría el pedazo que se estaba
+ * viendo, y el resto de la hoja saldría en blanco.
+ */
+@media print {
+  @page { margin: 8mm; }
+
+  html, body, #root { height: auto; overflow: visible; background: #fff; }
+
+  /* Fuera todo lo que es para tocar, no para leer. */
+  aside, .tools, .hint, .drawer, .panel, .topbar, .modal, .sheet, .fab,
+  .canvas .btn, .segm, .swatches { display: none !important; }
+
+  /* El plano, solo, del ancho de la hoja. */
+  .app { display: block !important; height: auto !important; overflow: visible !important; padding: 0 !important; }
+  .stage { position: static !important; overflow: visible !important; background: #fff !important; }
+  .canvas { position: relative !important; inset: auto !important; width: 100% !important; height: 92vh !important; cursor: default !important; }
+
+  /* El plano, más claro; los ítems, no. */
+  .canvas .hoja { opacity: .75; }
+
+  .pin {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    box-shadow: none !important;
+    border-width: 2px;
+  }
+  .pin.sel { outline: none !important; }
+
+  /* El código, legible: 7 pt, negro, con halo blanco para que se lea encima
+     de una línea del plano. */
+  .pin span {
+    font-size: 7pt;
+    font-weight: 700;
+    color: #000;
+    margin-top: 2px;
+    text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 2px #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

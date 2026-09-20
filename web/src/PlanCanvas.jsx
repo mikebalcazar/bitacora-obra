@@ -50,6 +50,27 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
   };
   const mide = () => { const b = box.current; if (b) setTam({ w: b.clientWidth, h: b.clientHeight }); };
 
+  /* IMPRIMIR: antes de que el navegador arme las hojas, el plano se encuadra
+   * solo y se vuelve a dibujar.
+   *
+   * Mike, 20-sep: «quiero poder imprimir el plano de quell pero enfocado a
+   * que la impresión salga, con el plano ligeramente claro y los círculos de
+   * ítems en sus colores bien, pero el código del ítem en letra más
+   * legible».
+   *
+   * Hace falta porque el plano se pinta en un lienzo del tamaño de la
+   * PANTALLA: sin esto se imprime el pedazo que se estaba viendo, al zoom en
+   * que estaba, y lo que quedaba fuera sale en blanco. `afterprint` deja las
+   * cosas como estaban, para que imprimir no le mueva la vista a nadie. */
+  useEffect(() => {
+    const antes = () => { fit(); pinta(); };
+    const despues = () => { pide(); };
+    window.addEventListener('beforeprint', antes);
+    window.addEventListener('afterprint', despues);
+    return () => { window.removeEventListener('beforeprint', antes); window.removeEventListener('afterprint', despues); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan?.id, plan?.width, plan?.height]);
+
   // La vista vive en un ref además del estado: así el dibujado la lee sin
   // esperar a que React vuelva a pintar, y el arrastre se siente inmediato.
   function aplica(nueva) {
