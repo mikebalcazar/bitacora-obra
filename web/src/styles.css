@@ -385,6 +385,19 @@ a{color:var(--accent)}
   border-radius:9px;background:var(--surface2);color:var(--ink)}
 
 /* La fase del ítem, en la cabecera de su panel y en el plano. */
+/* La fecha de entrega del ítem y cuántos días faltan (contrato 0.40.0).
+   Tres estados y no dos: lejos se lee gris —es un dato—, cerca se pone
+   ámbar y vencida roja. Sin fecha no hay pastilla: un botón, porque
+   «todavía no se sabe» es un estado legítimo de una obra y pintarlo de
+   rojo llena la pantalla de alarmas que nadie atiende. */
+.entrega{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 8px}
+.entrega .cuando{font-size:12px;color:var(--ink2)}
+.entrega input[type=date]{font:inherit;font-size:13px;padding:3px 6px;border:1px solid var(--line2);border-radius:6px;background:var(--bg)}
+.entrega label{font-size:12px;color:var(--ink2)}
+.pill.entrega{background:var(--line2);color:var(--ink2)}
+.pill.entrega.cerca{background:var(--proc-soft);color:#8A6209}
+.pill.entrega.tarde{background:var(--pend);color:#fff}
+
 .pill.fase{font-weight:600}
 .pill.fase.produccion{background:var(--accent-soft);color:var(--accent)}
 .pill.fase.punchlist{background:var(--ok-soft);color:var(--ok)}
