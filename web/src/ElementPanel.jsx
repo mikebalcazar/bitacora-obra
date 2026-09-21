@@ -112,6 +112,7 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
           <span>{e.fase === 'punchlist' && e.entregado_en ? `Entregado ${fmtD(e.entregado_en)}` : `Creado ${fmtD(e.created_at)}`}</span>
         </div>
         {staff && <Contratistas e={e} contratistas={contratistas} members={members} onChanged={changed} />}
+        {e.item_id && <Entrega e={e} staff={staff} onChanged={changed} />}
         {staff && e.item_id && <Alcance e={e} onChanged={changed} />}
         <div className="tabs">
           {veTodo && <button className={'tab' + (tab === 'log' ? ' on' : '')} onClick={() => setTab('log')}>Bitácora <span className="n">{log.length}</span></button>}
@@ -572,6 +573,79 @@ function EditElement({ e, onClose, onChanged, onDeleted, onReubicar }) {
  * En dos pasos y con motivo: cancelar saca el ítem del precio de venta del
  * proyecto, y «por qué se cayó esto» no tiene otra respuesta tres meses
  * después. */
+/* La fecha de entrega del ítem y cuántos días faltan (contrato 0.40.0).
+ *
+ * Mike, 21-sep: «hay que agregar un campo en el ítem de fecha de entrega y un
+ * contador de cuántos días quedan para la entrega».
+ *
+ * LA CUENTA NO SE HACE AQUÍ. Viene resuelta de la API, en
+ * `item_entrega_falta`, por dos razones: tres apps contando días son tres
+ * maneras de que una diga «faltan 3» y otra «faltan 2», y una cuenta hecha en
+ * el navegador hereda el reloj del aparato —un celular de obra con la fecha
+ * mal puesta diría que hay margen cuando ya se venció—.
+ *
+ * LA FECHA TAMPOCO ES DE AQUÍ: se guarda en el ítem, que es el mismo que ve
+ * dash101 y el que el portal ya le enseña al cliente. Se fija desde la obra
+ * porque es donde se sabe, no porque haya una copia.
+ *
+ * Sin fecha no se pinta una alarma sino un botón: «todavía no se sabe» es un
+ * estado legítimo de una obra, y tratarlo como un descuido llena la pantalla
+ * de rojo que nadie atiende.
+ */
+function Entrega({ e, staff, onChanged }) {
+  const [abierto, setAbierto] = React.useState(false);
+  const [fecha, setFecha] = React.useState(e.item_fecha_entrega || '');
+  const [yendo, setYendo] = React.useState(false);
+  const falta = e.item_entrega_falta;
+
+  React.useEffect(() => { setFecha(e.item_fecha_entrega || ''); }, [e.id, e.item_fecha_entrega]);
+
+  const guardar = async (valor) => {
+    setYendo(true);
+    try {
+      await escribir({ ruta: `/elements/${e.id}/entrega`, cuerpo: { fecha: valor } });
+      setAbierto(false);
+      onChanged();
+    } catch (err) {
+      alert(err.message || 'No se pudo guardar la fecha.');
+    } finally {
+      setYendo(false);
+    }
+  };
+
+  if (abierto) {
+    return (
+      <div className="entrega editando">
+        <label>Se entrega el</label>
+        <input type="date" value={fecha} onChange={(ev) => setFecha(ev.target.value)} />
+        <button className="btn sm" disabled={yendo} onClick={() => guardar(fecha)}>{yendo ? 'Guardando…' : 'Guardar'}</button>
+        {e.item_fecha_entrega && (
+          <button className="btn sm" disabled={yendo} onClick={() => guardar('')} title="Dejarla sin fecha">Quitar</button>
+        )}
+        <button className="btn sm" disabled={yendo} onClick={() => { setAbierto(false); setFecha(e.item_fecha_entrega || ''); }}>Cancelar</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="entrega">
+      {falta ? (
+        <>
+          <span className={'pill entrega' + (falta.tarde ? ' tarde' : falta.dias <= 3 ? ' cerca' : '')}>{falta.dice}</span>
+          <span className="cuando">Se entrega el {fmtDay(e.item_fecha_entrega)}</span>
+        </>
+      ) : (
+        <span className="cuando">Sin fecha de entrega</span>
+      )}
+      {staff && (
+        <button className="btn sm" onClick={() => setAbierto(true)}>
+          {e.item_fecha_entrega ? 'Cambiar' : 'Poner fecha'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Alcance({ e, onChanged }) {
   const [abierto, setAbierto] = React.useState(false);
   const [motivo, setMotivo] = React.useState('');
