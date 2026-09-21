@@ -3,6 +3,7 @@ import { api, leer, escribir, fileUrl, FASES, ALCANCES, TIPOS, fmtD, fmtT, fmtDa
 import { useApp } from './App.jsx';
 import { Photos, usePending, PhotoInput, PendingStrip } from './Fotos.jsx';
 import { Duda } from './Dudas.jsx';
+import Docs from './DocsItem.jsx';
 
 // staff = puede escribir. veTodo = puede ver la obra completa. No son lo mismo:
 // el trabajador ve todo y no escribe nada, y el contratista ni ve todo ni
@@ -113,6 +114,12 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
         </div>
         {staff && <Contratistas e={e} contratistas={contratistas} members={members} onChanged={changed} />}
         {e.item_id && <Entrega e={e} staff={staff} onChanged={changed} />}
+        {/* Los archivos del ítem. Mike los pidió justo aquí, señalando el
+            recuadro azul del encabezado: es donde se está cuando surge la
+            duda de «¿cómo era esta pieza?». El contratista también lo ve —es
+            el plano de lo que va a fabricar—; lo que no puede es subir ni
+            anotar, y eso lo decide la API, no este renglón. */}
+        <Docs e={e} staff={staff} />
         {staff && e.item_id && <Alcance e={e} onChanged={changed} />}
         <div className="tabs">
           {veTodo && <button className={'tab' + (tab === 'log' ? ' on' : '')} onClick={() => setTab('log')}>Bitácora <span className="n">{log.length}</span></button>}

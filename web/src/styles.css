@@ -547,3 +547,77 @@ select.sm{font-size:12px;padding:3px 6px;border-radius:12px;border:1px solid var
    puede estar buscando—; dejarlo igual que los demás diría que se está
    fabricando. */
 .pin.fuera{background:transparent !important;border-style:dashed;opacity:.72}
+
+/* ── los archivos del ítem (Mike, 21-sep-2026) ───────────────────────────
+   El plano grande y los demás al lado. En el celular la barra se recorre en
+   horizontal encima de la hoja: una columna de 260 puntos al lado dejaría el
+   plano en 130, que es no verlo. */
+.docs-btn{margin:2px 0 8px}
+.docs-btn .ico{color:var(--ink3);font-size:13px}
+.docs-btn .n{font-variant-numeric:tabular-nums;color:var(--ink3);font-size:12px}
+.docs-btn .falta{font-size:11px;color:var(--pend);background:var(--pend-soft);padding:1px 6px;border-radius:4px}
+
+.visor{position:fixed;inset:0;z-index:40;background:var(--bg);display:flex;flex-direction:column}
+.visor-top{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--surface);flex:none}
+.visor-top .quien{min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.visor-top .quien b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.visor-top .quien span{font-size:12px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.visor-top .seg.anotar{flex:none}
+.visor-top .seg.anotar button{padding:7px 12px}
+
+.visor-cuerpo{flex:1;min-height:0;display:flex;flex-direction:row-reverse}
+.visor-hoja{flex:1;min-width:0;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px calc(12px + var(--sai, 0px)) calc(12px + var(--sab))}
+.visor-lado{width:280px;flex:none;border-right:1px solid var(--line);background:var(--surface);
+  overflow:auto;-webkit-overflow-scrolling:touch;padding:12px 12px calc(12px + var(--sab));
+  display:flex;flex-direction:column;gap:8px}
+.visor-lado .rotulo{font-size:11px;font-weight:500;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em;margin-top:6px}
+.visor-lado .rotulo .n{font-variant-numeric:tabular-nums}
+.visor-lado .nada{font-size:12px;color:var(--ink3);padding:2px 2px 4px}
+
+.dcard{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:6px 8px 6px 10px}
+.dcard.on{border-color:var(--accent);background:var(--accent-soft)}
+.dcard .cual{flex:1;min-width:0;text-align:left;padding:3px 0}
+.dcard .cual .t{font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dcard .cual .s{font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dcard .cual .s.nota{color:var(--accent)}
+
+.versiones{display:flex;flex-direction:column;gap:4px;margin:2px 0 4px}
+.versiones .vrow{display:flex;align-items:baseline;gap:6px;text-align:left;border:1px solid var(--line2);border-radius:8px;padding:5px 8px;font-size:12px}
+.versiones .vrow.on{border-color:var(--accent);background:var(--accent-soft)}
+.versiones .vrow b{font-variant-numeric:tabular-nums}
+.versiones .vrow span{flex:1;min-width:0;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.versiones .vrow small{color:var(--ink3);flex:none}
+
+.docs-hoja{display:flex;flex-direction:column;gap:8px;align-items:center;width:100%}
+.docs-hoja>*{max-width:100%}
+.docs-hoja .paginas{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2)}
+.docs-hoja .lamina{position:relative;display:inline-block;max-width:100%;line-height:0;box-shadow:var(--shadow);background:#fff}
+.docs-hoja .lamina.anotando{touch-action:none;cursor:crosshair}
+.docs-hoja .lamina img,.docs-hoja .lamina canvas{display:block;max-width:100%;height:auto}
+.docs-hoja .marcas{position:absolute;inset:0;width:100%;height:100%}
+.docs-hoja .comomarcar{font-size:12px;color:var(--ink2);background:var(--accent-soft);border-radius:8px;padding:6px 10px}
+.avisoarch{margin:10px auto 0;font-size:12px;color:var(--ink2);background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;max-width:520px;text-align:center}
+
+.chinche{position:absolute;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;
+  background:var(--pend);color:#fff;font-size:11px;font-weight:600;line-height:22px;text-align:center;
+  border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.chinche.on{background:var(--accent)}
+.globo{position:absolute;transform:translate(-50%,10px);z-index:2;width:min(240px,70vw);
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);
+  padding:8px 10px;display:flex;flex-direction:column;gap:6px;line-height:1.35}
+.globo .txt{font-size:13px;white-space:pre-wrap}
+.globo .pie{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink3)}
+.globo .pie span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+.modal p.muted{font-size:13px;line-height:1.45}
+
+@media (max-width:760px){
+  .visor-cuerpo{flex-direction:column}
+  .visor-lado{width:auto;border-right:0;border-bottom:1px solid var(--line);
+    flex-direction:row;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;padding:8px 12px}
+  .visor-lado .rotulo{margin:0;flex:none}
+  .visor-lado .dcard{flex:none;width:min(220px,62vw)}
+  .visor-lado .btn.block{width:auto;flex:none}
+  .visor-lado .versiones{flex-direction:row;flex:none}
+  .visor-lado .versiones .vrow{flex:none;white-space:nowrap}
+}
