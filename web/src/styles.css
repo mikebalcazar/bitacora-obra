@@ -114,7 +114,48 @@ a{color:var(--accent)}
 .stage .tools{position:absolute;top:12px;left:12px;right:12px;display:flex;gap:8px;z-index:3;align-items:center;pointer-events:none}
 .stage .tools>*{pointer-events:auto}
 .stage .tools .btn{box-shadow:0 2px 8px rgba(20,28,38,.08)}
-.hint{position:absolute;left:50%;bottom:calc(16px + var(--sab));transform:translateX(-50%);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:8px;box-shadow:var(--shadow);font-size:13px;z-index:3;white-space:nowrap}
+/* El aviso de «toca el plano».
+ *
+ * DEFECTO que reportó Mike el 22-sep-2026: «el letrero que indica "toca el
+ * plano donde va el ítem" debe ser visible, no blanco».
+ *
+ * Era `background: var(--surface)`, o sea BLANCO, y se pinta encima de la
+ * hoja del plano, que también es blanca. Medido: contraste 1.00 contra el
+ * papel — literalmente invisible salvo por la sombra, que sobre papel claro
+ * casi no se nota. Ahora va en tinta oscura sólida: 17:1 contra la hoja.
+ *
+ * Oscuro y no rojo/ámbar/verde a propósito: esos tres ya significan algo en
+ * esta pantalla (pendiente, en proceso, resuelto) y un aviso que los use se
+ * leería como un estado del ítem.
+ *
+ * El latido son DOS pulsos y se acaba. Uno infinito en una pantalla que se
+ * usa con el sol encima y el plano abierto es de las cosas que hacen que la
+ * gente deje de mirar. */
+.hint{position:absolute;left:50%;bottom:calc(22px + var(--sab));transform:translateX(-50%);
+  background:var(--ink);color:#fff;padding:10px 14px;border-radius:10px;
+  box-shadow:0 6px 20px rgba(10,14,20,.45);font-size:13.5px;font-weight:500;z-index:3;
+  display:flex;align-items:center;gap:10px;line-height:1.3;
+  /* `width:max-content` con tope: toma el ancho de UNA línea y sólo se parte
+     si de verdad no cabe. Sin esto, una caja absoluta que puede partir el
+     texto se encoge al mínimo, y el aviso salía en tres renglones con media
+     pantalla libre al lado. */
+  width:max-content;max-width:calc(100vw - 24px);
+  animation:hint-entra .18s ease-out, hint-late 1.1s ease-in-out 2}
+/* El puntito: dice «esto está esperando algo de ti» sin gastar palabras. */
+.hint::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--proc);flex:none}
+/* El botón de adentro, sobre fondo oscuro: el `.btn` de siempre es claro y
+   aquí se veía como un parche pegado. */
+/* El texto se ajusta; el botón NUNCA. Con `nowrap` en el contenedor, el
+   aviso del requerimiento —que es más largo— empujaba el «Cancelar» fuera
+   del borde de un celular de 390 y lo cortaba a la mitad. */
+.hint>span{min-width:0}
+.hint .btn{background:transparent;color:#fff;border-color:rgba(255,255,255,.45);min-height:30px;padding:4px 10px;flex:none}
+.hint .btn:hover{background:rgba(255,255,255,.14)}
+@keyframes hint-entra{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes hint-late{0%,100%{box-shadow:0 6px 20px rgba(10,14,20,.45)}50%{box-shadow:0 6px 20px rgba(10,14,20,.45),0 0 0 6px rgba(217,154,18,.35)}}
+/* Quien pidió menos movimiento no lo recibe: el aviso sigue igual de visible
+   porque lo que lo hace visible es el contraste, no la animación. */
+@media (prefers-reduced-motion:reduce){ .hint{animation:none} }
 .canvas{position:absolute;inset:0;cursor:grab}
 .canvas.adding{cursor:crosshair}
 .canvas.dragging{cursor:grabbing}
