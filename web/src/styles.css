@@ -621,3 +621,13 @@ select.sm{font-size:12px;padding:3px 6px;border-radius:12px;border:1px solid var
   .visor-lado .versiones{flex-direction:row;flex:none}
   .visor-lado .versiones .vrow{flex:none;white-space:nowrap}
 }
+
+/* ── el requerimiento, que está en revisión (Mike, 22-sep-2026) ──────────
+   Gris y no un color de material: lo que dice de lejos es «esto todavía no
+   es nada». En un plano lleno, un color más se leería como otra categoría
+   de pieza y alguien la mandaría a fabricar. */
+.revision{margin:6px 0 8px;font-size:12px;line-height:1.4;color:var(--ink2);
+  background:var(--surface2);border-left:3px solid var(--ink3);border-radius:0 8px 8px 0;padding:7px 10px}
+.revision b{color:var(--ink)}
+.modal p.aviso-rq{font-size:13px;line-height:1.45;background:var(--surface2);
+  border-left:3px solid var(--ink3);border-radius:0 8px 8px 0;padding:8px 10px;margin:0}

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, leer, escribir, fileUrl, FASES, ALCANCES, TIPOS, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
+import { api, leer, escribir, fileUrl, FASES, ALCANCES, TIPOS, enRevision, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
 import { Photos, usePending, PhotoInput, PendingStrip } from './Fotos.jsx';
 import { Duda } from './Dudas.jsx';
@@ -112,6 +112,16 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
           <span>{e.plan_name}</span>
           <span>{e.fase === 'punchlist' && e.entregado_en ? `Entregado ${fmtD(e.entregado_en)}` : `Creado ${fmtD(e.created_at)}`}</span>
         </div>
+        {/* EN REVISIÓN. Mike, 22-sep: un requerimiento «sí aparece en mapa, sí
+            aparece en ítems, pero está pendiente de cotizarse y autorizarse
+            para entrar en producción». Se dice con palabras y no sólo con el
+            color del pin: el color se lee de lejos en el plano, pero aquí
+            adentro hay que saber POR QUÉ no se puede avanzar. */}
+        {enRevision(e.type) && (
+          <div className="revision">
+            <b>En revisión.</b> Falta cotizarlo y autorizarlo. Cuando se apruebe, edítalo y cámbiale el tipo: entra a producción con todo lo que ya trae.
+          </div>
+        )}
         {staff && <Contratistas e={e} contratistas={contratistas} members={members} onChanged={changed} />}
         {e.item_id && <Entrega e={e} staff={staff} onChanged={changed} />}
         {/* Los archivos del ítem. Mike los pidió justo aquí, señalando el
@@ -128,8 +138,12 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
       </div>
       {tab === 'log' && veTodo
         ? <Log e={e} log={log} onChanged={changed} setLb={setLb} user={user} staff={staff} />
-        : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} veTodo={veTodo} members={members} onEntregar={entregar} onVerProceso={() => setProc(true)} />}
-      {veTodo && !!etapas.length && (
+        : <Punch e={e} punch={punch} flash={flash} onChanged={changed} setLb={setLb} user={user} staff={staff} veTodo={veTodo} members={members} onEntregar={enRevision(e.type) ? null : entregar} onVerProceso={() => setProc(true)} />}
+      {/* La barra del proceso se esconde mientras esté en revisión, y las
+          palomas se apagan: la API rechaza las dos cosas (contrato 0.43.0),
+          así que ofrecerlas sería prometer algo que no se cumple. El permiso
+          lo decide el motor; esto es para no hacer picar en balde. */}
+      {veTodo && !!etapas.length && !enRevision(e.type) && (
         <BarraProceso e={e} etapas={etapas} hechas={hechas} n={nEtapas} puedeMarcar={staff}
           abierta={proc} onAbrir={() => setProc(!proc)} onChanged={changed} />
       )}

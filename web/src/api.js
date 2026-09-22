@@ -197,7 +197,23 @@ export const TIPOS = [
   { clave: 'Mueble',  color: '#2C5AA0' },
   { clave: 'Puerta',  color: '#B4622A' },
   { clave: 'Acabado', color: '#4B7F52' },
+  { clave: 'Servicio', color: '#6B4E9B' },
+  // 22-sep-2026, Mike: «el requerimiento es un tipo de ítem pero que aún está
+  // en revisión. Sí aparece en mapa, sí aparece en ítems, pero está pendiente
+  // de cotizarse y autorizarse para entrar en producción».
+  //
+  // Gris a propósito, y es el único que no es un color de material: lo que
+  // dice de lejos es «esto todavía no es nada». Si se hubiera pintado de un
+  // color más, en un plano lleno se leería como una categoría más de pieza y
+  // alguien la mandaría a fabricar.
+  { clave: 'Requerimiento', color: '#6E7781' },
 ];
+
+/** ¿Está en revisión? Se pregunta por el tipo y normalizando, igual que en la
+ *  API (`esRequerimiento` de src/quell/codigos.js): `type` es texto libre, y
+ *  un «requerimiento» en minúscula guardado desde otra pantalla tiene que
+ *  seguir contando. */
+export const enRevision = (tipo) => String(tipo || '').trim().toLowerCase() === 'requerimiento';
 // Un ítem viejo con un tipo que ya no está en la lista no desaparece: se pinta
 // del azul marino de siempre y se puede prender y apagar como los demás.
 export const colorTipo = (t) => (TIPOS.find((x) => x.clave === t) || {}).color || '#1C3557';
