@@ -354,7 +354,17 @@ export default function Project({ id }) {
             <button className="btn sm" onClick={() => { setApagados(new Set()); setFase(''); setAlcance('dentro'); }}>Ver todos</button>
           </div>
         )}
-        {adding && <div className="hint">{tipoNuevo === 'Requerimiento' ? 'Toca el plano donde va el requerimiento' : 'Toca el plano donde va el ítem'} · <button className="btn sm" onClick={() => { setAdding(false); setTipoNuevo(null); }}>Cancelar</button></div>}
+        {adding && (
+          <div className="hint">
+            {/* El texto en su propia caja para que se ajuste solo: el aviso
+                del requerimiento es más largo y en un celular de 390 empujaba
+                el «Cancelar» fuera del borde. El «·» que los separaba se fue:
+                ahora los separa el espacio del flex, que no se parte a media
+                línea cuando el texto hace dos renglones. */}
+            <span>{tipoNuevo === 'Requerimiento' ? 'Toca el plano donde va el requerimiento' : 'Toca el plano donde va el ítem'}</span>
+            <button className="btn sm" onClick={() => { setAdding(false); setTipoNuevo(null); }}>Cancelar</button>
+          </div>
+        )}
         {moviendo && <div className="hint">Toca el plano donde va ahora {moviendo.code || 'el ítem'} · <button className="btn sm" onClick={() => setMoviendo(null)}>Cancelar</button></div>}
         {vista === 'dudas' ? (
           <Dudas pid={id} staff={staff} user={user} cli={cli}
