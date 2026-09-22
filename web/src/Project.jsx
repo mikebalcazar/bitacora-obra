@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { api, leer, escribir, hayRed, fileUrl, FASES, ALCANCES, TIPOS, colorTipo, aguado, enRevision, fmtD, isLate, rasterizePlan, avance, veTodoEn, esCliente } from './api.js';
+import { HONDURA, irA, sellar, useEncima } from './navegar.js';
 import Dudas from './Dudas.jsx';
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
@@ -10,7 +11,7 @@ import { siguienteCodigo } from './codigos.js';
 
 const TYPES = TIPOS.map((t) => t.clave);
 
-export default function Project({ id }) {
+export default function Project({ id, sub }) {
   const { user, go, logout, toast } = useApp();
   // El cliente (encargo B): ve el plano con sus ítems para ubicarse y los
   // puntos por definir. Lo demás de esta pantalla no le sale, y el servidor
@@ -20,7 +21,25 @@ export default function Project({ id }) {
   const [data, setData] = useState(null);
   const [projects, setProjects] = useState([]);
   const [planId, setPlanId] = useState(null);
-  const [sel, setSel] = useState(null);
+  /* DÓNDE ESTÁS lo dice la dirección, no una variable (22-sep-2026).
+   *
+   * `sub` es lo que sigue de `#/p/OBRA`: '' el plano, 'lista', 'dudas', o
+   * 'e/ITEM' con un ítem abierto. Antes eran dos `useState` y por eso el
+   * «atrás» del navegador no sabía nada de ellos y sacaba de la app.
+   *
+   * Derivarlos en vez de duplicarlos es lo que impide que la pantalla y la
+   * barra de direcciones se contradigan: no hay dos copias que sincronizar. */
+  const trozos = (sub || '').split('/').filter(Boolean);
+  const sel = trozos[0] === 'e' ? trozos[1] || null : null;
+  const vista = ['lista', 'dudas'].includes(trozos[0]) ? trozos[0] : 'plan';
+  /* A esta pantalla también se llega sin navegar: por una liga que alguien
+   * mandó, o recargando. Ahí el navegador deja el estado en nulo y el
+   * módulo creería que estamos en el inicio, así que el primer paso
+   * apilaría una entrada de más. Se sella al llegar y al cambiar. */
+  useEffect(() => {
+    sellar(sel ? HONDURA.item : vista !== 'plan' ? HONDURA.seccion : HONDURA.obra);
+  }, [sel, vista]);
+  const irSeccion = (v) => irA(`/p/${id}${v && v !== 'plan' ? '/' + v : ''}`, v && v !== 'plan' ? HONDURA.seccion : HONDURA.obra);
   const [flash, setFlash] = useState(null);
   const [adding, setAdding] = useState(false);
   /* Con qué tipo nace el ítem que se está clavando. `null` es el alta de
@@ -61,7 +80,10 @@ export default function Project({ id }) {
   // El plano contesta "dónde"; la lista contesta "cómo van". Son la misma obra
   // vista de dos maneras y comparten los mismos filtros, así que apagar un tipo
   // en una lo apaga en la otra.
-  const [vista, setVista] = useState('plan');   // plan | lista | dudas
+  /* `setVista` se queda con el mismo nombre para no reescribir la pantalla
+   * entera, pero ahora navega en vez de guardar. Alternar entre plano y
+   * lista no acumula historial: son el mismo nivel de hondura. */
+  const setVista = irSeccion;
   const [uploading, setUploading] = useState(false);
   const [report, setReport] = useState(false);
   const [editPlan, setEditPlan] = useState(null);
@@ -145,11 +167,31 @@ export default function Project({ id }) {
   const openTotal = data ? data.elements.reduce((a, e) => a + e.n_pend + e.n_proc, 0) : 0;
   const lateTotal = openItems ? openItems.filter(isLate).length : null;
 
+  /** Abrir un ítem es entrar más hondo: deja una entrada en el historial, y
+   *  por eso «atrás» lo cierra en vez de sacar de la obra. El plano y el
+   *  destello son de la vista y no de la dirección: no describen DÓNDE
+   *  estás, así que compartir la liga no debe arrastrarlos. */
   function selectEl(eid, opts = {}) {
-    setSel(eid); setFlash(opts.flash || null);
+    setFlash(opts.flash || null);
     if (opts.planId && opts.planId !== planId) setPlanId(opts.planId);
     if (opts.mobile !== false) setMview('elem');
+    irA(`/p/${id}/e/${eid}`, HONDURA.item);
   }
+  /** Cerrar el ítem: se sale hacia afuera, que `irA` resuelve con el propio
+   *  historial. Si escribiera una entrada nueva, el siguiente «atrás»
+   *  reabriría el ítem que la persona acaba de cerrar. */
+  const cerrarEl = () => { setMview('plan'); irSeccion(vista); };
+  /* Lo que se abre ENCIMA: «atrás» lo cierra en vez de salir de la obra.
+   * Están juntas a propósito — si mañana se agrega una ventana y no se
+   * apunta en esta lista, el «atrás» vuelve a sacar de la app y nadie lo
+   * nota hasta que alguien lo sufre en obra. */
+  useEncima(drawer, () => setDrawer(false));
+  useEncima(!!newAt, () => { setNewAt(null); setTipoNuevo(null); });
+  useEncima(report, () => setReport(false));
+  useEncima(planos, () => setPlanos(false));
+  useEncima(!!editPlan, () => setEditPlan(null));
+  useEncima(!!moviendo, () => setMoviendo(null));
+
   function onPlanClick(x, y) {
     if (moviendo) { reubicar(x, y); return; }
     if (!adding) return;
@@ -243,7 +285,7 @@ export default function Project({ id }) {
       <aside className="rail">
         <section>
           <div className="eyebrow">Planos</div>
-          {data.plans.map((p) => <button key={p.id} className={'item' + (p.id === planId ? ' on' : '')} onClick={() => { setPlanId(p.id); setSel(null); }}><span>{p.name}</span><small>{data.elements.filter((e) => e.plan_id === p.id).length} ítems</small></button>)}
+          {data.plans.map((p) => <button key={p.id} className={'item' + (p.id === planId ? ' on' : '')} onClick={() => { setPlanId(p.id); cerrarEl(); }}><span>{p.name}</span><small>{data.elements.filter((e) => e.plan_id === p.id).length} ítems</small></button>)}
           {staff && <label className="btn sm" style={{ justifyContent: 'flex-start' }}>{uploading ? 'Procesando…' : '+ Subir plano (PDF / imagen)'}<input type="file" accept="application/pdf,image/*" hidden disabled={uploading} onChange={(e) => e.target.files[0] && uploadPlan(e.target.files[0])} /></label>}
           {staff && plan && <button className="btn sm" style={{ justifyContent: 'flex-start' }} onClick={() => setEditPlan(plan)}>Renombrar / borrar plano</button>}
         </section>
@@ -393,7 +435,7 @@ export default function Project({ id }) {
         )}
       </main>
 
-      <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} veTodo={veTodo} user={user} members={data.members} todos={data.elements} onIr={(eid, pid) => selectEl(eid, { planId: pid })} onChanged={load} onClose={() => { setSel(null); setMview('plan'); }}
+      <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} veTodo={veTodo} user={user} members={data.members} todos={data.elements} onIr={(eid, pid) => selectEl(eid, { planId: pid })} onChanged={load} onClose={cerrarEl}
         onReubicar={(e) => { setMoviendo({ id: e.id, code: e.code }); setVista('plan'); setMview('plan'); }} />
 
       <nav className="mnav">
@@ -412,7 +454,7 @@ export default function Project({ id }) {
       {editPlan && <EditPlanModal plan={editPlan} onClose={() => setEditPlan(null)} onChanged={load} />}
       {planos && (
         <PlanosModal plans={data.plans} elements={data.elements} planId={planId} staff={staff} uploading={uploading}
-          onElegir={(pid) => { setPlanId(pid); setSel(null); setPlanos(false); }}
+          onElegir={(pid) => { setPlanId(pid); cerrarEl(); setPlanos(false); }}
           onSubir={(f) => { setPlanos(false); uploadPlan(f); }}
           onEditar={(p) => { setPlanos(false); setEditPlan(p); }}
           onClose={() => setPlanos(false)} />
