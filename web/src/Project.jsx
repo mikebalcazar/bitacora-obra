@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { api, leer, escribir, hayRed, fileUrl, FASES, ALCANCES, TIPOS, colorTipo, aguado, fmtD, isLate, rasterizePlan, avance, veTodoEn, esCliente } from './api.js';
+import { api, leer, escribir, hayRed, fileUrl, FASES, ALCANCES, TIPOS, colorTipo, aguado, enRevision, fmtD, isLate, rasterizePlan, avance, veTodoEn, esCliente } from './api.js';
 import Dudas from './Dudas.jsx';
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
@@ -23,6 +23,12 @@ export default function Project({ id }) {
   const [sel, setSel] = useState(null);
   const [flash, setFlash] = useState(null);
   const [adding, setAdding] = useState(false);
+  /* Con qué tipo nace el ítem que se está clavando. `null` es el alta de
+   * siempre; 'Requerimiento' viene del botón aparte que pidió Mike. Es un
+   * dato del alta y no un modo distinto: el formulario es el mismo, y quien
+   * levanta un requerimiento puede cambiarle el tipo ahí mismo si se dio
+   * cuenta de que ya estaba vendido. */
+  const [tipoNuevo, setTipoNuevo] = useState(null);
   const [newAt, setNewAt] = useState(null);
   // Reubicar un ítem ya colocado: se pica desde «Editar ítem», se toca el
   // nuevo punto y se confirma (encargo A.4). Va por la fila, como el alta.
@@ -181,7 +187,7 @@ export default function Project({ id }) {
       },
     }).catch((e) => { toast(e.message); return null; });
     if (!r) return;
-    setNewAt(null); await load(); cargarSinUbicar();
+    setNewAt(null); setTipoNuevo(null); await load(); cargarSinUbicar();
     if (r.subido && r.r?.id) selectEl(r.r.id);
     else toast('Sin señal: el ítem se sube solo cuando vuelva.');
   }
@@ -224,7 +230,13 @@ export default function Project({ id }) {
         </select>
         <div className="spacer" />
         {staff && <button className="btn sm hide-m" onClick={() => setReport(true)} disabled={!plan}>Generar reporte</button>}
-        {staff && <button className="btn primary sm" onClick={() => { if (!plan) return toast('Primero sube un plano'); setAdding(true); setMview('plan'); }}>+ Ítem</button>}
+        {/* Dos botones y no un desplegable: levantar un requerimiento es un
+            acto distinto de levantar una pieza vendida —lo hace otra persona,
+            en otro momento y con otra intención—, y esconderlo dentro del
+            alta de siempre es pedirle a quien anda en obra que se acuerde de
+            cambiar un campo. Mike lo pidió como botón. */}
+        {staff && <button className="btn sm" onClick={() => { if (!plan) return toast('Primero sube un plano'); setTipoNuevo('Requerimiento'); setAdding(true); setMview('plan'); }} title="Algo que el cliente pidió y todavía falta cotizar y autorizar">+ Requerimiento</button>}
+        {staff && <button className="btn primary sm" onClick={() => { if (!plan) return toast('Primero sube un plano'); setTipoNuevo(null); setAdding(true); setMview('plan'); }}>+ Ítem</button>}
         <button className="avatar hide-m" onClick={logout} title={`${user.name} · salir`}>{user.name.slice(0, 2).toUpperCase()}</button>
       </div>
 
@@ -342,7 +354,7 @@ export default function Project({ id }) {
             <button className="btn sm" onClick={() => { setApagados(new Set()); setFase(''); setAlcance('dentro'); }}>Ver todos</button>
           </div>
         )}
-        {adding && <div className="hint">Toca el plano donde va el ítem · <button className="btn sm" onClick={() => setAdding(false)}>Cancelar</button></div>}
+        {adding && <div className="hint">{tipoNuevo === 'Requerimiento' ? 'Toca el plano donde va el requerimiento' : 'Toca el plano donde va el ítem'} · <button className="btn sm" onClick={() => { setAdding(false); setTipoNuevo(null); }}>Cancelar</button></div>}
         {moviendo && <div className="hint">Toca el plano donde va ahora {moviendo.code || 'el ítem'} · <button className="btn sm" onClick={() => setMoviendo(null)}>Cancelar</button></div>}
         {vista === 'dudas' ? (
           <Dudas pid={id} staff={staff} user={user} cli={cli}
@@ -384,7 +396,7 @@ export default function Project({ id }) {
         {staff && <button onClick={() => plan && setReport(true)}><i dangerouslySetInnerHTML={{ __html: ICO.doc }} />Reporte</button>}
       </nav>
 
-      {newAt && <NewElementModal elements={data.elements} members={data.members} sinUbicar={sinUbicar} onCancel={() => setNewAt(null)} onOk={createElement} />}
+      {newAt && <NewElementModal elements={data.elements} members={data.members} sinUbicar={sinUbicar} tipoInicial={tipoNuevo} onCancel={() => { setNewAt(null); setTipoNuevo(null); }} onOk={createElement} />}
       {report && <ReportModal hasSel={!!sel} onCancel={() => setReport(false)} onOk={generateReport} />}
       {repView && <ReportView {...repView} onClose={() => setRepView(null)} />}
       {editPlan && <EditPlanModal plan={editPlan} onClose={() => setEditPlan(null)} onChanged={load} />}
@@ -470,12 +482,13 @@ function Lista({ items, etapas, plans, sel, onIr }) {
   );
 }
 
-function NewElementModal({ elements, members, sinUbicar = [], onCancel, onOk }) {
+function NewElementModal({ elements, members, sinUbicar = [], tipoInicial = null, onCancel, onOk }) {
   // El código se propone por obra según el tipo (MW-, PT-, FX-), sin contar
   // los prefijos viejos y sin rellenar huecos. Es una propuesta: si el taller
   // quiere otro a mano, puede; la base avisa si choca. En cuanto la persona
   // toca la clave, cambiar de tipo ya no se la pisa.
-  const [f, setF] = useState({ code: siguienteCodigo(elements, 'Mueble'), type: 'Mueble', name: '', resp: '', item_id: '' });
+  const arranca = tipoInicial || 'Mueble';
+  const [f, setF] = useState({ code: siguienteCodigo(elements, arranca), type: arranca, name: '', resp: '', item_id: '' });
   const [claveTocada, setClaveTocada] = useState(false);
   const cambiaTipo = (type) => setF({ ...f, type, code: claveTocada ? f.code : siguienteCodigo(elements, type) });
   const resps = [...new Set(members.map((m) => m.company || m.name).filter(Boolean))];
@@ -493,8 +506,16 @@ function NewElementModal({ elements, members, sinUbicar = [], onCancel, onOk }) 
   return (
     <div className="ov" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <form className="modal" onSubmit={(e) => { e.preventDefault(); onOk(f); }}>
-        <div><div className="eyebrow">Nuevo ítem</div><h2>Ubicado en el plano</h2></div>
-        {sinUbicar.length > 0 && (
+        <div>
+          <div className="eyebrow">{enRevision(f.type) ? 'Nuevo requerimiento' : 'Nuevo ítem'}</div>
+          <h2>Ubicado en el plano</h2>
+        </div>
+        {/* Se dice ANTES de guardar, no después: quien lo levanta tiene que
+            saber que esto no se va a fabricar todavía. */}
+        {enRevision(f.type) && (
+          <p className="muted aviso-rq">Queda <b>en revisión</b>: se ve en el plano y en la lista, pero no entra a producción hasta que se cotice y se autorice. Cuando se apruebe, cámbiale el tipo a lo que sea.</p>
+        )}
+        {sinUbicar.length > 0 && !enRevision(f.type) && (
           <div className="field">
             <label>¿Es uno de los vendidos? <small className="muted">ítems sin ubicar</small></label>
             <select value={f.item_id || ''} onChange={(e) => escoger(e.target.value)}>

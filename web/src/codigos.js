@@ -14,7 +14,14 @@
  * Es una función pura sobre la lista de ítems de la obra, sin red: así la
  * propuesta también sale bien en modo avión. La usa la pantalla y el Worker.
  */
-export const PREFIJOS = { Mueble: 'MW-', Puerta: 'PT-', Acabado: 'FX-' };
+/* OJO: este archivo es una COPIA de `src/quell/codigos.js` de suite101-api, y
+ * tiene que decir lo mismo. Está duplicado porque la propuesta de código se
+ * calcula en la pantalla para que también salga bien en modo avión, y el
+ * servidor la vuelve a calcular si llega sin ella. Si los dos se separan, dos
+ * personas sin señal proponen claves distintas para la misma pieza.
+ *
+ * 22-sep-2026: Servicio → SV- y Requerimiento → RQ-, como en la API. */
+export const PREFIJOS = { Mueble: 'MW-', Puerta: 'PT-', Acabado: 'FX-', Servicio: 'SV-', Requerimiento: 'RQ-' };
 
 export function siguienteCodigo(elementos, tipo) {
   const prefijo = PREFIJOS[tipo];
