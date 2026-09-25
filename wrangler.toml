@@ -26,6 +26,9 @@ run_worker_first = ["/api/*", "/files/*", "/descargas/*", "/s101/*"]
 
 [vars]
 APP_NAME = "quell101"
+# La dirección de workers.dev manda al dominio (Mike, 25-sep: «redirigir, no
+# apagar»). Sólo producción: staging tiene sus propias `vars` y no lleva esto.
+DOMINIO_PROPIO = "quell101.taller101.com"
 # La empresa de la suite de este sitio. Desde el 19-sep quell101 no tiene base:
 # sus datos viven en la base por empresa de la suite, y esta es la empresa que
 # se abre por omisión a quien es miembro de varias (y al dueño de la suite).
