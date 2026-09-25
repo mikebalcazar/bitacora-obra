@@ -3,6 +3,17 @@ main = "worker/index.js"
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Desde el 25-sep-2026 quell101 vive también en quell101.taller101.com (el
+# dominio lleva el nombre de la app, no el del Worker): el DNS de taller101.com
+# está en Cloudflare y el Worker se cuelga del dominio como *custom domain*;
+# Cloudflare pone el registro y el certificado. `workers_dev = true` es
+# obligatorio al lado de `routes`: sin él wrangler apaga workers.dev (le pasó
+# a peek101). Las dos direcciones se quedan.
+workers_dev = true
+routes = [
+  { pattern = "quell101.taller101.com", custom_domain = true }
+]
+
 [assets]
 directory = "./web/dist"
 binding = "ASSETS"
@@ -42,6 +53,8 @@ service = "suite101-api"
 # quell101 no tenía: un lugar donde entrar y escribir sin tocar la obra real.
 [env.staging]
 name = "bitacora-obra-staging"
+# `routes` se hereda del nivel de arriba; staging NO se cuelga del dominio.
+routes = []
 
 [env.staging.assets]
 directory = "./web/dist"
