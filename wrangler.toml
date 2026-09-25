@@ -22,7 +22,13 @@ not_found_handling = "single-page-application"
 # resuelve la capa de archivos, y como esta aplicación vive en una sola página,
 # lo que no encuentra devuelve index.html: por eso una ruta olvidada aquí no da
 # "no encontrado", sino la pantalla de entrada, que despista.
-run_worker_first = ["/api/*", "/files/*", "/descargas/*", "/s101/*"]
+#
+# Desde el 25-sep TODO pasa por el Worker: con la lista de antes la capa de
+# archivos contestaba la pantalla sin que el Worker corriera, y la redirección
+# de workers.dev al dominio nunca se ejecutaría (se midió en peek101). El
+# Worker sirve los archivos él mismo con `env.ASSETS.fetch`, que conserva la
+# regla de una sola página.
+run_worker_first = true
 
 [vars]
 APP_NAME = "quell101"
