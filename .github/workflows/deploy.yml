@@ -118,8 +118,9 @@ jobs:
       - name: Revisar que la bitácora responda
         run: |
           set -e
-          DIR=$(npx wrangler deployments list 2>/dev/null | grep -oE 'https://[a-z0-9.-]+workers\.dev' | head -1 || true)
-          if [ -z "$DIR" ]; then echo "No pude leer la dirección; búscala en dash.cloudflare.com → Workers."; exit 0; fi
+          # Producción se mira en su dominio: workers.dev manda para allá desde
+          # el 25-sep (DOMINIO_PROPIO en wrangler.toml).
+          DIR=https://quell101.taller101.com
           sleep 12
           curl -fsS "$DIR/api/salud"
           echo ""
@@ -131,7 +132,7 @@ jobs:
     needs: publicar
     uses: ./.github/workflows/verificar.yml
     with:
-      url: https://bitacora-obra.mike-929.workers.dev
+      url: https://quell101.taller101.com
       marca: quell101
       # Las cinco fuentes, una por una. Que la portada responda no dice nada de
       # ellas: si una .woff2 se cae, la app sigue abriendo y solo se ve con otra

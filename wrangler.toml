@@ -22,10 +22,19 @@ not_found_handling = "single-page-application"
 # resuelve la capa de archivos, y como esta aplicación vive en una sola página,
 # lo que no encuentra devuelve index.html: por eso una ruta olvidada aquí no da
 # "no encontrado", sino la pantalla de entrada, que despista.
-run_worker_first = ["/api/*", "/files/*", "/descargas/*", "/s101/*"]
+#
+# Desde el 25-sep TODO pasa por el Worker: con la lista de antes la capa de
+# archivos contestaba la pantalla sin que el Worker corriera, y la redirección
+# de workers.dev al dominio nunca se ejecutaría (se midió en peek101). El
+# Worker sirve los archivos él mismo con `env.ASSETS.fetch`, que conserva la
+# regla de una sola página.
+run_worker_first = true
 
 [vars]
 APP_NAME = "quell101"
+# La dirección de workers.dev manda al dominio (Mike, 25-sep: «redirigir, no
+# apagar»). Sólo producción: staging tiene sus propias `vars` y no lleva esto.
+DOMINIO_PROPIO = "quell101.taller101.com"
 # La empresa de la suite de este sitio. Desde el 19-sep quell101 no tiene base:
 # sus datos viven en la base por empresa de la suite, y esta es la empresa que
 # se abre por omisión a quien es miembro de varias (y al dueño de la suite).
