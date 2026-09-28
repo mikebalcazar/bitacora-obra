@@ -191,8 +191,20 @@ a{color:var(--accent)}
 .drow .due{font-size:11px;color:var(--ink3);white-space:nowrap}
 .drow .due.late{color:var(--pend);font-weight:500}
 
-/* panel */
-.panel{background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;min-width:0}
+/* panel
+   El panel del ítem es UNA página que se desplaza entera, en el celular y
+   en la compu. Mike, 28-sep-2026: «No puedo scrollear hacia abajo para
+   poner “terminado” en el proceso. Queda fuera de pantalla», y luego «en
+   PC sigue sin verse el proceso». El encabezado (contratistas, entrega,
+   archivos, alcance, pestañas) ya mide más que media pantalla; con la
+   bitácora encogida a cero, lo que se escribe y el proceso abierto no
+   cabían, y el panel no se desplazaba: el fondo se cortaba sin manera de
+   llegar. En una laptop de 768 de alto pasa igual que en el teléfono.
+   Ahora el panel se desplaza, la bitácora mide lo que mide, y el proceso
+   va pegado abajo con `sticky`: se ve siempre, y abierto se despliega
+   encima con su propio desplazamiento hasta la última etapa. */
+.panel{background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;min-width:0;
+  overflow:auto;-webkit-overflow-scrolling:touch}
 .panel .head{padding:14px 16px 0;border-bottom:1px solid var(--line)}
 .panel .head h2{font-size:18px;line-height:1.2;margin:4px 0 2px}
 .panel .meta{display:flex;gap:10px;flex-wrap:wrap;color:var(--ink3);font-size:12px;margin-bottom:8px}
@@ -200,7 +212,7 @@ a{color:var(--accent)}
 .tab{padding:10px 12px;border-bottom:2px solid transparent;color:var(--ink3);font-weight:500;display:flex;gap:6px;align-items:center}
 .tab.on{color:var(--ink);border-color:var(--accent)}
 .tab .n{font-size:11px;color:var(--ink3)}
-.body{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px;min-height:0;-webkit-overflow-scrolling:touch}
+.body{flex:none;overflow:visible;padding:14px 16px;display:flex;flex-direction:column;gap:12px;min-height:0}
 .day{display:flex;align-items:center;gap:10px;color:var(--ink3);font-size:11px}
 .day::before,.day::after{content:"";flex:1;border-top:1px solid var(--line2)}
 .msg{display:grid;grid-template-columns:28px 1fr;gap:10px}
@@ -265,7 +277,7 @@ a{color:var(--accent)}
 /* ── el proceso del ítem, pegado al fondo del panel ─────────────────────── */
 /* Va debajo de donde se escribe porque no es una cosa que se hace con el ítem,
    es lo que el ítem es: se lee de reojo y se abre sólo para palomear. */
-.barproc{flex:none;border-top:1px solid var(--line);background:var(--surface2)}
+.barproc{flex:none;border-top:1px solid var(--line);background:var(--surface2);position:sticky;bottom:0;z-index:3;margin-top:auto}
 .barproc .resumen{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
   padding:9px 16px calc(9px + var(--sab));min-height:46px}
 .barproc .resumen:hover{background:var(--surface)}
@@ -394,19 +406,6 @@ a{color:var(--accent)}
   .panel{border-left:0;display:none}
   .app.view-elem .panel{display:flex}
   .app.view-elem .stage{display:none}
-  /* En el celular el panel del ítem es UNA página que se desplaza entera.
-     Mike, 28-sep-2026: «No puedo scrollear hacia abajo para poner
-     “terminado” en el proceso. Queda fuera de pantalla». El encabezado
-     (contratistas, entrega, archivos, alcance, pestañas) ya mide más que la
-     mitad de la pantalla; con la bitácora encogida a cero, lo que se
-     escribe y el proceso abierto no cabían, y el panel no se desplazaba:
-     el fondo se cortaba sin manera de llegar. Ahora el panel se desplaza,
-     la bitácora mide lo que mide, y el proceso va pegado abajo con
-     `sticky`: se ve siempre, y abierto se despliega encima con su propio
-     desplazamiento hasta la última etapa. */
-  .panel{overflow:auto;-webkit-overflow-scrolling:touch}
-  .panel .body{flex:none;overflow:visible;min-height:0}
-  .barproc{position:sticky;bottom:0;z-index:3;margin-top:auto}
   .mnav{display:flex;grid-row:3;grid-column:1;background:var(--surface);border-top:1px solid var(--line);padding:6px 6px calc(6px + var(--sab))}
   .mnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;font-size:11px;color:var(--ink3);border-radius:8px;position:relative}
   .mnav button.on{color:var(--accent);font-weight:600}
