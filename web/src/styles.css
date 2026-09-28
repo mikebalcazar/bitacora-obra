@@ -394,6 +394,19 @@ a{color:var(--accent)}
   .panel{border-left:0;display:none}
   .app.view-elem .panel{display:flex}
   .app.view-elem .stage{display:none}
+  /* En el celular el panel del ítem es UNA página que se desplaza entera.
+     Mike, 28-sep-2026: «No puedo scrollear hacia abajo para poner
+     “terminado” en el proceso. Queda fuera de pantalla». El encabezado
+     (contratistas, entrega, archivos, alcance, pestañas) ya mide más que la
+     mitad de la pantalla; con la bitácora encogida a cero, lo que se
+     escribe y el proceso abierto no cabían, y el panel no se desplazaba:
+     el fondo se cortaba sin manera de llegar. Ahora el panel se desplaza,
+     la bitácora mide lo que mide, y el proceso va pegado abajo con
+     `sticky`: se ve siempre, y abierto se despliega encima con su propio
+     desplazamiento hasta la última etapa. */
+  .panel{overflow:auto;-webkit-overflow-scrolling:touch}
+  .panel .body{flex:none;overflow:visible;min-height:0}
+  .barproc{position:sticky;bottom:0;z-index:3;margin-top:auto}
   .mnav{display:flex;grid-row:3;grid-column:1;background:var(--surface);border-top:1px solid var(--line);padding:6px 6px calc(6px + var(--sab))}
   .mnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;font-size:11px;color:var(--ink3);border-radius:8px;position:relative}
   .mnav button.on{color:var(--accent);font-weight:600}

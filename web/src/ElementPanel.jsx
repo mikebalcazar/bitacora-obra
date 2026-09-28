@@ -247,7 +247,16 @@ function Log({ e, log, onChanged, setLb, user, staff }) {   // staff: quien no e
   const [busy, setBusy] = useState(false);
   const { pending, add, clear, remove } = usePending();
   const bodyRef = useRef(null);
-  useEffect(() => { bodyRef.current && (bodyRef.current.scrollTop = bodyRef.current.scrollHeight); }, [log.length]);
+  /* Al fondo, donde está lo más nuevo. En la compu la bitácora se desplaza
+   * sola; en el celular es el panel entero el que se desplaza (styles.css,
+   * 28-sep), así que se le pide al último renglón que se traiga a la vista y
+   * el navegador desplaza al que toque. */
+  useEffect(() => {
+    const b = bodyRef.current;
+    if (!b) return;
+    b.scrollTop = b.scrollHeight;
+    b.lastElementChild?.scrollIntoView?.({ block: 'end' });
+  }, [log.length]);
 
   async function send() {
     if (!txt.trim() && !pending.length) return;
