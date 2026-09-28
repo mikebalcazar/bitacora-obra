@@ -35,6 +35,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api, leer, fileUrl, fmtD } from './api.js';
 import { useApp } from './App.jsx';
 import { pdfjs, esPdf } from './pdf.js';
+import { medidasDeHoja } from './nitidez.js';
 
 const idOp = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 const kb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
@@ -301,6 +302,10 @@ function Hoja({ doc, marcas, modo, onNota, onTrazo, onBorrar }) {
   const caja = useRef(null);
   const lienzo = useRef(null);
   const [pagina, setPagina] = useState(1);
+  /* Acercamiento: 1 es «a lo ancho de la caja». Un plano de obra a lo ancho
+   * de un celular no se lee; con 2 o 3 sí, y la caja se desplaza. */
+  const [zoom, setZoom] = useState(1);
+  const [anchoCaja, setAnchoCaja] = useState(0);
   /* Los puntos del trazo se juntan en un ref, no en el estado.
    *
    * Un dedo sobre el plano dispara `pointermove` muchas veces más rápido de
@@ -312,13 +317,16 @@ function Hoja({ doc, marcas, modo, onNota, onTrazo, onBorrar }) {
   const [trazando, setTrazando] = useState(null);
   const [abierta, setAbierta] = useState(null); // id de la nota abierta
 
-  useEffect(() => { setPagina(1); setAbierta(null); }, [doc.id]);
+  useEffect(() => { setPagina(1); setAbierta(null); setZoom(1); }, [doc.id]);
+  useEffect(() => { setAnchoCaja(caja.current?.clientWidth || 0); }, [doc.id]);
 
   const imagen = esImagen(doc);
   const url = fileUrl(doc.r2_key);
 
-  // El PDF se pinta a la anchura que haya, con un tope: un plano de obra a
-  // 4000 píxeles de ancho tumba la pestaña en un celular.
+  // El PDF se pinta con los píxeles de verdad de la pantalla (no con los
+  // puntos CSS: en un celular son dos o tres por punto) y con el acercamiento
+  // pedido. Los topes están en nitidez.js: un lienzo más grande que eso no
+  // truena en el teléfono, se queda en blanco sin avisar.
   useEffect(() => {
     if (imagen) return;
     let vivo = true, tarea = null, pdf = null;
@@ -330,12 +338,14 @@ function Hoja({ doc, marcas, modo, onNota, onTrazo, onBorrar }) {
         const pg = await pdf.getPage(Math.min(pagina, pdf.numPages));
         if (!vivo) return;
         const base = pg.getViewport({ scale: 1 });
-        const ancho = Math.min(caja.current?.clientWidth || 800, 1600);
-        const escala = Math.max(0.1, ancho / base.width);
-        const vp = pg.getViewport({ scale: escala });
+        const m = medidasDeHoja({
+          anchoCss: caja.current?.clientWidth || 800, zoom,
+          dpr: window.devicePixelRatio || 1, base,
+        });
+        const vp = pg.getViewport({ scale: m.escala });
         const c = lienzo.current;
         if (!c) return;
-        c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+        c.width = m.ancho; c.height = m.alto;
         tarea = pg.render({ canvasContext: c.getContext('2d'), viewport: vp });
         await tarea.promise;
       } catch (x) {
@@ -346,7 +356,14 @@ function Hoja({ doc, marcas, modo, onNota, onTrazo, onBorrar }) {
       }
     })();
     return () => { vivo = false; try { tarea?.cancel(); } catch {} pdf?.destroy?.(); };
-  }, [doc.id, pagina, imagen]);
+  }, [doc.id, pagina, imagen, zoom]);
+
+  const ZOOMS = [1, 1.5, 2, 3, 4];
+  const acercar = () => setZoom(ZOOMS.find((z) => z > zoom) || ZOOMS[ZOOMS.length - 1]);
+  const alejar = () => setZoom([...ZOOMS].reverse().find((z) => z < zoom) || 1);
+  // Acercado, la lámina mide más que la caja y la caja se desplaza; a 1 se
+  // deja que el CSS la ajuste al ancho que haya.
+  const anchoLamina = zoom > 1 && anchoCaja ? Math.round(anchoCaja * zoom) : undefined;
 
   const deLaPagina = marcas.filter((mk) => (mk.pagina || 1) === pagina);
 
@@ -391,15 +408,19 @@ function Hoja({ doc, marcas, modo, onNota, onTrazo, onBorrar }) {
   }
 
   return (
-    <div className="docs-hoja" ref={caja}>
-      {doc.paginas > 1 && (
-        <div className="paginas">
+    <div className={'docs-hoja' + (anchoLamina ? ' acercada' : '')} ref={caja}>
+      <div className="paginas">
+        {doc.paginas > 1 && (<>
           <button className="btn sm" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>‹</button>
           <span>Página {pagina} de {doc.paginas}</span>
           <button className="btn sm" disabled={pagina >= doc.paginas} onClick={() => setPagina(pagina + 1)}>›</button>
-        </div>
-      )}
-      <div className={'lamina' + (modo ? ' anotando' : '')}>
+          <span className="sep" />
+        </>)}
+        <button className="btn sm" disabled={zoom <= 1} onClick={alejar} title="Alejar" aria-label="Alejar">−</button>
+        <button className="btn sm" data-zoom={zoom} onClick={() => setZoom(1)} title="A lo ancho">{Math.round(zoom * 100)} %</button>
+        <button className="btn sm" disabled={zoom >= 4} onClick={acercar} title="Acercar" aria-label="Acercar">+</button>
+      </div>
+      <div className={'lamina' + (modo ? ' anotando' : '')} style={anchoLamina ? { width: anchoLamina } : undefined}>
         {imagen
           ? <img src={url} alt={doc.nombre} />
           : <canvas ref={lienzo} />}
