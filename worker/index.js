@@ -145,7 +145,50 @@ export function aDominioPropio(req, env, u) {
   if (!d || u.hostname === d || !u.hostname.endsWith('.workers.dev')) return null;
   if (req.method !== 'GET' && req.method !== 'HEAD') return null;
   if (u.pathname === PREFIJO_SUITE || SIN_REBOTE.some((p) => u.pathname.startsWith(p))) return null;
+  if (u.pathname === '/sw.js') return swQueSeVa(d);
   return Response.redirect(`https://${d}${u.pathname}${u.search}`, 301);
+}
+
+/* El service worker de la dirección vieja se DESINSTALA.
+ *
+ * Mike, 28-sep-2026: en la PC quell101 seguía en workers.dev con una versión
+ * de antes del 22-sep: sin «+ Requerimiento» y con el proceso cortado. La
+ * causa: la pantalla trae un service worker (`web/public/sw.js`) que guarda
+ * la app en caché y la sirve si la red falla. Al mandar workers.dev al
+ * dominio con 301 pasaron dos cosas a la vez: el navegador NO acepta un
+ * `sw.js` que llegue por redirección, así que el service worker viejo nunca
+ * se actualizó; y sus peticiones a `/assets/…` seguían el 301 y caían en
+ * 404 en el dominio (esos archivos ya no existen), con lo que el service
+ * worker entregaba su copia guardada. Resultado: una app congelada en la
+ * dirección vieja, sin manera de salir sola.
+ *
+ * Aquí `/sw.js` en workers.dev NO se redirige: contesta un service worker
+ * cuyo único trabajo es borrar sus cachés, darse de baja y mandar cada
+ * ventana abierta al dominio. El navegador revisa `/sw.js` cada 24 h o al
+ * abrir la app, así que la próxima vez que alguien la abra en la dirección
+ * vieja, se limpia y se va. En el dominio el service worker normal sigue
+ * igual. */
+function swQueSeVa(dominio) {
+  const js = `// quell101: esta dirección ya no es la de la app. Este service worker se
+// borra a sí mismo y manda cada ventana a https://${dominio}.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil((async () => {
+  for (const k of await caches.keys()) await caches.delete(k);
+  await self.registration.unregister();
+  for (const c of await self.clients.matchAll({ type: 'window' })) {
+    const u = new URL(c.url);
+    try { await c.navigate('https://${dominio}' + u.pathname + u.search + u.hash); } catch {}
+  }
+})()));
+`;
+  return new Response(js, {
+    headers: {
+      'content-type': 'text/javascript; charset=utf-8',
+      // Sin caché: si el navegador guardara esto, tampoco vería el siguiente.
+      'cache-control': 'no-store',
+      'x-sw-que-se-va': dominio,
+    },
+  });
 }
 
 export default {
