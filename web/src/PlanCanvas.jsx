@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fileUrl, colorTipo, aguado } from './api.js';
 import { pdfjs, esPdf } from './pdf.js';
+import { hojaConMargen, pegado, hayQueRedibujar, ESPERA_MS } from './plano.js';
 
 // Plano + pines. Pan (arrastrar), zoom (rueda / pinch), tap para elegir.
 //
@@ -14,8 +15,19 @@ import { pdfjs, esPdf } from './pdf.js';
 // Encima, si el plano llegó en PDF, se dibuja la página del PDF a la escala en
 // que se está viendo: al ser dibujo y no fotografía, las líneas finas y la letra
 // chica salen limpias a cualquier acercamiento.
+//
+// BATERÍA (Mike, 29-sep-2026). Mientras el dedo está sobre el plano, React NO
+// vuelve a pintar nada: la vista vive en `vista.current`, el desplazamiento y
+// la escala se escriben directo en la capa `.world` (una transformación y una
+// variable CSS para el tamaño de los pines), y el lienzo se repinta en el
+// siguiente cuadro. Hasta hoy cada `pointermove` —de 60 a 120 por segundo—
+// pasaba por `setV`, y con eso React rearmaba los N pines con un estilo nuevo
+// cada uno, en cada cuadro. El estado de React se pone al día una sola vez, al
+// soltar. Y la hoja del PDF se vuelve a dibujar sólo cuando de verdad hace
+// falta (plano.js), no en cada pausa.
 export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = null, onPick, onClick }) {
   const box = useRef(null);
+  const mundo = useRef(null);       // la capa de los pines: se mueve sin React
   const [v, setV] = useState({ x: 0, y: 0, s: 1 });
   const [drag, setDrag] = useState(false);
   const ptrs = useRef(new Map());
@@ -73,16 +85,45 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
 
   // La vista vive en un ref además del estado: así el dibujado la lee sin
   // esperar a que React vuelva a pintar, y el arrastre se siente inmediato.
-  function aplica(nueva) {
+  // `comprometer` en falso es el gesto en curso: se mueve la capa y se
+  // repinta el lienzo, pero React no se entera hasta que el dedo se levanta.
+  function aplica(nueva, comprometer = true) {
     const val = typeof nueva === 'function' ? nueva(vista.current) : nueva;
     vista.current = val;
-    setV(val);
     pide();
+    if (comprometer) setV(val);
   }
+  // La capa de los pines sigue a la vista sin pasar por React: una
+  // transformación para moverla y una sola variable (`--k`) con la que cada
+  // pin se mantiene del mismo tamaño en pantalla a cualquier zoom. Se escribe
+  // una vez por cuadro (desde `pide`), no una por evento del dedo: en un
+  // pinch llegan dos eventos por cuadro, y cada escritura de `--k` obliga al
+  // navegador a recalcular el estilo de todos los pines. Por eso, además, la
+  // variable sólo se toca cuando el tamaño cambió más de un 2 % —de menos no
+  // se nota— y exacto al terminar el gesto (`exacto`).
+  const kPuesto = useRef(null);
+  function sincroniza(exacto = false) {
+    const m = mundo.current; if (!m) return;
+    const vv = vista.current;
+    m.style.transform = `translate(${vv.x}px,${vv.y}px) scale(${vv.s})`;
+    const k = 1 / vv.s;
+    if (exacto ? k !== kPuesto.current : (kPuesto.current === null || Math.abs(k / kPuesto.current - 1) > 0.02)) {
+      kPuesto.current = k;
+      m.style.setProperty('--k', String(k));
+    }
+  }
+  useLayoutEffect(() => { sincroniza(true); });
   function pide() {
     if (cuadro.current) return;
-    cuadro.current = requestAnimationFrame(() => { cuadro.current = 0; pinta(); });
+    cuadro.current = requestAnimationFrame(() => { cuadro.current = 0; sincroniza(); pinta(); });
   }
+
+  // Con la pestaña oculta no se dibuja nada; al volver, se pone al día.
+  useEffect(() => {
+    const f = () => { if (document.visibilityState === 'visible') { pide(); setQuieto((n) => n + 1); } };
+    document.addEventListener('visibilitychange', f);
+    return () => document.removeEventListener('visibilitychange', f);
+  }, []);
 
   useEffect(() => {
     fit(); mide();
@@ -166,22 +207,24 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
 
     const hv = hojaVista.current;
     if (hoja.current && hv && !falla) {
-      // La hoja se dibujó con la vista `hv` y, si hubo que bajarle la escala al
-      // PDF, a un tamaño `hv.estirar` veces menor que la pantalla. Al pegarla
-      // van las dos cuentas: el estirado con que se dibujó, y cuánto se movió la
-      // vista desde entonces. Sin lo primero se pega chiquita en una esquina.
-      const k = vv.s / hv.s;
-      const e = hv.estirar || 1;
+      // La hoja se dibujó con la vista `hv`, con margen alrededor de la
+      // pantalla y, si hubo que bajarle la escala al PDF, a un tamaño
+      // `hv.estirar` veces menor. Al pegarla van las tres cuentas (plano.js):
+      // el margen, el estirado con que se dibujó, y cuánto se movió la vista
+      // desde entonces.
+      const { x, y, e, k } = pegado({ vv, hv, p });
       ctx.drawImage(hoja.current, 0, 0, hoja.current.width, hoja.current.height,
-        (vv.x - hv.x * k) * p, (vv.y - hv.y * k) * p, hoja.current.width * e * k, hoja.current.height * e * k);
+        x, y, hoja.current.width * e * k, hoja.current.height * e * k);
     }
   }
 
-  // El PDF se redibuja cuando la vista se queda quieta: mientras el dedo está
-  // encima se estira lo ya dibujado, que es instantáneo.
+  // El PDF se redibuja cuando la vista se queda quieta, y sólo si lo dibujado
+  // ya no alcanza (plano.js): mientras el dedo está encima se estira lo que
+  // hay, que es instantáneo. `v` sólo cambia al soltar, así que esto no corre
+  // a mitad del gesto.
   useEffect(() => {
     if (!pagina.current || falla || !tam.w) return;
-    const t = setTimeout(() => { if (!ptrs.current.size) dibujaPdf(); }, 200);
+    const t = setTimeout(() => { if (!ptrs.current.size && !document.hidden) dibujaPdf(); }, ESPERA_MS);
     return () => clearTimeout(t);
   }, [v.x, v.y, v.s, tam.w, tam.h, quieto, falla]);
 
@@ -192,6 +235,7 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
     const p = punto();
     const w = Math.round(b.clientWidth * p), h = Math.round(b.clientHeight * p);
     if (!w || !h) return;
+    if (!hayQueRedibujar({ vv, hv: hojaVista.current, w, h, p })) return;
 
     const base = pg.getViewport({ scale: 1 });
     const deseada = (plan.width / base.width) * vv.s * p;
@@ -199,14 +243,17 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
     const tope = PAGINA_MAX / Math.max(base.width, base.height);
     const estirar = deseada > tope ? deseada / tope : 1;
     const escala = deseada / estirar;
-    const aw = Math.max(1, Math.round(w / estirar)), ah = Math.max(1, Math.round(h / estirar));
+    // Con margen: se dibuja más de lo que se ve, para que un paneo corto se
+    // resuelva copiando píxeles en vez de volver a pedirle la página a pdf.js.
+    const { mx, my, aw, ah } = hojaConMargen({ w, h });
+    const cw = Math.max(1, Math.round(aw / estirar)), ch = Math.max(1, Math.round(ah / estirar));
 
     if (!hoja.current) hoja.current = document.createElement('canvas');
     const off = hoja.current;
-    if (off.width !== aw || off.height !== ah) { off.width = aw; off.height = ah; }
+    if (off.width !== cw || off.height !== ch) { off.width = cw; off.height = ch; }
     const ctx = off.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, aw, ah);
+    ctx.clearRect(0, 0, cw, ch);
 
     try { tarea.current?.cancel(); } catch {}
     let t;
@@ -214,7 +261,7 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
       t = pg.render({
         canvasContext: ctx,
         viewport: pg.getViewport({ scale: escala }),
-        transform: [1, 0, 0, 1, (vv.x * p) / estirar, (vv.y * p) / estirar],
+        transform: [1, 0, 0, 1, (vv.x * p + mx) / estirar, (vv.y * p + my) / estirar],
       });
       tarea.current = t;
       await t.promise;
@@ -226,7 +273,7 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
       return;
     }
     if (tarea.current !== t) return;
-    hojaVista.current = { ...vv, estirar };
+    hojaVista.current = { ...vv, estirar, mx, my, aw, ah, w, h };
     pinta();
   }
 
@@ -261,14 +308,14 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
       const r = box.current.getBoundingClientRect();
       const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
       const kk = s / start.current.s;
-      aplica({ s, x: mx - (start.current.mx - r.left - start.current.vx) * kk, y: my - (start.current.my - r.top - start.current.vy) * kk });
+      aplica({ s, x: mx - (start.current.mx - r.left - start.current.vx) * kk, y: my - (start.current.my - r.top - start.current.vy) * kk }, false);
       moved.current = true;
       return;
     }
     if (ptrs.current.size === 1 && start.current && !start.current.pinch) {
       const dx = e.clientX - start.current.x, dy = e.clientY - start.current.y;
       if (Math.abs(dx) + Math.abs(dy) > 4) { moved.current = true; setDrag(true); }
-      if (moved.current) aplica((o) => ({ ...o, x: start.current.vx + dx, y: start.current.vy + dy }));
+      if (moved.current) aplica((o) => ({ ...o, x: start.current.vx + dx, y: start.current.vy + dy }), false);
     }
   };
   const onUp = (e) => {
@@ -281,6 +328,8 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
         if (w.x >= 0 && w.y >= 0 && w.x <= plan.width && w.y <= plan.height) onClick(w.x / plan.width, w.y / plan.height);
       }
       start.current = null;
+      // Ahora sí, React se entera: una vez por gesto, no una por cuadro.
+      setV(vista.current);
       setQuieto((n) => n + 1);
     }
   };
@@ -288,7 +337,7 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
   return (
     <div ref={box} className={'canvas' + (adding ? ' adding' : '') + (drag ? ' dragging' : '')} onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
       <canvas ref={lienzo} className="hoja" style={{ width: tam.w, height: tam.h }} />
-      <div className="world" style={{ transform: `translate(${v.x}px,${v.y}px) scale(${v.s})` }}>
+      <div ref={mundo} className="world">
         {elements.map((e) => {
           // El relleno dice de qué tipo es; el aro rojo, que tiene punchlist sin
           // cerrar. Un ítem en producción va aguado: del color de su tipo pero
@@ -312,7 +361,7 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
                    tampoco se ve como algo que se esté fabricando. */
                 + ((e.alcance && e.alcance !== 'dentro') ? ' fuera' : '')}
               style={{
-                left: e.x * plan.width, top: e.y * plan.height, transform: `translate(-50%,-50%) scale(${1 / v.s})`,
+                left: e.x * plan.width, top: e.y * plan.height,
                 background: enProd ? aguado(tinte) : tinte,
                 ['--tinte']: tinte,
               }}

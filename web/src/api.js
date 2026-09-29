@@ -44,6 +44,9 @@ async function avisa(extra = {}) {
   const faltan = await local.cuantosFaltan();
   for (const fn of OYENTES) { try { fn({ faltan, red: hayRed(), ...extra }); } catch {} }
 }
+// Para que la app sepa al arrancar cuántos cambios quedaron por subir de la
+// vez pasada, aunque ahora mismo no haya señal (vaciaFila no avisa sin red).
+export const revisaSenal = () => avisa();
 
 // Un fallo de red es "no hubo forma de llegar", no "el servidor dijo que no".
 // El segundo no se guarda para reintentar: reintentarlo daría lo mismo.
