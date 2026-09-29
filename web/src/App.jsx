@@ -1,5 +1,6 @@
-import React, { useEffect, useState, createContext, useContext } from 'react';
-import { api, setToken, alCambiarRed, vaciaFila, hayRed } from './api.js';
+import React, { useEffect, useMemo, useRef, useState, createContext, useContext } from 'react';
+import { api, setToken, alCambiarRed, vaciaFila, hayRed, revisaSenal } from './api.js';
+import { mismaSenal } from './plano.js';
 import { salirDeSuite } from './suite.js';
 import Login from './Login.jsx';
 import Home from './Home.jsx';
@@ -27,15 +28,27 @@ export default function App() {
   // Estado de la señal y de lo que falta subir. Se vacía la fila al abrir la
   // app, no solo cuando el navegador avisa que volvió la red: en obra la señal
   // va y viene sin que nadie se entere.
+  //
+  // BATERÍA (Mike, 29-sep-2026): el reintento de cada minuto sólo corre con la
+  // pestaña a la vista y con algo por subir. Antes corría siempre —en segundo
+  // plano y con la fila vacía— y cada vuelta leía la base local y volvía a
+  // pintar toda la app, plano y pines incluidos. Un aviso igual al anterior
+  // tampoco repinta nada.
   const [red, setRed] = useState({ faltan: 0, red: hayRed() });
+  const faltan = useRef(0);
+  useEffect(() => { faltan.current = red.faltan; }, [red.faltan]);
   useEffect(() => {
-    const quita = alCambiarRed(setRed);
+    const quita = alCambiarRed((n) => setRed((antes) => (mismaSenal(antes, n) ? antes : n)));
     vaciaFila();
-    const cada = setInterval(() => { if (hayRed()) vaciaFila(); }, 60000);
-    return () => { quita(); clearInterval(cada); };
+    revisaSenal();   // lo que quedó por subir de la vez pasada, con o sin señal
+    const toca = () => hayRed() && document.visibilityState === 'visible' && faltan.current > 0;
+    const cada = setInterval(() => { if (toca()) vaciaFila(); }, 60000);
+    const alVolver = () => { if (toca()) vaciaFila(); };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => { quita(); clearInterval(cada); document.removeEventListener('visibilitychange', alVolver); };
   }, []);
 
-  const ctx = {
+  const ctx = useMemo(() => ({
     user,
     go: (h) => { location.hash = h; },
     toast: (m) => setToast(m),
@@ -46,7 +59,7 @@ export default function App() {
       await api.post('/auth/logout').catch(() => {});
       setToken(null); setUser(null); location.hash = '';
     },
-  };
+  }), [user]);
 
   if (user === undefined) return <div className="center"><div className="spin" /></div>;
   if (!user) return <Login onLogin={(u) => setUser(u)} />;
