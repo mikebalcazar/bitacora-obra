@@ -273,6 +273,17 @@ a{color:var(--accent)}
 .card h3{font-size:16px}
 .card .n{font-size:22px;font-weight:600;color:var(--pend)}
 .card .n.zero{color:var(--ok)}
+/* Archivar y borrar van en la tarjeta, chicos, y no en el menú del proyecto:
+   es desde el inicio donde se decide qué obras siguen a la vista. */
+.card{cursor:pointer}
+.card.archivada{opacity:.75;background:var(--surface2)}
+.card-acts{display:flex;gap:6px;flex:none}
+.archivo-barra{gap:10px;flex-wrap:wrap;font-size:12.5px}
+.archivo-barra .btn.on{border-color:var(--accent);color:var(--accent)}
+@media (max-width:560px){
+  .card{flex-wrap:wrap}
+  .card-acts{width:100%;justify-content:flex-end}
+}
 
 /* ── el proceso del ítem, pegado al fondo del panel ─────────────────────── */
 /* Va debajo de donde se escribe porque no es una cosa que se hace con el ítem,
