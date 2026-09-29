@@ -14,9 +14,27 @@ export default function Home() {
   const dueno = esDueno(user);
   const [pinAbierto, setPin] = useState(false);
   const [invitando, setInvitando] = useState(false);
+  /* Archivar y borrar (Mike, 29-sep-2026): «Borrar elimina la info completa.
+   * Archivar lo quita de la pantalla home pero se queda guardada la info, es
+   * para cuando un proyecto se termina. Y debe haber un botón para ver todo
+   * el archivo». Archivar es el `status: 'cerrado'` que la obra ya tenía en
+   * la base; aquí se le llama archivo porque es la palabra que usa quien
+   * abre esta pantalla. Borrar es del dueño y lo decide la API. */
+  const [verArchivo, setVerArchivo] = useState(false);
+  const [borrando, setBorrando] = useState(null); // la obra que se va a borrar
 
   const load = () => api.get('/projects').then((r) => setProjects(r.projects)).catch((e) => toast(e.message));
   useEffect(() => { load(); }, []);
+
+  const archivadas = (projects || []).filter((p) => p.status === 'cerrado');
+  const activas = (projects || []).filter((p) => p.status !== 'cerrado');
+  const lista = verArchivo ? archivadas : activas;
+
+  async function archivar(p, si) {
+    if (si && !confirm(`¿Archivar «${p.name}»? Se quita del inicio; toda su información se queda guardada y se puede volver a abrir desde el archivo.`)) return;
+    try { await api.patch(`/projects/${p.id}`, { status: si ? 'cerrado' : 'activo' }); toast(si ? 'Archivado.' : 'De vuelta en el inicio.'); load(); }
+    catch (x) { toast(x.message); }
+  }
 
   async function create(e) {
     e.preventDefault();
@@ -47,13 +65,43 @@ export default function Home() {
         {staff && <button className="btn primary sm" onClick={() => setCreating(true)}>+ Proyecto</button>}
       </div>
       {!projects && <div className="spin" />}
-      {projects && !projects.length && <div className="empty"><h3>{cli ? 'Sin obras todavía' : 'Sin proyectos'}</h3>{cli ? 'El taller todavía no te ha invitado a ninguna obra.' : staff ? 'Crea el primero con + Proyecto.' : 'Pide al supervisor que te agregue a un proyecto.'}</div>}
-      {projects && projects.map((p) => (
-        <button key={p.id} className="card" onClick={() => go(`/p/${p.id}`)}>
-          <div style={{ flex: 1 }}><h3>{p.name}</h3><div className="muted">{p.client}{p.status === 'cerrado' ? ' · cerrado' : ''}</div></div>
+      {/* El archivo: las obras terminadas. Se quitan del inicio y se ven aquí.
+          Sólo el taller lo abre; a un contratista o a un cliente una obra
+          archivada simplemente ya no le aparece. */}
+      {staff && projects && (archivadas.length > 0 || verArchivo) && (
+        <div className="row archivo-barra">
+          <button className={'btn sm' + (verArchivo ? ' on' : '')} data-archivo={verArchivo ? 'abierto' : 'cerrado'} onClick={() => setVerArchivo(!verArchivo)}>
+            {verArchivo ? '← Volver al inicio' : `Ver el archivo (${archivadas.length})`}
+          </button>
+          {verArchivo && <span className="muted">Proyectos archivados. Su información sigue completa; se pueden volver a abrir.</span>}
+        </div>
+      )}
+      {projects && !lista.length && (
+        verArchivo
+          ? <div className="empty"><h3>El archivo está vacío</h3>Cuando un proyecto termine, archívalo desde el inicio y aparecerá aquí.</div>
+          : <div className="empty"><h3>{cli ? 'Sin obras todavía' : 'Sin proyectos'}</h3>{cli ? 'El taller todavía no te ha invitado a ninguna obra.' : staff ? 'Crea el primero con + Proyecto.' : 'Pide al supervisor que te agregue a un proyecto.'}</div>
+      )}
+      {projects && lista.map((p) => (
+        /* La tarjeta era un <button>; ahora lleva botones adentro (archivar,
+           borrar) y un botón no puede traer otros. Es un div que se pica. */
+        <div key={p.id} className={'card' + (p.status === 'cerrado' ? ' archivada' : '')} role="button" tabIndex={0}
+          onClick={() => go(`/p/${p.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(`/p/${p.id}`); } }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3>{p.name}</h3>
+            <div className="muted">{p.client}{p.status === 'cerrado' ? <span className="pill gen" style={{ marginLeft: 6 }}>archivado</span> : null}</div>
+          </div>
           <div style={{ textAlign: 'right' }}><div className={'n' + (p.open_count ? '' : ' zero')}>{p.open_count}</div><div className="muted" style={{ fontSize: 11 }}>{cli ? 'por definir' : 'pendientes'}</div></div>
-        </button>
+          {staff && (
+            <div className="card-acts" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+              {p.status === 'cerrado'
+                ? <button className="btn sm" data-accion="desarchivar" onClick={() => archivar(p, false)} title="Regresarlo al inicio">Desarchivar</button>
+                : <button className="btn sm" data-accion="archivar" onClick={() => archivar(p, true)} title="Quitarlo del inicio sin borrar nada">Archivar</button>}
+              {dueno && <button className="btn sm danger" data-accion="borrar" onClick={() => setBorrando(p)} title="Borrar la obra con todo lo que trae. No hay papelera.">Borrar</button>}
+            </div>
+          )}
+        </div>
       ))}
+      {borrando && <BorrarObra p={borrando} onClose={() => setBorrando(null)} onBorrada={() => { setBorrando(null); load(); }} />}
       {pinAbierto && <CambiarPin onClose={() => setPin(false)} />}
       {invitando && <InvitarCliente projects={projects || []} onClose={() => setInvitando(false)} />}
       {creating && (
@@ -66,6 +114,47 @@ export default function Home() {
           </form>
         </div>
       )}
+    </div>
+  );
+}
+
+// Borrar una obra: se va TODO —planos, ítems, bitácora, pendientes, dudas,
+// archivos— y no hay papelera. Por eso no basta un «¿seguro?»: se teclea el
+// nombre de la obra. Quien borra por error una obra de verdad no pierde un
+// renglón, pierde semanas de trabajo de la gente de obra. La API sólo se lo
+// permite al dueño; esta pantalla no le enseña el botón a nadie más.
+function BorrarObra({ p, onClose, onBorrada }) {
+  const { toast } = useApp();
+  const [nombre, setNombre] = useState('');
+  const [busy, setBusy] = useState(false);
+  const coincide = nombre.trim() === p.name.trim();
+
+  async function borrar(e) {
+    e.preventDefault();
+    if (!coincide) return;
+    setBusy(true);
+    try {
+      const r = await api.del(`/projects/${p.id}`);
+      toast(`Borrado «${p.name}»${r?.archivos ? ` y sus ${r.archivos} archivos` : ''}.`);
+      onBorrada();
+    } catch (x) { toast(x.message); setBusy(false); }
+  }
+
+  return (
+    <div className="ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <form className="modal" onSubmit={borrar}>
+        <h2>Borrar «{p.name}»</h2>
+        <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>
+          Se borra la obra completa: planos, ítems, bitácora, pendientes, dudas y todos sus archivos. No hay papelera ni forma de recuperarla.
+          Si lo que quieres es quitarla del inicio porque ya terminó, mejor archívala.
+        </p>
+        <div className="field"><label>Escribe el nombre de la obra para confirmar</label>
+          <input autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder={p.name} data-confirma="nombre" /></div>
+        <div className="acts">
+          <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+          <button className="btn danger" disabled={!coincide || busy}>{busy ? 'Borrando…' : 'Borrar para siempre'}</button>
+        </div>
+      </form>
     </div>
   );
 }
