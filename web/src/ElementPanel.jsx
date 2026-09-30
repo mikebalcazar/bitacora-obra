@@ -8,7 +8,7 @@ import Docs from './DocsItem.jsx';
 // staff = puede escribir. veTodo = puede ver la obra completa. No son lo mismo:
 // el trabajador ve todo y no escribe nada, y el contratista ni ve todo ni
 // escribe, salvo la evidencia de lo que le tocó.
-export default function ElementPanel({ elementId, flash, plan, staff, veTodo = staff, user, members = [], todos = [], onIr, onChanged, onClose, onReubicar }) {
+export default function ElementPanel({ elementId, flash, plan, staff, veTodo = staff, user, members = [], todos = [], onIr, onChanged, onClose, onReubicar, onSubitem }) {
   const { toast } = useApp();
   const [d, setD] = useState(null);
   const [tab, setTab] = useState(!veTodo || flash ? 'punch' : 'log');
@@ -49,6 +49,11 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
   const nEtapas = etapas.filter((x) => hechas.some((h) => h.etapa === x.clave)).length;
   const open = punch.filter((k) => k.status !== 'ok').length;
   const changed = () => { load(); onChanged(); };
+  /* 0.56.0 · Subítems (Mike, 30-sep): los trabajos complementarios que
+   * cuelgan de este ítem, y de cuál cuelga éste. Salen de la lista de la
+   * obra, que ya viene con `padre_id`: no hace falta otra llamada. */
+  const hijos = todos.filter((t) => t.padre_id === e.id);
+  const padre = e.padre_id ? todos.find((t) => t.id === e.padre_id) : null;
 
   // Entregar es un acto, no un detalle: se pregunta antes, y al devolver a
   // producción se avisa que los pendientes no se borran, solo se guardan.
@@ -108,6 +113,7 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
               ida y de sólo lectura; se edita en dash101, que es donde vive. */}
           {e.item_descripcion && <span title="Descripción del ítem, de dash101">{e.item_descripcion}</span>}
           {e.resp && <span>Resp. <b style={{ fontWeight: 500, color: 'var(--ink2)' }}>{e.resp}</b></span>}
+          {padre && <span data-subitem="padre">Complemento de <button type="button" className="liga" onClick={() => onIr(padre.id, padre.plan_id)}>{padre.code || padre.name}</button></span>}
           {!staff && contratistas.length > 0 && <span>Contratistas: <b style={{ fontWeight: 500, color: 'var(--ink2)' }}>{contratistas.map((c) => c.name).join(', ')}</b></span>}
           <span>{e.plan_name}</span>
           <span>{e.fase === 'punchlist' && e.entregado_en ? `Entregado ${fmtD(e.entregado_en)}` : `Creado ${fmtD(e.created_at)}`}</span>
@@ -123,6 +129,20 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
           </div>
         )}
         {staff && <Contratistas e={e} contratistas={contratistas} members={members} onChanged={changed} />}
+        {/* Los subítems de este ítem, y el botón para levantar uno más. Se
+            ven para todos los que ven el ítem; sólo quien dirige levanta. */}
+        {(hijos.length > 0 || (staff && onSubitem)) && (
+          <div className="subitems" data-subitems={hijos.length}>
+            <span className="muted" style={{ fontSize: 12 }}>Subítems{hijos.length ? ` (${hijos.length})` : ''}:</span>
+            {hijos.map((h) => (
+              <button key={h.id} type="button" className="chip subitem" title={h.name} onClick={() => onIr(h.id, h.plan_id)}>
+                <b>{h.code}</b> {h.name}{enRevision(h.type) ? <span className="pill gen">en revisión</span> : h.fase === 'punchlist' ? <span className="pill ok">entregado</span> : null}
+              </button>
+            ))}
+            {!hijos.length && <span className="chip">ninguno todavía</span>}
+            {staff && onSubitem && <button type="button" className="btn sm" data-subitem="nuevo" onClick={() => onSubitem(e)}>＋ Subítem</button>}
+          </div>
+        )}
         {e.item_id && <Entrega e={e} staff={staff} onChanged={changed} />}
         {/* Los archivos del ítem. Mike los pidió justo aquí, señalando el
             recuadro azul del encabezado: es donde se está cuando surge la

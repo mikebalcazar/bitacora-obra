@@ -49,6 +49,10 @@ export default function Project({ id, sub }) {
    * cuenta de que ya estaba vendido. */
   const [tipoNuevo, setTipoNuevo] = useState(null);
   const [newAt, setNewAt] = useState(null);
+  /* 0.56.0 · Subítem (Mike, 30-sep): un requerimiento que nace colgado de
+   * una pieza. Se guarda de qué pieza es mientras el modal está abierto; el
+   * pin nace junto al padre, en su mismo plano, y se puede reubicar después. */
+  const [padreNuevo, setPadreNuevo] = useState(null);
   // Reubicar un ítem ya colocado: se pica desde «Editar ítem», se toca el
   // nuevo punto y se confirma (encargo A.4). Va por la fila, como el alta.
   const [moviendo, setMoviendo] = useState(null);   // { id, code } o null
@@ -186,7 +190,7 @@ export default function Project({ id, sub }) {
    * apunta en esta lista, el «atrás» vuelve a sacar de la app y nadie lo
    * nota hasta que alguien lo sufre en obra. */
   useEncima(drawer, () => setDrawer(false));
-  useEncima(!!newAt, () => { setNewAt(null); setTipoNuevo(null); });
+  useEncima(!!newAt, () => { setNewAt(null); setTipoNuevo(null); setPadreNuevo(null); });
   useEncima(report, () => setReport(false));
   useEncima(planos, () => setPlanos(false));
   useEncima(!!editPlan, () => setEditPlan(null));
@@ -211,9 +215,10 @@ export default function Project({ id, sub }) {
     await load();
   }
   async function createElement(f) {
-    const punto = { ...f, x: newAt.x, y: newAt.y };
+    const punto = { ...f, x: newAt.x, y: newAt.y, ...(padreNuevo ? { padre_id: padreNuevo.id } : {}) };
+    const planDelPunto = padreNuevo?.plan_id || planId;
     const r = await escribir({
-      ruta: `/plans/${planId}/elements`,
+      ruta: `/plans/${planDelPunto}/elements`,
       cuerpo: punto,
       // Sin señal el pin aparece igual, con sus ceros: para quien lo clavó ya
       // está puesto, y pedírselo otra vez mañana es la manera de que no lo haga.
@@ -221,7 +226,7 @@ export default function Project({ id, sub }) {
         clave: `/projects/${id}`,
         fn: (d) => {
           d.elements = [...(d.elements || []), {
-            ...punto, id: 'local-' + Date.now(), plan_id: planId,
+            ...punto, id: 'local-' + Date.now(), plan_id: planDelPunto,
             n_pend: 0, n_proc: 0, n_total: 0, n_log: 0, created_at: new Date().toISOString(), __pendiente: true,
           }];
           return d;
@@ -229,7 +234,7 @@ export default function Project({ id, sub }) {
       },
     }).catch((e) => { toast(e.message); return null; });
     if (!r) return;
-    setNewAt(null); setTipoNuevo(null); await load(); cargarSinUbicar();
+    setNewAt(null); setTipoNuevo(null); setPadreNuevo(null); await load(); cargarSinUbicar();
     if (r.subido && r.r?.id) selectEl(r.r.id);
     else toast('Sin señal: el ítem se sube solo cuando vuelva.');
   }
@@ -436,6 +441,7 @@ export default function Project({ id, sub }) {
       </main>
 
       <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} veTodo={veTodo} user={user} members={data.members} todos={data.elements} onIr={(eid, pid) => selectEl(eid, { planId: pid })} onChanged={load} onClose={cerrarEl}
+        onSubitem={(padre) => { setPadreNuevo(padre); setTipoNuevo('Requerimiento'); setNewAt({ x: Math.min(0.98, (padre.x ?? 0.5) + 0.015), y: Math.min(0.98, (padre.y ?? 0.5) + 0.015) }); }}
         onReubicar={(e) => { setMoviendo({ id: e.id, code: e.code }); setVista('plan'); setMview('plan'); }} />
 
       <nav className="mnav">
@@ -448,7 +454,7 @@ export default function Project({ id, sub }) {
         {staff && <button onClick={() => plan && setReport(true)}><i dangerouslySetInnerHTML={{ __html: ICO.doc }} />Reporte</button>}
       </nav>
 
-      {newAt && <NewElementModal elements={data.elements} members={data.members} sinUbicar={sinUbicar} tipoInicial={tipoNuevo} onCancel={() => { setNewAt(null); setTipoNuevo(null); }} onOk={createElement} />}
+      {newAt && <NewElementModal elements={data.elements} members={data.members} sinUbicar={sinUbicar} tipoInicial={tipoNuevo} padre={padreNuevo} onCancel={() => { setNewAt(null); setTipoNuevo(null); setPadreNuevo(null); }} onOk={createElement} />}
       {report && <ReportModal hasSel={!!sel} onCancel={() => setReport(false)} onOk={generateReport} />}
       {repView && <ReportView {...repView} onClose={() => setRepView(null)} />}
       {editPlan && <EditPlanModal plan={editPlan} onClose={() => setEditPlan(null)} onChanged={load} />}
@@ -534,7 +540,7 @@ function Lista({ items, etapas, plans, sel, onIr }) {
   );
 }
 
-function NewElementModal({ elements, members, sinUbicar = [], tipoInicial = null, onCancel, onOk }) {
+function NewElementModal({ elements, members, sinUbicar = [], tipoInicial = null, padre = null, onCancel, onOk }) {
   // El código se propone por obra según el tipo (MW-, PT-, FX-), sin contar
   // los prefijos viejos y sin rellenar huecos. Es una propuesta: si el taller
   // quiere otro a mano, puede; la base avisa si choca. En cuanto la persona
@@ -559,9 +565,15 @@ function NewElementModal({ elements, members, sinUbicar = [], tipoInicial = null
     <div className="ov" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <form className="modal" onSubmit={(e) => { e.preventDefault(); onOk(f); }}>
         <div>
-          <div className="eyebrow">{enRevision(f.type) ? 'Nuevo requerimiento' : 'Nuevo ítem'}</div>
-          <h2>Ubicado en el plano</h2>
+          <div className="eyebrow">{padre ? 'Nuevo subítem' : enRevision(f.type) ? 'Nuevo requerimiento' : 'Nuevo ítem'}</div>
+          <h2>{padre ? `Complemento de ${padre.code || padre.name}` : 'Ubicado en el plano'}</h2>
         </div>
+        {/* Un subítem (0.56.0): nace como requerimiento colgado de la pieza
+            padre y de su ítem, junto a ella en el plano. Se dice antes de
+            guardar para que quien lo levanta sepa de qué cuelga. */}
+        {padre && (
+          <p className="muted aviso-rq" data-subitem="aviso">Es un trabajo o servicio complementario de <b>{padre.code} · {padre.name}</b>. Nace como requerimiento ligado a ese ítem, junto a él en el plano; lo puedes reubicar después.</p>
+        )}
         {/* Se dice ANTES de guardar, no después: quien lo levanta tiene que
             saber que esto no se va a fabricar todavía. */}
         {enRevision(f.type) && (
