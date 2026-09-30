@@ -41,4 +41,11 @@ r = await pide('https://bitacora-obra-staging.mike-929.workers.dev/sw.js', stagi
 ok(r.status === 200 && await r.text() === 'sitio', 'y en staging también');
 r = await pide('https://bitacora-obra-staging.mike-929.workers.dev/', staging);
 ok(r.status === 200 && await r.text() === 'sitio', 'staging, sin DOMINIO_PROPIO, sirve tal cual');
+// Sin la «s» (Mike, 30-sep-2026): http en el dominio propio manda a https.
+r = await pide('http://quell101.taller101.com/?x=1', prod);
+ok(r.status === 301 && r.headers.get('location') === 'https://quell101.taller101.com/?x=1', 'http en el dominio propio manda a https con 301, con ruta y consulta');
+r = await pide('http://quell101.taller101.com/', prod, { method: 'POST' });
+ok(r.status !== 301, 'pero un POST por http no se convierte en GET');
+r = await pide('http://bitacora-obra-staging.mike-929.workers.dev/', staging);
+ok(r.status !== 301, 'y sin DOMINIO_PROPIO no se toca');
 console.log(`${n} revisadas · 0 fallas`);
