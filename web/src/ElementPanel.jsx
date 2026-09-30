@@ -210,18 +210,37 @@ function ItemCliente({ d, plan, user, onClose, onChanged }) {
 }
 
 // Los contratistas del ítem (encargo D, 18-sep-2026). Los pone quien dirige la
-// obra, de entre la gente que ya tiene acceso a ella con rol de contratista.
-// `elements.resp` (texto libre) se queda como está: esto es aparte y liga a
-// cuentas de verdad.
+// obra. `elements.resp` (texto libre) se queda como está: esto es aparte y
+// liga a cuentas de verdad.
+//
+// Desde el 30-sep (Mike, en Holcim: «en este ítem no me deja agregar a un
+// contratista») el menú trae a TODOS los contratistas de la empresa, no sólo
+// a los que ya entran a la obra. Los de la obra van primero; los demás van en
+// su propio grupo, y al escoger uno de ésos la API le da acceso a la obra en
+// el mismo paso (contrato 0.54.1) y aquí se dice con un aviso. Antes el
+// letrero mandaba a «Usuarios y accesos» y de regreso: dos pantallas para una
+// cosa.
 function Contratistas({ e, contratistas, members, onChanged }) {
   const { toast } = useApp();
   const [busy, setBusy] = useState(false);
-  const candidatos = members.filter((m) => (m.rol_obra === 'con' || m.role === 'con') && !contratistas.some((c) => c.id === m.id));
+  const [empresa, setEmpresa] = useState(null); // los contratistas de la empresa; null = no han llegado
+  useEffect(() => { let vivo = true; api.get('/contratistas').then((r) => vivo && setEmpresa(r.contratistas || [])).catch(() => vivo && setEmpresa([])); return () => { vivo = false; }; }, []);
+  const yaEsta = (id) => contratistas.some((c) => c.id === id);
+  const enObra = members.filter((m) => (m.rol_obra === 'con' || m.role === 'con') && !yaEsta(m.id));
+  const fuera = (empresa || []).filter((c) => !yaEsta(c.id) && !members.some((m) => m.id === c.id));
   async function guarda(ids) {
     setBusy(true);
-    await escribir({ metodo: 'PUT', ruta: `/elements/${e.id}/contratistas`, cuerpo: { user_ids: ids } }).catch((x) => toast(x.message));
+    // `escribir` envuelve la respuesta de la API en `.r` cuando subió; sin
+    // señal se encola y no hay respuesta que leer (el aviso sale al recargar).
+    const hecho = await escribir({ metodo: 'PUT', ruta: `/elements/${e.id}/contratistas`, cuerpo: { user_ids: ids } }).catch((x) => { toast(x.message); return null; });
+    const r = hecho && hecho.subido ? hecho.r : null;
+    if (r && r.entraron_a_la_obra && r.entraron_a_la_obra.length) {
+      const quien = r.entraron_a_la_obra.map((x) => x.name).join(', ');
+      toast(r.aviso ? `${quien} ya entra a la obra y quedó en el ítem, pero el correo no salió: ${r.aviso}` : `${quien} ya entra a la obra y quedó en el ítem. Le llegó el correo con cómo entrar.`);
+    }
     setBusy(false); onChanged();
   }
+  const opcion = (m) => <option key={m.id} value={m.id}>{m.name}{m.company ? ` · ${m.company}` : ''}</option>;
   return (
     <div className="chips" style={{ margin: '6px 0 4px', alignItems: 'center' }}>
       <span className="muted" style={{ fontSize: 12 }}>Contratistas:</span>
@@ -231,12 +250,13 @@ function Contratistas({ e, contratistas, members, onChanged }) {
         </span>
       ))}
       {!contratistas.length && <span className="chip">nadie todavía</span>}
-      {candidatos.length > 0
-        ? <select className="sm" value="" disabled={busy} onChange={(ev) => ev.target.value && guarda([...contratistas.map((c) => c.id), ev.target.value])}>
+      {enObra.length + fuera.length > 0
+        ? <select className="sm" value="" disabled={busy} data-contratistas="asignar" onChange={(ev) => ev.target.value && guarda([...contratistas.map((c) => c.id), ev.target.value])}>
             <option value="">+ asignar…</option>
-            {candidatos.map((m) => <option key={m.id} value={m.id}>{m.name}{m.company ? ` · ${m.company}` : ''}</option>)}
+            {enObra.length > 0 && <optgroup label="Ya entran a esta obra">{enObra.map(opcion)}</optgroup>}
+            {fuera.length > 0 && <optgroup label="Otros contratistas de la empresa (entran a la obra al asignarlos)">{fuera.map(opcion)}</optgroup>}
           </select>
-        : <span className="muted" style={{ fontSize: 12 }}>{members.some((m) => m.rol_obra === 'con' || m.role === 'con') ? '' : 'Primero dale acceso a la obra a un contratista.'}</span>}
+        : <span className="muted" style={{ fontSize: 12 }}>{empresa === null ? '' : 'No hay contratistas dados de alta. Primero da de alta uno en «Usuarios y accesos».'}</span>}
     </div>
   );
 }
