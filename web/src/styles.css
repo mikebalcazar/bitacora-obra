@@ -704,3 +704,11 @@ select.sm{font-size:12px;padding:3px 6px;border-radius:12px;border:1px solid var
 .revision b{color:var(--ink)}
 .modal p.aviso-rq{font-size:13px;line-height:1.45;background:var(--surface2);
   border-left:3px solid var(--ink3);border-radius:0 8px 8px 0;padding:8px 10px;margin:0}
+
+/* Subítems (0.56.0): los complementos de un ítem, como chips que llevan a la pieza. */
+.subitems{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0 4px}
+.chip.subitem{cursor:pointer;border:1px solid var(--line2);background:var(--surface)}
+.chip.subitem:hover{background:var(--surface2)}
+.chip.subitem .pill{margin-left:4px}
+button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;cursor:pointer;text-decoration:underline}
+
