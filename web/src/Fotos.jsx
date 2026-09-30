@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { fileUrl, compressImage } from './api.js';
+import { imagenesDe, nombreDePegada } from './pegar.js';
 
 // Las fotos de la aplicación: verlas, elegirlas y ver las que están por subir.
 // Viven aquí y no dentro de una pantalla porque son las mismas en todas —la
@@ -20,6 +21,27 @@ export function usePending() {
   const clear = () => { pending.forEach((p) => URL.revokeObjectURL(p.url)); setPending([]); };
   const remove = (i) => setPending((p) => p.filter((_, j) => j !== i));
   return { pending, add, clear, remove };
+}
+/* Pegar (Ctrl-V) o arrastrar una foto encima de donde se escribe (Mike,
+ * 30-sep-2026). Devuelve lo que se le cuelga a la caja y a la zona: al pegar,
+ * si el portapapeles trae imágenes se toman ésas y NO se pega su nombre como
+ * texto; si trae texto nada más, el pegado sigue igual. Al arrastrar, la zona
+ * se marca (`soltando`) mientras algo va encima, y al soltar se quedan sólo
+ * las imágenes. Sirve para cualquier compositor; hoy lo usa la bitácora. */
+export function usePegarYSoltar(add) {
+  const [soltando, setSoltando] = useState(false);
+  const toma = (dt) => {
+    const fotos = imagenesDe(dt).map((f) => (f.name && f.name !== 'image.png' && f.name !== 'image.jpeg') ? f : new File([f], nombreDePegada(f), { type: f.type }));
+    if (fotos.length) add(fotos);
+    return fotos.length;
+  };
+  return {
+    soltando,
+    onPaste: (ev) => { if (toma(ev.clipboardData)) ev.preventDefault(); },
+    onDragOver: (ev) => { if (imagenesDe(ev.dataTransfer).length || Array.from(ev.dataTransfer?.types || []).includes('Files')) { ev.preventDefault(); setSoltando(true); } },
+    onDragLeave: () => setSoltando(false),
+    onDrop: (ev) => { ev.preventDefault(); setSoltando(false); toma(ev.dataTransfer); },
+  };
 }
 export function PhotoInput({ onFiles, label = 'Foto' }) {
   return (
