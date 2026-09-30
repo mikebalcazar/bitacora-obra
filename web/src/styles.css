@@ -712,3 +712,7 @@ select.sm{font-size:12px;padding:3px 6px;border-radius:12px;border:1px solid var
 .chip.subitem .pill{margin-left:4px}
 button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;cursor:pointer;text-decoration:underline}
 
+/* El letrero de versión nueva (30-sep-2026): abajo, encima de todo. */
+#aviso-version{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:5000;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;background:#1d1f20;color:#fff;font-size:13px;line-height:1.35;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:calc(100vw - 32px)}
+#aviso-version button{border:0;border-radius:4px;padding:6px 12px;background:#C6FF3D;color:#1d1f20;font:inherit;font-weight:700;cursor:pointer;white-space:nowrap}
+
