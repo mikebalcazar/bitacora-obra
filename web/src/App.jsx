@@ -6,6 +6,7 @@ import Login from './Login.jsx';
 import Home from './Home.jsx';
 import Project from './Project.jsx';
 import Admin from './Admin.jsx';
+import VersionNueva from './VersionNueva.jsx';
 
 export const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
@@ -80,6 +81,7 @@ export default function App() {
         </div>
       )}
       {toast && <div className="toast">{toast}</div>}
+      <VersionNueva />
     </Ctx.Provider>
   );
 }
