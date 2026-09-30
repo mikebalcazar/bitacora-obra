@@ -230,6 +230,9 @@ a{color:var(--accent)}
 .ph .rm{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);color:#fff;width:20px;height:20px;border-radius:50%;font-size:14px;line-height:1;display:grid;place-items:center}
 .compose{border-top:1px solid var(--line);padding:10px 16px calc(10px + var(--sab));display:flex;flex-direction:column;gap:8px;background:var(--surface)}
 .compose textarea{min-height:44px}
+/* una foto arrastrada encima de la bitácora (30-sep-2026) */
+.compose.soltando{outline:2px dashed var(--accent);outline-offset:-6px;background:var(--surface2)}
+.compose .suelta-aqui{font-size:12px;font-weight:700;color:var(--accent);text-align:center;pointer-events:none}
 .compose select{width:auto}
 .pl{display:flex;flex-direction:column;gap:8px}
 .pi{display:grid;grid-template-columns:auto 1fr;gap:10px;padding:10px;border:1px solid var(--line2);border-radius:8px;background:var(--surface)}

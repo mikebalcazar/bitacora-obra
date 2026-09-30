@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, leer, escribir, fileUrl, FASES, ALCANCES, TIPOS, enRevision, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
-import { Photos, usePending, PhotoInput, PendingStrip } from './Fotos.jsx';
+import { Photos, usePending, PhotoInput, PendingStrip, usePegarYSoltar } from './Fotos.jsx';
 import { Duda } from './Dudas.jsx';
 import Docs from './DocsItem.jsx';
 
@@ -246,6 +246,9 @@ function Log({ e, log, onChanged, setLb, user, staff }) {   // staff: quien no e
   const [txt, setTxt] = useState('');
   const [busy, setBusy] = useState(false);
   const { pending, add, clear, remove } = usePending();
+  // Una foto pegada del portapapeles o arrastrada encima de la caja entra
+  // como si se hubiera escogido (Mike, 30-sep-2026).
+  const { soltando, onPaste, onDragOver, onDragLeave, onDrop } = usePegarYSoltar(add);
   const bodyRef = useRef(null);
   /* Al fondo, donde está lo más nuevo. En la compu la bitácora se desplaza
    * sola; en el celular es el panel entero el que se desplaza (styles.css,
@@ -305,10 +308,11 @@ function Log({ e, log, onChanged, setLb, user, staff }) {   // staff: quien no e
           );
         })}
       </div>
-      {staff && <div className="compose">
+      {staff && <div className={'compose' + (soltando ? ' soltando' : '')} data-compose="bitacora" onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
         <div className="row">
-          <textarea rows={2} value={txt} onChange={(ev) => setTxt(ev.target.value)} placeholder="Escribe lo que pasó en este ítem…" onKeyDown={(ev) => { if (ev.key === 'Enter' && !ev.shiftKey && window.innerWidth > 900) { ev.preventDefault(); send(); } }} />
+          <textarea rows={2} value={txt} onChange={(ev) => setTxt(ev.target.value)} onPaste={onPaste} placeholder="Escribe lo que pasó en este ítem… (pega o arrastra una foto aquí)" onKeyDown={(ev) => { if (ev.key === 'Enter' && !ev.shiftKey && window.innerWidth > 900) { ev.preventDefault(); send(); } }} />
         </div>
+        {soltando && <div className="suelta-aqui">Suelta la foto aquí</div>}
         <PendingStrip pending={pending} remove={remove} />
         <div className="row"><PhotoInput onFiles={add} /><div className="spacer" /><button className="btn primary sm" disabled={busy || (!txt.trim() && !pending.length)} onClick={send}>{busy ? 'Guardando…' : 'Registrar'}</button></div>
       </div>}
