@@ -303,7 +303,10 @@ a{color:var(--accent)}
 .barproc.abierta{background:var(--surface)}
 .barproc .proc{max-height:min(46vh,340px);overflow:auto;padding:10px 12px;border-bottom:1px solid var(--line2);
   -webkit-overflow-scrolling:touch}
-.proc{display:flex;flex-direction:column;gap:6px}
+/* La lista de pasos del proceso. Acotada igual que `.lrow .pend`: «proc» es
+   también el estado «en proceso» de un pendiente (`.pi.proc`), y a secas lo
+   volvía columna flex en vez de ícono + texto. */
+.barproc .proc{display:flex;flex-direction:column;gap:6px}
 .pstep{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;
   background:var(--surface);text-align:left;width:100%}
 .pstep:hover{border-color:var(--accent)}
@@ -351,7 +354,12 @@ a{color:var(--accent)}
 .pct{width:78px;flex:none;text-align:right}
 .pct span{font-variant-numeric:tabular-nums;font-weight:500}
 .pct small{display:block;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pend{width:120px;flex:none;text-align:right}
+/* SÓLO en el renglón de la lista. Hasta el 1-oct-2026 era `.pend` a secas, y
+   «pend» es también el ESTADO de un pendiente del punchlist (`.pi.pend`): el
+   título de cada pendiente salía apretado a 120px y pegado a la derecha, como
+   si fuera la columna de la lista (Mike: «los títulos del punchlist se ven
+   mal, deberían estar corridos en el ancho del renglón»). */
+.lrow .pend{width:120px;flex:none;text-align:right}
 
 /* Sobre el plano las herramientas flotan, porque debajo hay dibujo que tapar lo
    menos posible. Sobre la lista no: flotando le caían encima al embudo en
