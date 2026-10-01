@@ -164,7 +164,13 @@ function Visor({ e, staff, inicial, onCerrar }) {
     } catch (x) { toast(x.message); }
   }
 
+  /* Quitar una marca pregunta antes (Mike, 1-oct-2026: «si le doy click en
+   * quitar, primero me pregunte si estoy seguro, si no es muy fácil quitarla
+   * por error»). Dice qué se va: la nota con su texto, o el trazo. */
   async function borraMarca(id) {
+    const mk = marcas.find((m) => m.id === id);
+    const que = mk?.tipo === 'nota' ? `la nota «${String(mk.texto || '').slice(0, 60)}»` : 'este trazo';
+    if (!confirm(`¿Quitar ${que}? No se puede deshacer.`)) return;
     try {
       const r = await api.post(`/marcas/${id}/borrar`, { op_id: idOp() });
       setMarcas(r.marcas || []);
