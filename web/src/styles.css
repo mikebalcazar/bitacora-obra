@@ -728,3 +728,7 @@ button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;
 #aviso-version{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:5000;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;background:#1d1f20;color:#fff;font-size:13px;line-height:1.35;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:calc(100vw - 32px)}
 #aviso-version button{border:0;border-radius:4px;padding:6px 12px;background:#C6FF3D;color:#1d1f20;font:inherit;font-weight:700;cursor:pointer;white-space:nowrap}
 
+
+
+/* El cuadro de subir el plano, mientras un archivo va encima (1-oct-2026). */
+.modal.soltando{outline:2px dashed #2f6fed;outline-offset:-6px}

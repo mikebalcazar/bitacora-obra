@@ -36,6 +36,7 @@ import { api, leer, fileUrl, fmtD } from './api.js';
 import { useApp } from './App.jsx';
 import { pdfjs, esPdf } from './pdf.js';
 import { medidasDeHoja } from './nitidez.js';
+import { planoDe, nombreDePlanoPegado } from './pegar.js';
 
 const idOp = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 const kb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
@@ -484,12 +485,36 @@ function Hoja({ doc, marcas, modo, onNota, onTrazo, onBorrar }) {
 function Subir({ que, busy, principal, onCerrar, onSubir }) {
   const [file, setFile] = useState(null);
   const [copiar, setCopiar] = useState(false);
+  const [soltando, setSoltando] = useState(false);
   const titulo = que === 'version' ? 'Versión nueva del plano principal'
     : que === 'principal' ? 'El plano principal del ítem' : 'Archivo de soporte';
 
+  /* Pegar (Ctrl-V) o arrastrar el archivo encima del cuadro (Mike, 1-oct-2026:
+   * «quiero poder copiarlo del portapapeles. sea un pdf o una imagen»). El
+   * pegado se escucha en el documento mientras el cuadro está abierto: el
+   * cuadro no tiene dónde escribir, así que no hay caja que reciba el
+   * evento. Lo pegado sustituye a lo escogido con el botón, y al revés. */
+  const toma = (dt) => {
+    const f = planoDe(dt);
+    if (!f) return false;
+    const nombre = nombreDePlanoPegado(f);
+    setFile(f.name === nombre ? f : new File([f], nombre, { type: f.type }));
+    return true;
+  };
+  useEffect(() => {
+    const onPaste = (ev) => { if (toma(ev.clipboardData)) ev.preventDefault(); };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, []);
+
   return (
     <div className="ov" onClick={(ev) => ev.target === ev.currentTarget && onCerrar()}>
-      <div className="modal">
+      <div
+        className={`modal${soltando ? ' soltando' : ''}`}
+        onDragOver={(ev) => { if (Array.from(ev.dataTransfer?.types || []).includes('Files')) { ev.preventDefault(); setSoltando(true); } }}
+        onDragLeave={() => setSoltando(false)}
+        onDrop={(ev) => { ev.preventDefault(); setSoltando(false); toma(ev.dataTransfer); }}
+      >
         <h2>{titulo}</h2>
         {que === 'principal' && <p className="muted">Es el plano o la foto de la pieza: sobre éste se anota. Sólo puede haber uno a la vista.</p>}
         {que === 'soporte' && <p className="muted">Va al lado, para consultar. Los archivos de soporte no se anotan.</p>}
@@ -500,6 +525,10 @@ function Subir({ que, busy, principal, onCerrar, onSubir }) {
           </p>
         )}
         <input type="file" accept=".pdf,image/*" onChange={(ev) => setFile(ev.target.files?.[0] || null)} />
+        <p className="muted pegar-plano">
+          {soltando ? 'Suelta el archivo aquí.' : 'O pégalo con Ctrl+V, o arrástralo encima de este cuadro: un PDF o una imagen.'}
+        </p>
+        {file && <p className="muted" data-escogido>Listo para subir: <b>{file.name}</b> ({kb(file.size || 0)})</p>}
         {que === 'version' && (
           <>
             <div className="seg">
