@@ -28,3 +28,28 @@ export function nombreDePegada(f, cuando = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
   return `pegada-${cuando.getFullYear()}${p(cuando.getMonth() + 1)}${p(cuando.getDate())}-${p(cuando.getHours())}${p(cuando.getMinutes())}${p(cuando.getSeconds())}.${ext}`;
 }
+
+/* El plano del ítem pegado o arrastrado (Mike, 1-oct-2026: «cuando quiero
+ * subir el plano principal de un ítem, quiero poder copiarlo del
+ * portapapeles. sea un pdf o una imagen»). A diferencia de la bitácora,
+ * aquí SÍ entra el PDF: el plano principal es un PDF o una imagen, y es uno
+ * solo. Devuelve el primero que sirva, o null. */
+export function planoDe(dt) {
+  if (!dt) return null;
+  const sirve = (f) => !!f && (String(f.type || '').startsWith('image/') || String(f.type || '') === 'application/pdf' || /\.pdf$/i.test(f.name || ''));
+  for (const it of dt.items ? Array.from(dt.items) : []) {
+    if (it.kind !== 'file') continue;
+    const f = it.getAsFile && it.getAsFile();
+    if (sirve(f)) return f;
+  }
+  for (const f of dt.files ? Array.from(dt.files) : []) if (sirve(f)) return f;
+  return null;
+}
+/** Un nombre para el plano pegado, que llega sin él o como «image.png». */
+export function nombreDePlanoPegado(f, cuando = new Date()) {
+  if (f.name && !/^image\.(png|jpe?g)$/i.test(f.name)) return f.name;
+  const esPdf = String(f.type || '') === 'application/pdf';
+  const ext = esPdf ? 'pdf' : ((f.type || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg');
+  const p = (n) => String(n).padStart(2, '0');
+  return `plano-${cuando.getFullYear()}${p(cuando.getMonth() + 1)}${p(cuando.getDate())}-${p(cuando.getHours())}${p(cuando.getMinutes())}${p(cuando.getSeconds())}.${ext}`;
+}
