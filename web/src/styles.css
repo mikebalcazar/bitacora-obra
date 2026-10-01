@@ -388,7 +388,11 @@ a{color:var(--accent)}
   display:flex;flex-direction:column;gap:8px}
 .duda{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;
   display:flex;flex-direction:column;gap:8px}
-.duda.cerrada{opacity:.72}
+/* El color dice si espera o ya se respondió (Mike, 1-oct-2026): un tinte
+   rojizo para la que espera, verde para la respondida. Las dos se leen igual
+   de bien; antes la respondida iba apagada y se escondía. */
+.duda.abierta{background:#fff6f1;border-color:#f2c9b8}
+.duda.cerrada{background:#f0f9f2;border-color:#bfe3c8}
 .duda .quien{display:flex;align-items:center;gap:8px}
 .duda .min{flex:1;min-width:0;font-size:13px}
 .duda .min time{color:var(--ink3);font-size:12px;margin-left:6px}

@@ -22,7 +22,9 @@ export default function Dudas({ pid, staff, user, onIr, cli = false }) {
   const [dudas, setDudas] = useState(null);
   const [texto, setTexto] = useState('');
   const [busy, setBusy] = useState(false);
-  const [verCerradas, setVerCerradas] = useState(false);
+  // Mike, 1-oct-2026: todas a la vista como historial, y un interruptor
+  // para apagar las respondidas y enfocarse en las que faltan.
+  const [verRespondidas, setVerRespondidas] = useState(true);
   const [lb, setLb] = useState(null);
   const [paraCliente, setParaCliente] = useState(false);
   const [avisando, setAvisando] = useState(false);
@@ -57,6 +59,13 @@ export default function Dudas({ pid, staff, user, onIr, cli = false }) {
   const abiertas = dudas.filter((d) => d.estado === 'abierta');
   const cerradas = dudas.filter((d) => d.estado !== 'abierta');
   const delCliente = abiertas.filter((d) => d.para === 'cliente').length;
+  /* El historial: todas por tiempo, la más nueva arriba, sin apartar las
+   * respondidas (el color las distingue: rojizo las que esperan, verde las
+   * respondidas). Con el interruptor apagado quedan sólo las que esperan.
+   * Mike, 1-oct-2026. */
+  const historial = [...dudas]
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+    .filter((d) => verRespondidas || d.estado === 'abierta');
 
   return (
     <div className="dudas">
@@ -86,6 +95,11 @@ export default function Dudas({ pid, staff, user, onIr, cli = false }) {
             : (abiertas.length ? `${abiertas.length} ${abiertas.length === 1 ? 'duda esperando respuesta' : 'dudas esperando respuesta'}${delCliente ? ` · ${delCliente} del cliente` : ''}` : 'Nada esperando respuesta')}
         </div>
         <div className="spacer" />
+        {!!cerradas.length && (
+          <button className={'btn sm' + (verRespondidas ? '' : ' on')} aria-pressed={!verRespondidas} data-respondidas={verRespondidas ? 'visibles' : 'ocultas'} onClick={() => setVerRespondidas(!verRespondidas)}>
+            {verRespondidas ? 'Ocultar' : 'Mostrar'} {cerradas.length} {cli ? (cerradas.length === 1 ? 'definido' : 'definidos') : (cerradas.length === 1 ? 'respondida' : 'respondidas')}
+          </button>
+        )}
         {staff && delCliente > 0 && (
           <button className="btn sm" disabled={avisando} onClick={avisar}>{avisando ? 'Avisando…' : 'Avisar al cliente por correo'}</button>
         )}
@@ -93,15 +107,9 @@ export default function Dudas({ pid, staff, user, onIr, cli = false }) {
       {!abiertas.length && !cerradas.length && (
         <div className="empty"><h3>{cli ? 'Nada por definir' : 'Sin dudas'}</h3>{cli ? 'Cuando el taller necesite que definas algo, aparece aquí. Y aquí puedes preguntar tú.' : staff ? 'Nadie ha preguntado nada en esta obra.' : 'Aquí van a quedar tus preguntas y lo que te contesten.'}</div>
       )}
-      {abiertas.map((d) => <Duda key={d.id} d={d} staff={staff} cli={cli} user={user} onCambio={load} onIr={onIr} setLb={setLb} />)}
-
-      {!!cerradas.length && (
-        <>
-          <button className="btn sm" onClick={() => setVerCerradas(!verCerradas)}>
-            {verCerradas ? 'Ocultar' : 'Ver'} {cerradas.length} {cerradas.length === 1 ? 'resuelta' : 'resueltas'}
-          </button>
-          {verCerradas && cerradas.map((d) => <Duda key={d.id} d={d} staff={staff} cli={cli} user={user} onCambio={load} onIr={onIr} setLb={setLb} />)}
-        </>
+      {historial.map((d) => <Duda key={d.id} d={d} staff={staff} cli={cli} user={user} onCambio={load} onIr={onIr} setLb={setLb} />)}
+      {!historial.length && !!cerradas.length && (
+        <p className="muted" style={{ fontSize: 13 }}>Nada esperando respuesta. Las {cerradas.length} respondidas están ocultas.</p>
       )}
       {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
     </div>
@@ -137,7 +145,7 @@ export function Duda({ d, staff, cli = false, user, onCambio, onIr, setLb }) {
   }
 
   return (
-    <div className={'duda' + (cerrada ? ' cerrada' : '')}>
+    <div className={'duda ' + (cerrada ? 'cerrada' : 'abierta')} data-estado={cerrada ? 'respondida' : 'esperando'}>
       <div className="quien">
         <div className={'avatar' + (d.quien_rol === 'con' ? ' con' : d.quien_rol === 'cli' ? ' cli' : '')}>{ini(d.quien)}</div>
         <div className="min">
