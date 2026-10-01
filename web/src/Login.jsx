@@ -210,7 +210,7 @@ export default function Login({ onLogin }) {
             {err && <div className="err">{err}</div>}
             <button className="btn primary block" disabled={busy || !clave}>{busy ? 'Entrando…' : 'Entrar'}</button>
             <button type="button" className="btn block" disabled={busy} onClick={mandarCodigo}>
-              Olvidé mi contraseña
+              No tengo contraseña o la olvidé
             </button>
             <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>
               Si es tu primera vez y todavía no tienes una, pícale ahí mismo: te

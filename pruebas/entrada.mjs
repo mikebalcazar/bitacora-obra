@@ -75,7 +75,7 @@ try {
 if (!armado) {
   rev(false, 'hay un paquete armado que medir', 'corre `npm run build` antes');
 } else {
-  rev(/Olvid[ée] mi contrase/i.test(armado), 'el paquete ofrece «Olvidé mi contraseña»');
+  rev(/No tengo contraseña o la olvidé/.test(armado), 'el paquete ofrece «No tengo contraseña o la olvidé» (Mike, 1-oct-2026)');
   rev(/Entrar con Google/.test(armado), 'y «Entrar con Google»');
   /* `current-password` y `new-password` NO sirven para esto: el PIN viejo ya
    * los llevaba, así que la afirmación pasaba igual antes del cambio — o sea
