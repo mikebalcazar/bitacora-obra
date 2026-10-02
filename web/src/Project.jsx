@@ -90,6 +90,7 @@ export default function Project({ id, sub }) {
   const [uploading, setUploading] = useState(false);
   const [report, setReport] = useState(false);
   const [editPlan, setEditPlan] = useState(null);
+  const [pendiente, setPendiente] = useState(null); // el plano por subir, con su vista previa
   // La hoja de planos. En el celular no hay barra lateral, así que sin esto un
   // proyecto se quedaba con el primer plano para siempre: no había por dónde
   // subir el segundo ni cómo cambiar de uno a otro.
@@ -237,18 +238,30 @@ export default function Project({ id, sub }) {
     if (r.subido && r.r?.id) selectEl(r.r.id);
     else toast('Sin señal: el ítem se sube solo cuando vuelva.');
   }
-  async function uploadPlan(file, name) {
+  /* Subir un plano, o sustituir el que está (0029). Primero se enseña cómo
+   * quedó rasterizado y se deja girarlo —Mike, 2-oct: «a veces el PDF viene
+   * vertical»—; se sube hasta que se confirma. `sustituir` es el id del
+   * plano que se va a reemplazar; sin él es un plano nuevo. */
+  function uploadPlan(file, name, sustituir = null) {
+    setPendiente({ file, name: name || file.name.replace(/\.\w+$/, ''), sustituir });
+  }
+  async function confirmarPlano({ file, name, sustituir }, giro) {
     setUploading(true);
     try {
-      const { blob, width, height } = await rasterizePlan(file);
+      const { blob, width, height, rotation } = await rasterizePlan(file, giro);
       const fd = new FormData();
-      fd.append('name', name || file.name.replace(/\.\w+$/, ''));
+      if (!sustituir) fd.append('name', name);
       fd.append('file_name', file.name);
       fd.append('width', width); fd.append('height', height);
+      fd.append('rotation', String(rotation));
       fd.append('image', new File([blob], 'plan.png', { type: blob.type }));
       if (file.size < 25 * 1024 * 1024) fd.append('source', file);
-      const r = await api.form(`/projects/${id}/plans`, fd);
-      await load(); setPlanId(r.id); toast('Plano cargado');
+      const r = sustituir
+        ? await api.form(`/plans/${sustituir}/sustituir`, fd)
+        : await api.form(`/projects/${id}/plans`, fd);
+      setPendiente(null);
+      await load(); setPlanId(r.id);
+      toast(sustituir ? `Plano sustituido: versión ${r.version}` : 'Plano cargado');
     } catch (e) { toast('No se pudo cargar el plano: ' + e.message); } finally { setUploading(false); }
   }
   async function generateReport(opts) {
@@ -455,7 +468,8 @@ export default function Project({ id, sub }) {
       {newAt && <NewElementModal elements={data.elements} members={data.members} sinUbicar={sinUbicar} tipoInicial={tipoNuevo} padre={padreNuevo} onCancel={() => { setNewAt(null); setTipoNuevo(null); setPadreNuevo(null); }} onOk={createElement} />}
       {report && <ReportModal hasSel={!!sel} onCancel={() => setReport(false)} onOk={generateReport} />}
       {repView && <ReportView {...repView} onClose={() => setRepView(null)} />}
-      {editPlan && <EditPlanModal plan={editPlan} onClose={() => setEditPlan(null)} onChanged={load} />}
+      {editPlan && <EditPlanModal plan={editPlan} onClose={() => setEditPlan(null)} onChanged={load} onSustituir={(file) => { setEditPlan(null); uploadPlan(file, editPlan.name, editPlan.id); }} />}
+      {pendiente && <SubirPlanoModal pendiente={pendiente} ocupado={uploading} onConfirmar={confirmarPlano} onClose={() => setPendiente(null)} />}
       {planos && (
         <PlanosModal plans={data.plans} elements={data.elements} planId={planId} staff={staff} uploading={uploading}
           onElegir={(pid) => { setPlanId(pid); cerrarEl(); setPlanos(false); }}
@@ -660,15 +674,84 @@ function PlanosModal({ plans, elements, planId, staff, uploading, onElegir, onSu
   );
 }
 
-function EditPlanModal({ plan, onClose, onChanged }) {
+/* Vista previa de un plano antes de subirlo: se ve cómo quedó rasterizado y
+ * se puede girar de 90 en 90 (Mike, 2-oct: «a veces el PDF viene vertical»).
+ * La vista previa se gira con CSS, barato; el giro de verdad lo hace
+ * rasterizePlan al confirmar, y se guarda con el plano. */
+export function SubirPlanoModal({ pendiente, ocupado, onConfirmar, onClose }) {
+  const [giro, setGiro] = useState(0);
+  const [vista, setVista] = useState(null);
+  const [falla, setFalla] = useState('');
+  useEffect(() => {
+    let url = null, vivo = true;
+    setVista(null); setFalla(''); setGiro(0);
+    rasterizePlan(pendiente.file, 0)
+      .then(({ blob, width, height }) => { if (!vivo) return; url = URL.createObjectURL(blob); setVista({ url, width, height }); })
+      .catch((e) => { if (vivo) setFalla(e.message || 'No se pudo leer el archivo.'); });
+    return () => { vivo = false; if (url) URL.revokeObjectURL(url); };
+  }, [pendiente.file]);
+  const deLado = giro === 90 || giro === 270;
+  const girar = (d) => setGiro((g) => (g + d + 360) % 360);
+  return (
+    <div className="ov" onClick={(e) => e.target === e.currentTarget && !ocupado && onClose()}>
+      <div className="modal hoja subir-plano" data-subir-plano={pendiente.sustituir ? 'sustituir' : 'nuevo'}>
+        <h2>{pendiente.sustituir ? 'Sustituir el plano' : 'Subir plano'} <small className="muted">{pendiente.file.name}</small></h2>
+        {pendiente.sustituir && (
+          <p className="muted">Es el mismo plano con una hoja nueva: los ítems se quedan donde están. La hoja anterior queda guardada como versión.</p>
+        )}
+        <div className="vista-plano">
+          {falla ? <div className="empty">{falla}</div>
+            : !vista ? <div className="center"><div className="spin" /></div>
+              : <img src={vista.url} alt="Vista previa del plano" style={{ transform: `rotate(${giro}deg)`, maxWidth: deLado ? '60vh' : '100%', maxHeight: deLado ? '100%' : '60vh' }} />}
+        </div>
+        <div className="acts" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button type="button" className="btn" disabled={!vista || ocupado} onClick={() => girar(-90)} title="Girar a la izquierda">↺ Girar</button>
+            <button type="button" className="btn" disabled={!vista || ocupado} onClick={() => girar(90)} title="Girar a la derecha">↻ Girar</button>
+            {giro !== 0 && <span className="muted" style={{ alignSelf: 'center', fontSize: 12 }}>{giro}°</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button type="button" className="btn" disabled={ocupado} onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn primary" disabled={!vista || ocupado} onClick={() => onConfirmar(pendiente, giro)}>
+              {ocupado ? 'Subiendo…' : pendiente.sustituir ? 'Sustituir' : 'Subir'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditPlanModal({ plan, onClose, onChanged, onSustituir }) {
   const { toast } = useApp();
   const [name, setName] = useState(plan.name);
   const [confirm, setConfirm] = useState(false);
+  const versiones = plan.versiones || [];
   return (
     <div className="ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <form className="modal" onSubmit={async (e) => { e.preventDefault(); await api.patch(`/plans/${plan.id}`, { name }).catch((x) => toast(x.message)); onChanged(); onClose(); }}>
-        <h2>Plano</h2>
+        <h2>Plano {versiones.length > 0 && <small className="muted">versión {versiones.length + 1}</small>}</h2>
         <div className="field"><label>Nombre</label><input value={name} onChange={(e) => setName(e.target.value)} /></div>
+        {/* Sustituir (0029): otra hoja para el mismo plano, con sus ítems donde
+            están. Mike, 2-oct: «subir y sustituir el que está para actualizar
+            versiones». */}
+        <label className="btn block" data-sustituir-plano={plan.id}>
+          Sustituir el plano por una versión nueva (PDF o imagen)…
+          <input type="file" accept="application/pdf,image/*" hidden onChange={(e) => e.target.files[0] && onSustituir(e.target.files[0])} />
+        </label>
+        {versiones.length > 0 && (
+          <div className="field">
+            <label>Versiones anteriores</label>
+            <ul className="versiones-plano">
+              {[...versiones].reverse().map((v, i) => (
+                <li key={versiones.length - i}>
+                  <span>v{versiones.length - i} · {v.file_name || 'sin nombre'} · {fmtD(v.at)}{v.quien ? ` · ${v.quien}` : ''}</span>
+                  {v.source_key && <a className="btn sm" href={fileUrl(v.source_key)} target="_blank" rel="noreferrer">Bajar</a>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {!confirm ? <button type="button" className="btn danger" onClick={() => setConfirm(true)}>Borrar plano y todos sus ítems…</button>
           : <button type="button" className="btn danger" onClick={async () => { await api.del(`/plans/${plan.id}`).catch((x) => toast(x.message)); onChanged(); onClose(); }}>Confirmar borrado definitivo</button>}
         <div className="acts"><button type="button" className="btn" onClick={onClose}>Cancelar</button><button className="btn primary">Guardar</button></div>

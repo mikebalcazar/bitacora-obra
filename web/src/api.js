@@ -276,8 +276,15 @@ export async function compressImage(file, max = 1600, q = 0.82) {
 // pulgada y no se distingue nada. Se prueba de mayor a menor hasta que el
 // archivo entre en 8 MB, y nunca se pasa a JPEG: sus manchas alrededor de cada
 // línea negra son justo lo que arruina un plano.
-export async function rasterizePlan(file) {
+/* `giro` (0, 90, 180 o 270): cuántos grados se gira el original al subirlo.
+ * Mike, 2-oct-2026: «a veces el PDF viene vertical». Un PDF se gira con el
+ * propio pdf.js (`rotation` en el viewport); una imagen, girando el lienzo.
+ * El giro se guarda con el plano, porque la capa nítida vuelve a dibujar el
+ * PDF original y tiene que girarlo igual. */
+export async function rasterizePlan(file, giro = 0) {
   const LIMITE = 8 * 1024 * 1024;
+  const rotation = [0, 90, 180, 270].includes(Number(giro)) ? Number(giro) : 0;
+  const deLado = rotation === 90 || rotation === 270;
   // Safari en iPhone no dibuja lienzos de más de 16.7 millones de píxeles: se
   // queda en blanco sin avisar. Por eso el área también manda, no solo el lado.
   const AREA_MAX = 16 * 1024 * 1024;
@@ -294,11 +301,13 @@ export async function rasterizePlan(file) {
     const lib = await pdfjs();
     const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
     pagina = await doc.getPage(1);
-    const vp = pagina.getViewport({ scale: 1 });
+    // Con el giro puesto, el viewport ya viene de lado: ancho y alto cambiados.
+    const vp = pagina.getViewport({ scale: 1, rotation });
     ancho1 = vp.width; alto1 = vp.height;
   } else {
     bitmap = await createImageBitmap(file);
-    ancho1 = bitmap.width; alto1 = bitmap.height;
+    ancho1 = deLado ? bitmap.height : bitmap.width;
+    alto1 = deLado ? bitmap.width : bitmap.height;
   }
 
   let ultimo = null;
@@ -314,12 +323,21 @@ export async function rasterizePlan(file) {
     lienzo.width = w; lienzo.height = h;
     const ctx = lienzo.getContext('2d');
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
-    if (pdf) await pagina.render({ canvasContext: ctx, viewport: pagina.getViewport({ scale: escala }) }).promise;
-    else ctx.drawImage(bitmap, 0, 0, w, h);
+    if (pdf) {
+      await pagina.render({ canvasContext: ctx, viewport: pagina.getViewport({ scale: escala, rotation }) }).promise;
+    } else {
+      // La imagen se dibuja girada alrededor del centro del lienzo ya girado.
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.rotate((rotation * Math.PI) / 180);
+      const bw = deLado ? h : w, bh = deLado ? w : h;
+      ctx.drawImage(bitmap, -bw / 2, -bh / 2, bw, bh);
+      ctx.restore();
+    }
 
     const blob = await new Promise((res) => lienzo.toBlob(res, 'image/png'));
     if (!blob) continue;
-    ultimo = { blob, width: w, height: h };
+    ultimo = { blob, width: w, height: h, rotation };
     if (blob.size <= LIMITE) return ultimo;
   }
 
