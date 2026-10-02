@@ -170,7 +170,7 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
       // video no se libera sola nada más con dejar de apuntarlo.
       if (hoja.current) { hoja.current.width = 0; hoja.current.height = 0; hoja.current = null; }
     };
-  }, [plan.id, plan.source_key]);
+  }, [plan.id, plan.source_key, plan.rotation]);
 
   // Dibujar lo que se ve: primero el pedazo de imagen que toca, y encima, si ya
   // está lista, la hoja del PDF, corrida y estirada según cuánto se movió la
@@ -237,7 +237,11 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
     if (!w || !h) return;
     if (!hayQueRedibujar({ vv, hv: hojaVista.current, w, h, p })) return;
 
-    const base = pg.getViewport({ scale: 1 });
+    /* El giro con que se subió el plano (0029). La imagen ya viene girada;
+     * el PDF original no, así que se le pide a pdf.js con el mismo giro, o
+     * la capa nítida saldría cruzada sobre el plano. */
+    const rotation = [90, 180, 270].includes(Number(plan.rotation)) ? Number(plan.rotation) : 0;
+    const base = pg.getViewport({ scale: 1, rotation });
     const deseada = (plan.width / base.width) * vv.s * p;
     if (!(deseada > 0) || !Number.isFinite(deseada)) return;
     const tope = PAGINA_MAX / Math.max(base.width, base.height);
@@ -260,7 +264,7 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
     try {
       t = pg.render({
         canvasContext: ctx,
-        viewport: pg.getViewport({ scale: escala }),
+        viewport: pg.getViewport({ scale: escala, rotation }),
         transform: [1, 0, 0, 1, (vv.x * p + mx) / estirar, (vv.y * p + my) / estirar],
       });
       tarea.current = t;
