@@ -12,9 +12,11 @@
  * Aquí hay dos frases que tiran para lados contrarios, y lo que puede
  * romperse es que alguien junte una con la otra:
  *
- *   · Si a un requerimiento se le tratara como a un «no aprobado» —que en
- *     quell sólo sale si pides la vista de fuera de alcance—, desaparecería
- *     del plano. Se vería prolijo y Mike dejaría de ver lo que levantó.
+ *   · Un requerimiento está FUERA del alcance (Mike, 2-oct: «se genera como
+ *     requerimiento (fuera de alcance)»), y el filtro de la obra nace en
+ *     «En alcance»: si la pantalla no hiciera nada, el pin que la persona
+ *     acaba de clavar desaparecería y Mike dejaría de ver lo que levantó.
+ *     Por eso al levantarlo el filtro pasa a «Todos».
  *   · Y al revés: si se pudiera palomear su avance, alguien marcaría
  *     «comprado» en una pieza que nadie cotizó ni autorizó. Eso no truena:
  *     gasta.
@@ -75,11 +77,16 @@ rev(/onEntregar=\{enRevision\(e\.type\) \? null : entregar\}/.test(panel),
 rev(/!enRevision\(e\.type\) && \(\s*<BarraProceso/.test(panel.replace(/\n\s*/g, ' ')) || /&& !enRevision\(e\.type\) && \(/.test(panel),
     'ni palomear su avance');
 
-console.log('· pero SÍ se ve: no se esconde como un «no aprobado»');
-/* La mitad que se pierde si alguien lo trata como fuera de alcance. El filtro
- * de alcance es otra cosa y no debe mencionar el tipo. */
+console.log('· está fuera del alcance, y aun así se ve al levantarlo');
+/* El alcance lo dice la suite por pieza; el filtro de la obra no mira el
+ * tipo. Y como el requerimiento llega marcado fuera, la pantalla pasa el
+ * filtro a «Todos» al clavarlo, para que no se le pierda a quien lo hizo. */
 rev(!/enRevision/.test(proyecto.match(/const filtra[\s\S]{0,400}/)?.[0] || ''),
-    'el filtro de la obra no esconde requerimientos');
+    'el filtro de la obra no mira el tipo: el alcance lo manda la suite');
+rev(/if \(enRevision\(f\.type\) && alcance === 'dentro'\) setAlcance\('todos'\)/.test(proyecto),
+    'al levantar un requerimiento con el filtro en «En alcance», pasa a «Todos»');
+rev(/fuera de alcance<\/b>: sale en el plano y en la lista cuando ves «Fuera de alcance» o «Todos»/.test(proyecto),
+    'y el alta avisa que queda fuera de alcance y dónde se ve');
 rev(!/alcance/.test(api.match(/export const enRevision[\s\S]{0,200}/)?.[0] || ''),
     'y «en revisión» se pregunta por el TIPO, no por el alcance');
 
