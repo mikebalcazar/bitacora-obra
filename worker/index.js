@@ -69,12 +69,26 @@ const abre = (o) => !o.apps?.length || o.apps.includes(LLAVE) || o.apps.includes
  *  quell101 prendido. El dueño de la suite es miembro de todas, así que para
  *  él manda ORG_ID. La suite vuelve a revisar todo esto del otro lado: aquí
  *  sólo se escoge a qué puerta tocar. */
-export function empresaDe(yo, env) {
+export function empresaDe(yo, env, pedida = null) {
   if (!yo) return null;
   if (yo.acceso?.tipo === 'cliente') return yo.acceso.org_id || null;
   const mias = (yo.orgs || []).filter(abre);
+  /* 2-oct · por el dominio propio de una empresa (quell101.acme.com) la puerta
+   * de las empresas dice cuál es, y manda sobre ORG_ID: este Worker deja de
+   * ser de una sola empresa. Sólo si quien entró es de ella; si no, lo de
+   * siempre, y la suite —que ya acotó /yo a esa empresa— contesta 403. */
+  const delDominio = pedida && mias.find((o) => o.id === pedida);
   const porOmision = env.ORG_ID && mias.find((o) => o.id === env.ORG_ID);
-  return (porOmision || mias[0])?.id || null;
+  return (delDominio || porOmision || mias[0])?.id || null;
+}
+
+/** La empresa que pide la puerta de las empresas (puerta/ de la API) por el
+ *  dominio propio: `X-Org-Empresa`, sólo cuando viene con `X-Dominio-Empresa`.
+ *  Sin las dos, null, y el Worker se porta como siempre. */
+export function empresaPedida(req) {
+  const dominio = req.headers.get('X-Dominio-Empresa');
+  const org = req.headers.get('X-Org-Empresa');
+  return dominio && org ? org : null;
 }
 
 /** /api/* y /files/* → la suite, a /orgs/{empresa}/quell/… */
@@ -82,7 +96,7 @@ async function aLaSuite(req, env, url, ruta, prefijo = '/quell') {
   if (!env.API) return err('La puerta de la suite no está conectada.', 503);
   const yo = await laSuiteDiceQuien(req, env, url);
   if (!yo) return err('no autorizado', 401);
-  const empresa = empresaDe(yo, env);
+  const empresa = empresaDe(yo, env, empresaPedida(req));
   if (!empresa) return err('no autorizado', 401);
   const destino = new URL(`https://suite101-api/orgs/${encodeURIComponent(empresa)}${prefijo}${ruta}`);
   destino.search = url.search;
