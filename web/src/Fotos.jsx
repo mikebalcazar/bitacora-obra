@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { fileUrl, compressImage } from './api.js';
 import { imagenesDe, nombreDePegada } from './pegar.js';
+import { compartirArchivo } from './compartir.js';
 
 // Las fotos de la aplicación: verlas, elegirlas y ver las que están por subir.
 // Viven aquí y no dentro de una pantalla porque son las mismas en todas —la
@@ -8,7 +9,50 @@ import { imagenesDe, nombreDePegada } from './pegar.js';
 
 export function Photos({ photos, setLb, onDelete }) {
   if (!photos?.length) return null;
-  return <div className="photos">{photos.map((p) => <div key={p.id} className="ph" onClick={() => setLb(fileUrl(p.r2_key))}><img src={fileUrl(p.r2_key)} alt={p.file_name} loading="lazy" />{onDelete && <button className="rm" onClick={(ev) => { ev.stopPropagation(); onDelete(p); }} title="Quitar foto">×</button>}</div>)}</div>;
+  // Al ampliar se guarda la liga y el nombre: el visor los usa para compartir.
+  return <div className="photos">{photos.map((p) => <div key={p.id} className="ph" onClick={() => setLb({ url: fileUrl(p.r2_key), nombre: p.file_name })}><img src={fileUrl(p.r2_key)} alt={p.file_name} loading="lazy" />{onDelete && <button className="rm" onClick={(ev) => { ev.stopPropagation(); onDelete(p); }} title="Quitar foto">×</button>}</div>)}</div>;
+}
+
+/* El botón de compartir una copia del archivo (Mike, 2-oct-2026). Es el
+ * mismo en la foto ampliada y en la tarjeta de un documento: baja el archivo
+ * y abre la hoja de compartir del celular, o lo descarga donde no la hay. */
+export function BotonCompartir({ url, nombre, className = 'btn sm', children = 'Compartir' }) {
+  const [ocupado, setOcupado] = useState(false);
+  const [aviso, setAviso] = useState('');
+  const ir = async (ev) => {
+    ev.stopPropagation(); ev.preventDefault();
+    if (ocupado) return;
+    setOcupado(true); setAviso('');
+    try {
+      const como = await compartirArchivo(url, nombre);
+      if (como === 'descarga') { setAviso('Se guardó una copia'); setTimeout(() => setAviso(''), 3000); }
+    } catch (e) { setAviso(e.message || 'No se pudo compartir'); setTimeout(() => setAviso(''), 4000); }
+    finally { setOcupado(false); }
+  };
+  return (
+    <>
+      <button type="button" className={className} data-compartir onClick={ir} disabled={ocupado} title="Compartir una copia del archivo">
+        {ocupado ? 'Preparando…' : children}
+      </button>
+      {aviso && <span className="aviso-compartir" role="status">{aviso}</span>}
+    </>
+  );
+}
+
+/* La foto ampliada. `lb` es `{ url, nombre }` (o, por si algo viejo manda la
+ * liga sola, una cadena). Picar fuera la cierra; el botón no. */
+export function Lightbox({ lb, onClose }) {
+  if (!lb) return null;
+  const url = typeof lb === 'string' ? lb : lb.url;
+  const nombre = typeof lb === 'string' ? '' : lb.nombre;
+  return (
+    <div className="lightbox" onClick={onClose}>
+      <img src={url} alt={nombre || ''} />
+      <div className="lb-acciones" onClick={(ev) => ev.stopPropagation()}>
+        <BotonCompartir url={url} nombre={nombre} className="btn" />
+      </div>
+    </div>
+  );
 }
 
 export function usePending() {

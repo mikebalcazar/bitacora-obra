@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { leer, escribir, fmtD, fmtT, ini, ROLES, fileUrl } from './api.js';
 import { useApp } from './App.jsx';
-import { Photos, usePending, PhotoInput, PendingStrip } from './Fotos.jsx';
+import { Photos, usePending, PhotoInput, PendingStrip, Lightbox } from './Fotos.jsx';
 
 // Las dudas de la obra.
 //
@@ -111,7 +111,7 @@ export default function Dudas({ pid, staff, user, onIr, cli = false }) {
       {!historial.length && !!cerradas.length && (
         <p className="muted" style={{ fontSize: 13 }}>Nada esperando respuesta. Las {cerradas.length} respondidas están ocultas.</p>
       )}
-      {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
+      <Lightbox lb={lb} onClose={() => setLb(null)} />
     </div>
   );
 }
