@@ -8,6 +8,8 @@ import ElementPanel from './ElementPanel.jsx';
 import Marca from './Marca.jsx';
 import { buildReport, REPORT_CSS } from './report.js';
 import { siguienteCodigo } from './codigos.js';
+import { BotonCompartir } from './Fotos.jsx';
+import { archivoDelPlano } from './compartir.js';
 
 const TYPES = TIPOS.map((t) => t.clave);
 
@@ -384,6 +386,13 @@ export default function Project({ id, sub }) {
           {vista === 'plan' && plan && (
             <button className="btn sm" onClick={() => window.print()} title="Imprimir este plano con los códigos">Imprimir</button>
           )}
+          {/* Compartir el plano tal cual se subió (PDF o imagen). Mike, 2-oct:
+              «quiero compartir ese plano (imagen o pdf)»; el botón de compartir
+              existía para las fotos y los documentos del ítem, no para el
+              plano. Va junto a Imprimir, arriba, a la vista en el celular. */}
+          {vista === 'plan' && archivoDelPlano(plan) && (
+            <BotonCompartir url={fileUrl(archivoDelPlano(plan).llave)} nombre={archivoDelPlano(plan).nombre} className="btn sm" />
+          )}
           <div className="spacer" />
           {/* En escritorio los interruptores viven en la barra lateral, a la
               vista siempre; repetirlos aquí arriba era decir dos veces lo
@@ -672,6 +681,7 @@ function PlanosModal({ plans, elements, planId, staff, uploading, onElegir, onSu
                   <div className="t">{p.name}</div>
                   <div className="s">{n} {n === 1 ? 'ítem' : 'ítems'}{p.file_name ? ` · ${p.file_name}` : ''}</div>
                 </button>
+                {archivoDelPlano(p) && <BotonCompartir url={fileUrl(archivoDelPlano(p).llave)} nombre={archivoDelPlano(p).nombre} className="btn sm">⇪</BotonCompartir>}
                 {staff && <button className="btn sm" onClick={() => onEditar(p)} title="Renombrar o borrar">Editar</button>}
               </div>
             );
