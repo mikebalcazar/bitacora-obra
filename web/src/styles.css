@@ -428,7 +428,12 @@ a{color:var(--accent)}
 /* mobile */
 .mnav{display:none}
 @media (max-width:900px){
-  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(0,1fr) auto}
+  /* La app mide lo que SE VE, no la pantalla: Safari 26 pone su barra
+     flotante encima de la página y el menú de abajo quedaba detrás
+     (alto.js deja --alto-visible y --tapa en <html>). Sin medida, 100%. */
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(0,1fr) auto;height:var(--alto-visible,100%)}
+  .ov{inset:0 0 auto 0;height:var(--alto-visible,100%)}
+  .modal{max-height:calc(var(--alto-visible,100vh) - 24px)}
   .top{gap:8px;padding:0 10px}
   .top select{flex:1;max-width:none}
   .rail{display:none}
@@ -451,7 +456,7 @@ a{color:var(--accent)}
 
 /* Aviso de señal. Va abajo, encima de todo, y no tapa la barra de navegación
    del celular. Se puede tocar para reintentar ahora mismo. */
-.senal{position:fixed;left:12px;right:12px;bottom:calc(70px + var(--sab));z-index:60;display:flex;gap:10px;
+.senal{position:fixed;left:12px;right:12px;bottom:calc(70px + var(--sab) + var(--tapa,0px));z-index:60;display:flex;gap:10px;
   align-items:center;justify-content:center;padding:10px 14px;border-radius:12px;cursor:pointer;
   background:#3a3f45;color:#fff;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.22)}
 .senal.subiendo{background:var(--accent)}

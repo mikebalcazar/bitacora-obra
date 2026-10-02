@@ -31,6 +31,19 @@ export function nombreDelArchivo(nombre, url) {
   try { return decodeURIComponent(tramo); } catch { return tramo; }
 }
 
+/** El archivo con el que se comparte un plano (Mike, 2-oct-2026: «quiero
+ *  compartir ese plano (imagen o pdf)»): el original que se subió (PDF o
+ *  imagen, `source_key`) con su nombre; si el plano es de antes de que se
+ *  guardara el original, la imagen con la que se dibuja (`image_key`).
+ *  Devuelve { llave, nombre } o null si el plano no tiene archivo. */
+export function archivoDelPlano(plan) {
+  if (!plan) return null;
+  const base = String(plan.name || 'plano').trim() || 'plano';
+  if (plan.source_key) return { llave: plan.source_key, nombre: plan.file_name || base };
+  if (plan.image_key) return { llave: plan.image_key, nombre: /\.(png|jpe?g|webp)$/i.test(base) ? base : `${base}.png` };
+  return null;
+}
+
 /** Baja el archivo con la sesión y lo comparte o lo descarga. Devuelve cómo
  *  se fue (`hoja` | `descarga` | `cancelado`) o lanza con un mensaje para
  *  la pantalla. */
