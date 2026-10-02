@@ -426,7 +426,7 @@ export default function Project({ id, sub }) {
         {moviendo && <div className="hint">Toca el plano donde va ahora {moviendo.code || 'el ítem'} · <button className="btn sm" onClick={() => setMoviendo(null)}>Cancelar</button></div>}
         {vista === 'dudas' ? (
           <Dudas pid={id} staff={staff} user={user} cli={cli}
-            onIr={(eid, plid) => { setVista('plan'); selectEl(eid, { planId: plid }); if (window.innerWidth <= 900) setMview('elem'); }} />
+            onIr={(eid, plid) => { selectEl(eid, { planId: plid }); if (window.innerWidth <= 900) setMview('elem'); }} />
         ) : vista === 'lista' ? (
           <Lista items={listados} etapas={etapas} plans={data.plans} sel={sel}
             onIr={(e) => { selectEl(e.id, { planId: e.plan_id }); if (window.innerWidth <= 900) setMview('elem'); }} />
@@ -453,7 +453,17 @@ export default function Project({ id, sub }) {
 
       <ElementPanel key={sel || 'none'} elementId={sel} flash={flash} plan={plan} staff={staff} veTodo={veTodo} user={user} members={data.members} todos={data.elements} onIr={(eid, pid) => selectEl(eid, { planId: pid })} onChanged={load} onClose={cerrarEl}
         onSubitem={(padre) => { setPadreNuevo(padre); setTipoNuevo('Requerimiento'); setNewAt({ x: Math.min(0.98, (padre.x ?? 0.5) + 0.015), y: Math.min(0.98, (padre.y ?? 0.5) + 0.015) }); }}
-        onReubicar={(e) => { setMoviendo({ id: e.id, code: e.code }); setVista('plan'); setMview('plan'); }} />
+        onReubicar={(e) => {
+          /* Mike, 2-oct (Bosques de Santa Fe): «le pongo reubicar en plano y
+           * solo se sale de la función y deselecciona todo». Aquí decía
+           * también `setVista('plan')`, y `setVista` NAVEGA: con el ítem
+           * abierto (hondura 3) ir al plano (hondura 1) es un `history.back()`
+           * que cierra el ítem, y su `popstate` tardío le llegaba al
+           * `useEncima` de `moviendo` recién armado, que lo apagaba. No hace
+           * falta: con un ítem abierto la vista ya es el plano (sale de la
+           * dirección). Sólo se cambia la pestaña del celular, que es local. */
+          setMoviendo({ id: e.id, code: e.code }); setMview('plan');
+        }} />
 
       <nav className="mnav">
         <button className={mview === 'plan' && vista === 'plan' ? 'on' : ''} onClick={() => { setMview('plan'); setVista('plan'); setDrawer(false); }}><i dangerouslySetInnerHTML={{ __html: ICO.plan }} />Plano</button>

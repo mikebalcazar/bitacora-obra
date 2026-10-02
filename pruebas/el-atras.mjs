@@ -138,5 +138,29 @@ rev(!/setSel\(/.test(proyecto), 'no queda ningún `setSel` que se salte el histo
 const cuantasVentanas = (proyecto.match(/useEncima\(/g) || []).length;
 rev(cuantasVentanas >= 6, 'cada ventana de la obra avisa al historial', `${cuantasVentanas} ventanas`);
 
+console.log('· reubicar un ítem no lo cierra (Mike, 2-oct, Bosques de Santa Fe)');
+/* «Le pongo reubicar en plano y solo se sale de la función y deselecciona
+ * todo». El botón hacía `setVista('plan')` con el ítem abierto, y `setVista`
+ * navega: ir del ítem (hondura 3) al plano (hondura 1) es un `history.back()`
+ * que cierra el ítem, y su `popstate` tardío apagaba el modo de reubicar
+ * recién armado. Se reproduce aquí con el mismo módulo, y se vigila que el
+ * botón ya no navegue: con un ítem abierto la vista YA es el plano. */
+g.location.hash = '#/p/OBRA';
+sellar(HONDURA.obra);
+irA('/p/OBRA/e/M1', HONDURA.item);
+let reubicando = true;
+const soltar = alAbrir(() => { reubicando = false; });   // lo que arma `useEncima(!!moviendo)`
+rev(g.dónde() === '#/p/OBRA/e/M1' && reubicando, 'con el ítem abierto se arma el modo de reubicar');
+seccion('plan');   // lo que hacía el botón de más
+rev(g.dónde() !== '#/p/OBRA/e/M1' || !reubicando, 'ir «al plano» desde el ítem lo cierra o apaga el modo: ése era el defecto', g.dónde());
+soltar();
+// Sin los comentarios: el de ese botón cuenta la historia y nombra lo que se quitó.
+const sinComentarios = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '');
+const reubicar = sinComentarios(proyecto.match(/onReubicar=\{\(e\) => \{[\s\S]*?\}\} \/>/)?.[0] || '');
+rev(reubicar.length > 0, 'el botón de reubicar está cableado en la obra');
+rev(!/setVista\(/.test(reubicar), 'y ya no navega: sólo arma el modo y cambia la pestaña del celular');
+const irDesdeDudas = proyecto.match(/<Dudas [\s\S]*?onIr=\{[^\n]*\}/)?.[0] || '';
+rev(irDesdeDudas.length > 0 && !/setVista\(/.test(irDesdeDudas), 'abrir un ítem desde las dudas tampoco navega de más antes de abrirlo');
+
 console.log(`\n${revisadas} revisadas · ${fallas} fallas`);
 process.exit(fallas ? 1 : 0);
