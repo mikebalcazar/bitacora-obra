@@ -62,16 +62,15 @@ export default function Project({ id, sub }) {
   const [fase, setFase] = useState('');   // '' = las dos fases
   /* EL ALCANCE. Mike, 20-sep: «los no aprobados, a pesar de que tienen precio
    * y toda la info, NO APARECEN en quell al menos que veas la vista de ítems
-   * fuera de alcance», y «en el filtro de vista de ítems fuera de alcance
-   * debe venir dividido entre no aprobados y cancelados».
+   * fuera de alcance». Mike, 2-oct: «solo existirá "en alcance" o "fuera de
+   * alcance"»: ya no se divide entre no aprobados y cancelados; es una lista.
    *
    * Por omisión 'dentro': la obra enseña lo que se está fabricando. Lo que
-   * no se aprobó todavía y lo que se canceló siguen dibujados en el plano
-   * —la pieza no se borra— pero no estorban hasta que alguien los pide.
+   * está fuera sigue dibujado en el plano —la pieza no se borra— pero no
+   * estorba hasta que alguien lo pide.
    *
    * Quién es qué lo dice la API en cada pieza (`alcance`), no esta pantalla:
-   * la regla de «para considerarse cancelado tiene que haber estado aprobado
-   * primero» vive en el contrato y aquí sólo se lee. */
+   * la regla vive en el contrato y aquí sólo se lee. */
   const [alcance, setAlcance] = useState('dentro');
   const [drawer, setDrawer] = useState(false);
   const [openItems, setOpenItems] = useState(null);
@@ -389,8 +388,7 @@ export default function Project({ id, sub }) {
             <select className={'btn sm' + (alcance !== 'dentro' ? ' on' : '')} style={{ width: 'auto' }}
               value={alcance} onChange={(ev) => setAlcance(ev.target.value)} title="Ver los que están fuera del alcance">
               <option value="dentro">En proceso ({cuantosAlcance('dentro')})</option>
-              <option value="no_aprobado">Fuera: no aprobados ({cuantosAlcance('no_aprobado')})</option>
-              <option value="cancelado">Fuera: cancelados ({cuantosAlcance('cancelado')})</option>
+              <option value="fuera">Fuera de alcance ({cuantosAlcance('fuera')})</option>
               <option value="todos">Todos</option>
             </select>
           )}

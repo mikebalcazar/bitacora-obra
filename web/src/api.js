@@ -180,16 +180,21 @@ export const veTodoEn = (user, miRol) => dirige(user) || miRol === 'tra';
 export const FASES = { produccion: 'Producción', punchlist: 'Punchlist' };
 
 /* El alcance de un ítem, tal como lo manda la API en cada pieza del plano
- * (contrato 0.31.0). Aquí sólo están los NOMBRES: la regla —«para que un
- * ítem se considere cancelado tiene que haber estado aprobado primero»—
- * vive en el contrato de la suite y la resuelve el servidor. Esta pantalla
- * la lee; no la vuelve a sacar. */
+ * (contrato 0.64.0). Mike, 2-oct: «solo existirá "en alcance" o "fuera de
+ * alcance"»; lo que se sacó y lo que nadie ha aprobado van en la MISMA lista,
+ * y la historia —cuándo entró, cuándo salió, quién— está en la bitácora del
+ * ítem, no en un tercer estado. Aquí sólo están los NOMBRES: la regla vive
+ * en el contrato de la suite y la resuelve el servidor. */
 export const ALCANCES = {
-  dentro: 'En proceso',
-  no_aprobado: 'No aprobados',
-  cancelado: 'Cancelados',
-  descartado: 'Descartados',
+  dentro: 'En alcance',
+  fuera: 'Fuera de alcance',
   todos: 'Todos',
+};
+
+/** Lo que dice cada renglón de la bitácora del alcance (contrato 0.64.0). */
+export const MOVIMIENTOS_ALCANCE = {
+  entra: 'Se agregó al alcance',
+  sale: 'Se sacó del alcance',
 };
 
 // Los tipos de ítem y su color. El color es lo que hace legible un plano lleno:

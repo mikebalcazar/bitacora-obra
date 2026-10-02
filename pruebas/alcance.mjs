@@ -1,9 +1,10 @@
 /* Que la obra sepa distinguir lo que está dentro del alcance de lo que no.
  *
- * Mike, 20-sep-2026: «en el filtro de vista de quell de ítems fuera de
- * alcance debe venir dividido entre no aprobados y cancelados», y «los no
- * aprobados NO APARECEN en quell al menos que veas la vista de ítems fuera
- * de alcance».
+ * Mike, 20-sep-2026: «los no aprobados NO APARECEN en quell al menos que veas
+ * la vista de ítems fuera de alcance». Mike, 2-oct-2026: «solo existirá "en
+ * alcance" o "fuera de alcance" (…) solo en la bitácora sí aparecerá como "se
+ * sacó del alcance" y si se agrega de nuevo aparecerá después "se agregó al
+ * alcance" con su fecha y quién la agregó».
  *
  * POR QUÉ ESTO SE MIDE SOBRE LO ARMADO
  *
@@ -36,11 +37,16 @@ rev(/useState\('dentro'\)/.test(proyecto), "el filtro nace en 'dentro'");
 rev(/alcance === 'todos' \|\| \(e\.alcance \|\| 'dentro'\) === alcance/.test(proyecto),
     'y las piezas se filtran por el alcance que manda la API');
 
-console.log('· el filtro viene DIVIDIDO, como lo pidió Mike');
-for (const cual of ['no_aprobado', 'cancelado']) {
-  rev(proyecto.includes(`value="${cual}"`), `hay opción para «${cual}»`);
-}
-rev(/cuantosAlcance\('no_aprobado'\)/.test(proyecto), 'y cada opción dice cuántos hay detrás');
+console.log('· el filtro tiene DOS respuestas, como lo pidió Mike el 2-oct');
+rev(proyecto.includes('value="fuera"'), 'hay opción para «fuera»');
+rev(!proyecto.includes('value="no_aprobado"') && !proyecto.includes('value="cancelado"'),
+    'y ya no se divide entre no aprobados y cancelados');
+rev(/cuantosAlcance\('fuera'\)/.test(proyecto), 'y la opción dice cuántos hay detrás');
+const api = readFileSync('web/src/api.js', 'utf8');
+rev(/fuera: 'Fuera de alcance'/.test(api) && !/no_aprobado/.test(api) && !/descartado/.test(api),
+    'los nombres del alcance son dos: en alcance y fuera de alcance');
+rev(/entra: 'Se agregó al alcance'/.test(api) && /sale: 'Se sacó del alcance'/.test(api),
+    'y la bitácora habla con las palabras de Mike');
 
 console.log('· la regla NO se vuelve a escribir aquí');
 /* La pantalla no puede decidir qué es un cancelado: eso sale de `estado` y
@@ -51,12 +57,22 @@ rev(!/aprobado_at/.test(proyecto) && !/aprobado_at/.test(panel),
 
 console.log('· sacar del alcance desde la obra');
 rev(/items\/\$\{e\.item_id\}\/\$\{que\}/.test(panel), 'el panel del ítem lo pide a la suite');
-rev(/seg\[2\] === 'aprobar' \|\| seg\[2\] === 'cancelar'/.test(puerta), 'y la puerta reenvía esas dos rutas');
+rev(/mover\('sacar'\)/.test(panel) && !/mover\('cancelar'\)/.test(panel), 'y lo que pide es «sacar», no «cancelar»');
+rev(/seg\[2\] === 'aprobar' \|\| seg\[2\] === 'sacar'/.test(puerta), 'y la puerta reenvía «sacar» (y «cancelar» por los viejos)');
+rev(panel.includes('Agregar al alcance') && panel.includes('Sacar del alcance'), 'los dos botones dicen lo que hacen');
+rev(!/descartado/.test(panel) && !/Cancelado:/.test(panel), 'y ya no se habla de cancelados ni descartados');
+
+console.log('· la bitácora del alcance, debajo de los botones');
+rev(/item_alcance_movimientos/.test(panel), 'el panel lee los movimientos que manda la suite');
+rev(/MOVIMIENTOS_ALCANCE\[m\.accion\]/.test(panel), 'y cada renglón dice «se agregó» o «se sacó»');
+rev(/sin registro de quién/.test(panel), 'lo sembrado sin quién se dice así, no se inventa un nombre');
+rev(/\.alcance-bitacora\{/.test(css), 'y la lista tiene su estilo en lo armado');
 rev(/'\/items\/\$\{encodeURIComponent\(seg\[1\]\)\}\/\$\{seg\[2\]\}`, ''\)/.test(puerta.replace(/`/g, "'")) || puerta.includes("`/items/${encodeURIComponent(seg[1])}/${seg[2]}`, ''"),
     'sin el prefijo del motor: la ruta es de la empresa, no de la obra');
 
 console.log('· y todo eso llegó a lo armado');
-rev(js.includes('no_aprobado'), 'el paquete trae los alcances');
+rev(js.includes('Fuera de alcance') && js.includes('Se sacó del alcance'), 'el paquete trae los alcances y la bitácora');
+rev(!js.includes('no_aprobado'), 'y ya no trae el tercer estado');
 rev(/\.pin\.fuera\{/.test(css), 'y el pin de lo que está fuera se pinta distinto');
 
 console.log(`\n${revisadas} revisadas · ${fallas} fallas`);

@@ -323,7 +323,7 @@ async function api(req, env, url, path) {
    * se decide nada: si esta puerta escribiera el estado por su cuenta, la
    * regla de «para considerarse cancelado tiene que haber estado aprobado
    * primero» viviría en dos lados. */
-  if (seg[0] === 'items' && seg[1] && (seg[2] === 'aprobar' || seg[2] === 'cancelar') && !seg[3] && m === 'POST') {
+  if (seg[0] === 'items' && seg[1] && (seg[2] === 'aprobar' || seg[2] === 'sacar' || seg[2] === 'cancelar') && !seg[3] && m === 'POST') {
     return aLaSuite(req, env, url, `/items/${encodeURIComponent(seg[1])}/${seg[2]}`, '');
   }
 
