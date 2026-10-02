@@ -37,6 +37,7 @@ import { useApp } from './App.jsx';
 import { pdfjs, esPdf } from './pdf.js';
 import { medidasDeHoja } from './nitidez.js';
 import { planoDe, nombreDePlanoPegado } from './pegar.js';
+import { BotonCompartir } from './Fotos.jsx';
 
 const idOp = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 const kb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
@@ -298,6 +299,7 @@ function Tarjeta({ doc, on, onVer, onArchivar, nota }) {
         {nota && <div className="s nota">{nota}</div>}
       </button>
       <a className="btn sm" href={fileUrl(doc.r2_key)} target="_blank" rel="noreferrer" title="Abrir el archivo aparte">↗</a>
+      <BotonCompartir url={fileUrl(doc.r2_key)} nombre={doc.nombre}>⇪</BotonCompartir>
       {onArchivar && <button className="btn sm" onClick={onArchivar} title="Quitar de la vista">✕</button>}
     </div>
   );

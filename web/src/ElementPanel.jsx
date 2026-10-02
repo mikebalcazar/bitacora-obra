@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, leer, escribir, fileUrl, FASES, ALCANCES, TIPOS, enRevision, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
-import { Photos, usePending, PhotoInput, PendingStrip, usePegarYSoltar } from './Fotos.jsx';
+import { Photos, usePending, PhotoInput, PendingStrip, usePegarYSoltar, Lightbox } from './Fotos.jsx';
 import { Duda } from './Dudas.jsx';
 import Docs from './DocsItem.jsx';
 
@@ -167,7 +167,7 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
         <BarraProceso e={e} etapas={etapas} hechas={hechas} n={nEtapas} puedeMarcar={staff}
           abierta={proc} onAbrir={() => setProc(!proc)} onChanged={changed} />
       )}
-      {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
+      <Lightbox lb={lb} onClose={() => setLb(null)} />
       {edit && <EditElement e={e} onClose={() => setEdit(false)} onChanged={() => { changed(); }} onDeleted={() => { onChanged(); onClose(); }}
         onReubicar={onReubicar ? () => { setEdit(false); onReubicar(e); } : null} />}
     </aside>
@@ -224,7 +224,7 @@ function ItemCliente({ d, plan, user, onClose, onChanged }) {
           </div>
         </div>
       </div>
-      {lb && <div className="lightbox" onClick={() => setLb(null)}><img src={lb} alt="" /></div>}
+      <Lightbox lb={lb} onClose={() => setLb(null)} />
     </aside>
   );
 }
