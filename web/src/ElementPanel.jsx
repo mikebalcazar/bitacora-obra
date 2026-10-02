@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, leer, escribir, fileUrl, FASES, ALCANCES, TIPOS, enRevision, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
+import { api, leer, escribir, fileUrl, FASES, ALCANCES, MOVIMIENTOS_ALCANCE, TIPOS, enRevision, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
 import { Photos, usePending, PhotoInput, PendingStrip, usePegarYSoltar, Lightbox } from './Fotos.jsx';
 import { Duda } from './Dudas.jsx';
@@ -633,18 +633,19 @@ function EditElement({ e, onClose, onChanged, onDeleted, onReubicar }) {
   );
 }
 
-/* Sacar un ítem del alcance, o meterlo, desde la obra.
+/* Sacar un ítem del alcance, o agregarlo, desde la obra.
  *
  * Mike, 20-sep: «se debe poder cancelar algún ítem ya sea desde quell o
  * desde dash, y se refleja en los 2». Se refleja solo: es el MISMO ítem en
  * la misma base de la empresa, no hay nada que sincronizar.
  *
- * La regla de qué queda CANCELADO y qué DESCARTADO —«para considerarse
- * cancelado tiene que haber estado aprobado primero»— la aplica la suite y
- * la contesta; aquí se dice la palabra que ella devuelve, no se vuelve a
- * sacar la cuenta.
+ * Mike, 2-oct: «solo existirá "en alcance" o "fuera de alcance" (…) solo en
+ * la bitácora sí aparecerá como "se sacó del alcance" y si se agrega de nuevo
+ * aparecerá después "se agregó al alcance" con su fecha y quién la agregó».
+ * Así que ya no hay un tercer estado: dos botones y, debajo, la
+ * bitácora que manda la suite en `item_alcance_movimientos`.
  *
- * En dos pasos y con motivo: cancelar saca el ítem del precio de venta del
+ * En dos pasos y con motivo: sacar quita el ítem del precio de venta del
  * proyecto, y «por qué se cayó esto» no tiene otra respuesta tres meses
  * después. */
 /* La fecha de entrega del ítem y cuántos días faltan (contrato 0.40.0).
@@ -727,16 +728,16 @@ function Alcance({ e, onChanged }) {
   const [dicho, setDicho] = React.useState('');
   const fuera = (e.alcance || 'dentro') !== 'dentro';
 
+  const movimientos = e.item_alcance_movimientos || [];
+
   const mover = async (que) => {
     setYendo(true);
     try {
-      const r = await api.post(`/items/${e.item_id}/${que}`, que === 'cancelar' ? { motivo } : {});
+      const r = await api.post(`/items/${e.item_id}/${que}`, que === 'sacar' ? { motivo } : {});
       const como = r?.data?.alcance;
-      setDicho(que === 'aprobar'
-        ? 'Aprobado: vuelve al alcance de la obra.'
-        : como === 'descartado'
-          ? 'Descartado: nunca estuvo aprobado, así que no cuenta como cancelado.'
-          : 'Cancelado: sale del precio de venta del proyecto.');
+      setDicho(como === 'dentro'
+        ? 'Se agregó al alcance: ya cuenta en el precio de venta del proyecto.'
+        : 'Se sacó del alcance: ya no cuenta en el precio de venta del proyecto.');
       setAbierto(false); setMotivo('');
       onChanged();
     } catch (err) {
@@ -747,24 +748,42 @@ function Alcance({ e, onChanged }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', margin: '4px 0 8px' }}>
-      {fuera ? (
-        <button className="btn sm" disabled={yendo} onClick={() => mover('aprobar')}>
-          {yendo ? 'Un momento…' : 'Regresar al alcance'}
-        </button>
-      ) : !abierto ? (
-        <button className="btn sm" onClick={() => setAbierto(true)}>Sacar del alcance</button>
-      ) : (
-        <>
-          <input className="inp sm" style={{ width: 160 }} value={motivo} placeholder="¿Por qué?"
-            onChange={(ev) => setMotivo(ev.target.value)} aria-label="Motivo" />
-          <button className="btn sm danger" disabled={yendo} onClick={() => mover('cancelar')}>
-            {yendo ? 'Un momento…' : 'Confirmar'}
+    <div className="alcance">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', margin: '4px 0 4px' }}>
+        {fuera ? (
+          <button className="btn sm" disabled={yendo} onClick={() => mover('aprobar')}>
+            {yendo ? 'Un momento…' : 'Agregar al alcance'}
           </button>
-          <button className="btn sm" onClick={() => setAbierto(false)}>Cancelar</button>
-        </>
+        ) : !abierto ? (
+          <button className="btn sm" onClick={() => setAbierto(true)}>Sacar del alcance</button>
+        ) : (
+          <>
+            <input className="inp sm" style={{ width: 160 }} value={motivo} placeholder="¿Por qué?"
+              onChange={(ev) => setMotivo(ev.target.value)} aria-label="Motivo" />
+            <button className="btn sm danger" disabled={yendo} onClick={() => mover('sacar')}>
+              {yendo ? 'Un momento…' : 'Confirmar'}
+            </button>
+            <button className="btn sm" onClick={() => setAbierto(false)}>Mejor no</button>
+          </>
+        )}
+        {dicho && <span style={{ fontSize: 12, color: 'var(--ink3)' }}>{dicho}</span>}
+      </div>
+      {/* La bitácora del alcance: cada entrada y salida con fecha y quién.
+          Viene de la suite ya resuelta; aquí no se deduce nada. Un ítem
+          sin movimientos es un requerimiento que nadie ha decidido todavía. */}
+      {movimientos.length > 0 && (
+        <ul className="alcance-bitacora" aria-label="Bitácora del alcance">
+          {[...movimientos].reverse().map((m) => (
+            <li key={m.id} className={m.accion}>
+              <b>{MOVIMIENTOS_ALCANCE[m.accion] || m.accion}</b>
+              {' · '}{fmtD(m.at)} {fmtT(m.at)}
+              {m.quien ? <> · {m.quien}</> : <> · <i>sin registro de quién</i></>}
+              {m.app ? <> · desde {m.app}</> : null}
+              {m.motivo ? <span className="motivo">«{m.motivo}»</span> : null}
+            </li>
+          ))}
+        </ul>
       )}
-      {dicho && <span style={{ fontSize: 12, color: 'var(--ink3)' }}>{dicho}</span>}
     </div>
   );
 }
