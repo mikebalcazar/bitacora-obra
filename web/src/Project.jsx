@@ -234,6 +234,12 @@ export default function Project({ id, sub }) {
       },
     }).catch((e) => { toast(e.message); return null; });
     if (!r) return;
+    /* 0.64.1 · Mike, 2-oct: «se genera como requerimiento (fuera de
+     * alcance)». La suite lo marca fuera, y el filtro de la obra nace en
+     * «En alcance»: si no se cambiara, el pin que la persona acaba de clavar
+     * desaparecería. Se pasa a «Todos» para que lo vea, y el aviso de arriba
+     * dice por qué. */
+    if (enRevision(f.type) && alcance === 'dentro') setAlcance('todos');
     setNewAt(null); setTipoNuevo(null); setPadreNuevo(null); await load(); cargarSinUbicar();
     if (r.subido && r.r?.id) selectEl(r.r.id);
     else toast('Sin señal: el ítem se sube solo cuando vuelva.');
@@ -599,7 +605,7 @@ function NewElementModal({ elements, members, sinUbicar = [], tipoInicial = null
         {/* Se dice ANTES de guardar, no después: quien lo levanta tiene que
             saber que esto no se va a fabricar todavía. */}
         {enRevision(f.type) && (
-          <p className="muted aviso-rq">Queda <b>en revisión</b>: se ve en el plano y en la lista, pero no entra a producción hasta que se cotice y se autorice. Cuando se apruebe, cámbiale el tipo a lo que sea.</p>
+          <p className="muted aviso-rq">Queda <b>en revisión</b> y <b>fuera de alcance</b>: sale en el plano y en la lista cuando ves «Fuera de alcance» o «Todos», si la obra está ligada a un proyecto cae en el borrador de requerimientos de quote101, y no entra a producción hasta que se cotice y se autorice. Al aprobarse la cotización, entra al alcance con su tipo y su precio.</p>
         )}
         {sinUbicar.length > 0 && !enRevision(f.type) && (
           <div className="field">
