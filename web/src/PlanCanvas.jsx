@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { fileUrl, colorTipo, aguado } from './api.js';
+import { fileUrl, colorTipo, aguado, enRevision } from './api.js';
 import { pdfjs, esPdf } from './pdf.js';
 import { hojaConMargen, pegado, hayQueRedibujar, ESPERA_MS } from './plano.js';
 
@@ -363,7 +363,12 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
                 /* Fuera del alcance: hueco y punteado. No se borra del plano
                    —la pieza existe y alguien la puede estar buscando— pero
                    tampoco se ve como algo que se esté fabricando. */
-                + ((e.alcance && e.alcance !== 'dentro') ? ' fuera' : '')}
+                + ((e.alcance && e.alcance !== 'dentro') ? ' fuera' : '')
+                /* El requerimiento (Mike, 3-oct): amarillo relleno con aro
+                   verde, lleno y sin punteado aunque esté fuera del alcance,
+                   porque lo que tiene que decir de lejos es «esto se pidió y
+                   falta autorizarlo», no «esto se quitó». */
+                + (enRevision(e.type) ? ' revision' : '')}
               style={{
                 left: e.x * plan.width, top: e.y * plan.height,
                 background: enProd ? aguado(tinte) : tinte,
