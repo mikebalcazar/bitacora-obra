@@ -642,6 +642,14 @@ select.sm{font-size:12px;padding:3px 6px;border-radius:12px;border:1px solid var
    puede estar buscando—; dejarlo igual que los demás diría que se está
    fabricando. */
 .pin.fuera{background:transparent !important;border-style:dashed;opacity:.72}
+/* El requerimiento se tiene que VER (Mike, 3-oct-2026: «el color de los
+   círculos de los requerimientos en quell no se ven … un amarillo relleno con
+   círculo verde»). Gris, hueco y punteado sobre un plano blanco desaparecía.
+   Va después de `.pin.fuera` porque un requerimiento está fuera del alcance
+   y aquí gana: amarillo lleno, aro verde, sin punteado y sin transparencia.
+   Con pendientes abiertos el aro sigue rojo: eso lo tiene que decir el aro. */
+.pin.revision{background:var(--tinte) !important;border-style:solid;border-color:var(--ok);opacity:1}
+.pin.revision.abierto{border-color:var(--pend)}
 
 /* ── los archivos del ítem (Mike, 21-sep-2026) ───────────────────────────
    El plano grande y los demás al lado. En el celular la barra se recorre en

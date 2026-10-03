@@ -210,11 +210,15 @@ export const TIPOS = [
   // en revisión. Sí aparece en mapa, sí aparece en ítems, pero está pendiente
   // de cotizarse y autorizarse para entrar en producción».
   //
-  // Gris a propósito, y es el único que no es un color de material: lo que
-  // dice de lejos es «esto todavía no es nada». Si se hubiera pintado de un
-  // color más, en un plano lleno se leería como una categoría más de pieza y
-  // alguien la mandaría a fabricar.
-  { clave: 'Requerimiento', color: '#6E7781' },
+  // Era gris (22-sep: «esto todavía no es nada»), y desde el 2-oct además va
+  // fuera del alcance: hueco, punteado y a tres cuartos. Gris, hueco y
+  // punteado sobre un plano blanco no se veía. Mike, 3-oct-2026: «El color de
+  // los círculos de los requerimientos en quell no se ven. Podríamos hacerlos
+  // un amarillo relleno con círculo verde?». Amarillo relleno con aro verde:
+  // el único pin que no es color de material y el que más se ve, que es lo
+  // que un trabajo pedido en obra y sin autorizar necesita. El aro va en
+  // styles.css (`.pin.revision`).
+  { clave: 'Requerimiento', color: '#F0C419' },
 ];
 
 /** ¿Está en revisión? Se pregunta por el tipo y normalizando, igual que en la
