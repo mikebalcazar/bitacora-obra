@@ -169,19 +169,31 @@ function InvitarCliente({ projects, onClose }) {
   const [elegidas, setElegidas] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
   const [clientes, setClientes] = useState(null);
+  // El correo es de UN cliente en toda la suite (contrato 0.65.0). Mike,
+  // 4-oct-2026: «avisar que ya existe un cliente, presentar su info y
+  // preguntar si es ese cliente el que estás buscando y ya usarlo o si quieres
+  // crear uno nuevo con otro email». Si la suite contesta 409 correo_en_uso,
+  // aquí se guarda a quién es el correo y se pregunta antes de seguir.
+  const [conEseCorreo, setConEseCorreo] = useState(null);
   const carga = () => api.get('/clientes').then((r) => setClientes(r.clientes)).catch(() => setClientes([]));
   useEffect(() => { carga(); }, []);
   const toca = (id) => setElegidas((s0) => { const n = new Set(s0); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  async function manda(usarExistente) {
+    setBusy(true);
+    try {
+      const r = await api.post('/clientes/invitar', { email: f.email, name: f.name, project_ids: [...elegidas], ...(usarExistente ? { usar_existente: true } : {}) });
+      toast(r.aviso ? 'Quedó invitado, pero el correo no salió: ' + r.aviso : r.nuevo ? 'Invitado. Le llegó el correo con cómo entrar.' : 'Ya estaba: se le pusieron las obras y se le volvió a mandar el correo.');
+      setF({ email: '', name: '' }); setElegidas(new Set()); setConEseCorreo(null); carga();
+    } catch (x) {
+      if (x.status === 409 && x.message === 'correo_en_uso') { setConEseCorreo(x.data?.cliente || { correo: f.email }); return; }
+      toast(x.message);
+    } finally { setBusy(false); }
+  }
   async function invitar(e) {
     e.preventDefault();
     if (!elegidas.size) return toast('Elige al menos una obra.');
-    setBusy(true);
-    try {
-      const r = await api.post('/clientes/invitar', { email: f.email, name: f.name, project_ids: [...elegidas] });
-      toast(r.aviso ? 'Quedó invitado, pero el correo no salió: ' + r.aviso : r.nuevo ? 'Invitado. Le llegó el correo con cómo entrar.' : 'Ya estaba: se le pusieron las obras y se le volvió a mandar el correo.');
-      setF({ email: '', name: '' }); setElegidas(new Set()); carga();
-    } catch (x) { toast(x.message); } finally { setBusy(false); }
+    await manda(false);
   }
 
   return (
@@ -192,8 +204,18 @@ function InvitarCliente({ projects, onClose }) {
           Va a ver el plano de su obra y los puntos que le pidas definir; contesta ahí mismo y puede preguntar.
           No ve pendientes, bitácora ni nada interno. Entra con la misma cuenta que usa para su estado de cuenta.
         </p>
-        <div className="field"><label>Correo</label><input type="email" required autoFocus value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="cliente@correo.com" /></div>
+        <div className="field"><label>Correo</label><input type="email" required autoFocus id="correo-cliente-invitado" value={f.email} onChange={(e) => { setF({ ...f, email: e.target.value }); setConEseCorreo(null); }} placeholder="cliente@correo.com" /></div>
         <div className="field"><label>Nombre (como va a aparecer aquí)</label><input required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Fam. Ortega" /></div>
+        {conEseCorreo && (
+          <div className="aviso-correo" data-con-ese-correo role="status">
+            <p>Ya hay un cliente con el correo <b>{conEseCorreo.correo || f.email}</b>. ¿Es éste el que buscas?</p>
+            <p className="quien"><b>{conEseCorreo.nombre || '(sin nombre)'}</b>{conEseCorreo.telefono ? ` · ${conEseCorreo.telefono}` : ''}{conEseCorreo.rfc ? ` · ${conEseCorreo.rfc}` : ''}{conEseCorreo.portal_activo ? ' · con portal' : ''}</p>
+            <div className="acts">
+              <button type="button" className="btn" onClick={() => { setConEseCorreo(null); document.getElementById('correo-cliente-invitado')?.focus(); }}>No, es otro: cambio el correo</button>
+              <button type="button" className="btn primary" disabled={busy} onClick={() => manda(true)}>{busy ? 'Invitando…' : 'Sí, es ése: invitarlo'}</button>
+            </div>
+          </div>
+        )}
         <div className="field"><label>Obras a las que entra</label>
           <div className="obras-check">
             {projects.filter((p) => p.status !== 'cerrado').map((p) => (
