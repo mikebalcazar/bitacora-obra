@@ -19,7 +19,9 @@ async function call(method, path, body, isForm = false) {
   const r = await fetch(BASE + '/api' + path, { method, headers, body: isForm ? body : body ? JSON.stringify(body) : undefined, credentials: BASE ? 'omit' : 'same-origin' });
   let data = null;
   try { data = await r.json(); } catch { data = {}; }
-  if (!r.ok) { const e = new Error(data.error || `Error ${r.status}`); e.status = r.status; throw e; }
+  // El error lleva el cuerpo entero (`e.data`): un 409 correo_en_uso trae al
+  // cliente que ya tiene ese correo, y la pantalla lo enseña (4-oct-2026).
+  if (!r.ok) { const e = new Error(data.error || `Error ${r.status}`); e.status = r.status; e.data = data; throw e; }
   return data;
 }
 export const api = {
