@@ -177,6 +177,20 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
 // Lo que el cliente ve de un ítem: dónde está, cómo se llama, y los puntos que
 // el taller le pidió definir ahí. Contesta cada uno, y puede preguntar sobre
 // ese ítem. Ni fase, ni pendientes, ni bitácora: el servidor no los mandó.
+//
+// Desde el 4-oct-2026 (Mike: «al cliente sí le debe aparecer el precio de cada
+// ítem cuando lo selecciona en quell» y «necesito que pueda ver los documentos
+// (planos de ítem) de los ítems y su estado del proceso») también ve lo del
+// ítem que es suyo —precio, descripción, etapa de fabricación, entrega— y
+// abre «Archivos del ítem» de sólo lectura: el mismo visor, sin subir ni anotar.
+//
+// Las siete etapas son las del taller, las mismas que peek101 le enseña en su
+// estado de cuenta (suite101-api/claude/suite101-arquitectura.md §«Las 7
+// etapas»); `item_etapa` llega de 0 a 7.
+const ETAPAS_SUITE = ['Diseño autorizado', 'Anticipo pagado', 'Compra de materiales', 'Despiece y ensamble', 'Entrega', 'Instalación', 'Cierre'];
+const etapaSuite = (n) => (n == null ? null : n <= 0 ? 'Por iniciar' : ETAPAS_SUITE[Math.min(Number(n), 7) - 1]);
+const pesosCliente = (c) => '$' + (Number(c) / 100).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
 function ItemCliente({ d, plan, user, onClose, onChanged }) {
   const { toast } = useApp();
   const { element: e, dudas = [] } = d;
@@ -209,6 +223,15 @@ function ItemCliente({ d, plan, user, onClose, onChanged }) {
         </div>
         <h2>{e.name}</h2>
         <div className="meta"><span>{e.plan_name}</span><span>{abiertas.length ? `${abiertas.length} por definir` : 'Nada por definir'}</span></div>
+        {(e.item_monto != null || e.item_descripcion || e.item_etapa != null || e.item_fecha_entrega) && (
+          <div className="del-item" data-del-item>
+            {e.item_monto != null && <div><span>Precio</span><b>{pesosCliente(e.item_monto)}</b></div>}
+            {e.item_etapa != null && <div><span>Etapa</span><b>{etapaSuite(e.item_etapa)}</b></div>}
+            {e.item_fecha_entrega && <div><span>Entrega</span><b>{fmtD(e.item_fecha_entrega)}</b></div>}
+            {e.item_descripcion && <p>{e.item_descripcion}</p>}
+          </div>
+        )}
+        <Docs e={e} staff={false} />
       </div>
       <div className="puntos">
         {!dudas.length && <div className="empty"><h3>Nada por definir aquí</h3>Si tienes una duda sobre este ítem, pregúntala abajo.</div>}
