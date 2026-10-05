@@ -380,6 +380,14 @@ a{color:var(--accent)}
 .btn.planos b{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btn.planos small{color:var(--ink3);font-variant-numeric:tabular-nums;flex:none}
 .btn.planos .flecha{color:var(--ink3);font-size:10px;flex:none}
+/* Mike, 5-oct-2026: «Hay que hacer puro ícono el "imprimir" y el
+ * "compartir"». Un cuadrado de 32 con el dibujo; el nombre va en title y
+ * aria-label. Y en la barra del plano, el botón de planos es el único que
+ * cede: si no caben los selectores, el nombre del plano se recorta con «…»
+ * en vez de que los botones de la derecha se salgan del borde. */
+.btn.ico{display:inline-flex;align-items:center;justify-content:center;padding:0;width:32px;min-width:32px;height:32px;flex:none}
+.btn.ico i{width:16px;height:16px;display:block;color:var(--ink2)}
+.stage .tools .btn.planos{flex:0 1 auto;min-width:120px}
 .modal.hoja{gap:12px}
 .planlist{display:flex;flex-direction:column;gap:6px;max-height:min(52vh,380px);overflow:auto;-webkit-overflow-scrolling:touch}
 .planrow{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:6px 8px 6px 10px}

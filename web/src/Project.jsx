@@ -384,14 +384,22 @@ export default function Project({ id, sub }) {
               imprenta. El encuadre lo hace solo el lienzo al oír
               `beforeprint`; aquí nada más se pide la impresión. */}
           {vista === 'plan' && plan && (
-            <button className="btn sm" onClick={() => window.print()} title="Imprimir este plano con los códigos">Imprimir</button>
+            <button className="btn sm ico" onClick={() => window.print()} title="Imprimir este plano con los códigos" aria-label="Imprimir">
+              <i dangerouslySetInnerHTML={{ __html: ICO.imprimir }} />
+            </button>
           )}
           {/* Compartir el plano tal cual se subió (PDF o imagen). Mike, 2-oct:
               «quiero compartir ese plano (imagen o pdf)»; el botón de compartir
               existía para las fotos y los documentos del ítem, no para el
               plano. Va junto a Imprimir, arriba, a la vista en el celular. */}
+          {/* Mike, 5-oct: «Hay que hacer puro ícono el "imprimir" y el
+              "compartir"»: con las palabras, en una pantalla de escritorio
+              normal la barra ya no cabía y los selectores de la derecha se
+              salían del borde. El texto sigue en `title` y `aria-label`. */}
           {vista === 'plan' && archivoDelPlano(plan) && (
-            <BotonCompartir url={fileUrl(archivoDelPlano(plan).llave)} nombre={archivoDelPlano(plan).nombre} className="btn sm" />
+            <BotonCompartir url={fileUrl(archivoDelPlano(plan).llave)} nombre={archivoDelPlano(plan).nombre} className="btn sm ico" etiqueta="Compartir">
+              <i dangerouslySetInnerHTML={{ __html: ICO.compartir }} />
+            </BotonCompartir>
           )}
           <div className="spacer" />
           {/* En escritorio los interruptores viven en la barra lateral, a la
@@ -514,6 +522,8 @@ const ICO = {
   list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg>',
   elem: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
   doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/></svg>',
+  imprimir: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 8V3h10v5"/><rect x="3" y="8" width="18" height="9" rx="2"/><path d="M7 14h10v7H7z"/></svg>',
+  compartir: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>',
 };
 
 // La obra entera en una lista: qué es cada ítem, en qué etapa va y qué le falta.

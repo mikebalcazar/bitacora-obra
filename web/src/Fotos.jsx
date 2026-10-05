@@ -16,7 +16,7 @@ export function Photos({ photos, setLb, onDelete }) {
 /* El botón de compartir una copia del archivo (Mike, 2-oct-2026). Es el
  * mismo en la foto ampliada y en la tarjeta de un documento: baja el archivo
  * y abre la hoja de compartir del celular, o lo descarga donde no la hay. */
-export function BotonCompartir({ url, nombre, className = 'btn sm', children = 'Compartir' }) {
+export function BotonCompartir({ url, nombre, className = 'btn sm', children = 'Compartir', etiqueta }) {
   const [ocupado, setOcupado] = useState(false);
   const [aviso, setAviso] = useState('');
   const ir = async (ev) => {
@@ -31,8 +31,11 @@ export function BotonCompartir({ url, nombre, className = 'btn sm', children = '
   };
   return (
     <>
-      <button type="button" className={className} data-compartir onClick={ir} disabled={ocupado} title="Compartir una copia del archivo">
-        {ocupado ? 'Preparando…' : children}
+      {/* `etiqueta` es para cuando lo que se ve es un ícono: el nombre lo
+          lee el lector de pantalla y lo enseña el title. Un botón de texto
+          dice «Preparando…» mientras baja; uno de ícono, sólo «…». */}
+      <button type="button" className={className} data-compartir onClick={ir} disabled={ocupado} title="Compartir una copia del archivo" aria-label={etiqueta}>
+        {ocupado ? (etiqueta ? '…' : 'Preparando…') : children}
       </button>
       {aviso && <span className="aviso-compartir" role="status">{aviso}</span>}
     </>
