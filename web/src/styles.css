@@ -780,3 +780,49 @@ button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;
 .del-item span{color:var(--ink3);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 .del-item b{font-size:14px;font-weight:600}
 .del-item p{margin:0;flex-basis:100%;color:var(--ink2)}
+
+/* ─── el cronograma de la obra (5-oct-2026) ───
+   Una columna como la de las dudas: la obra arriba, una tarjeta por pieza. */
+.crono{position:absolute;inset:0;overflow:auto;background:var(--bg);padding:56px 14px calc(14px + var(--sab));
+  display:flex;flex-direction:column;gap:10px;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+.crono>*{width:min(860px,100%);align-self:center}
+.crono-cab{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap}
+.crono-cab .campo{display:flex;flex-direction:column;gap:4px;min-width:140px}
+.crono-cab .campo label{font-size:12px;color:var(--ink3)}
+.crono-cab .campo input{padding:8px 10px}
+.crono-cab .total b{font-size:18px}
+.crono-cab .total b.excede{color:var(--pend)}
+.crono-cab .total small{font-size:12px;color:var(--ink3)}
+.crono-cab .acciones{margin-left:auto;display:flex;gap:8px;align-items:center}
+.crono-cab .estado{font-size:12px;color:var(--ink3);min-width:60px;text-align:right}
+.crono-cab .estado.ok{color:var(--ok)}
+.crono-nota{font-size:12px}
+.pieza{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.pieza.sin{border-style:dashed}
+.pieza header{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.pieza header .nombre{text-align:left;font-size:14px;padding:0}
+.pieza header .nombre:hover{color:var(--accent)}
+.pieza header .fechas{margin-left:auto;font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pieza .dar{display:flex;gap:8px;align-items:center}
+.pieza .dar label{font-size:13px;color:var(--ink2)}
+.pieza .dar input{width:90px;padding:6px 10px}
+.seccion{display:flex;flex-direction:column;gap:6px;padding-left:8px;border-left:3px solid var(--line2)}
+.seccion-nombre{width:auto;max-width:260px;padding:4px 8px;font-weight:600;border-color:transparent;background:transparent}
+.seccion-nombre:hover,.seccion-nombre:focus{border-color:var(--line);background:var(--surface)}
+/* Una etapa es un renglón: qué, cuántos días, quién, después de qué, y cuándo cae. */
+.tarea{display:grid;grid-template-columns:150px 92px minmax(120px,1fr) minmax(150px,1fr) 118px 28px;gap:8px;align-items:center}
+.tarea .etapa{font-size:13px;font-weight:500}
+.tarea .dias{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink3)}
+.tarea .dias input{width:52px;padding:6px 8px;text-align:right}
+.tarea select{padding:6px 8px;font-size:13px}
+.tarea .cuando{font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.tarea .x{width:28px;height:28px;border-radius:6px;color:var(--ink3);font-size:12px}
+.tarea .x:hover{background:var(--pend-soft);color:var(--pend)}
+.pieza .agregar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px}
+@media (max-width:900px){
+  .crono{padding-top:64px}
+  .crono-cab .acciones{margin-left:0;width:100%;justify-content:flex-end}
+  .tarea{grid-template-columns:1fr 92px 28px;grid-auto-rows:auto}
+  .tarea .prov,.tarea .despues{grid-column:1/-1}
+  .tarea .cuando{grid-column:1/-1;text-align:left}
+}

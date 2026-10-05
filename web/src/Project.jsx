@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { api, leer, escribir, hayRed, fileUrl, FASES, ALCANCES, TIPOS, colorTipo, aguado, enRevision, fmtD, isLate, rasterizePlan, avance, veTodoEn, esCliente } from './api.js';
 import { HONDURA, irA, sellar, useEncima } from './navegar.js';
 import Dudas from './Dudas.jsx';
+import Cronograma from './Cronograma.jsx';
 import { useApp } from './App.jsx';
 import PlanCanvas from './PlanCanvas.jsx';
 import ElementPanel from './ElementPanel.jsx';
@@ -33,7 +34,9 @@ export default function Project({ id, sub }) {
    * barra de direcciones se contradigan: no hay dos copias que sincronizar. */
   const trozos = (sub || '').split('/').filter(Boolean);
   const sel = trozos[0] === 'e' ? trozos[1] || null : null;
-  const vista = ['lista', 'dudas'].includes(trozos[0]) ? trozos[0] : 'plan';
+  /* 'cronograma' sólo existe para quien dirige la obra (5-oct-2026); para
+   * los demás esa dirección es el plano. */
+  const vista = ['lista', 'dudas'].includes(trozos[0]) || (trozos[0] === 'cronograma' && staff) ? trozos[0] : 'plan';
   /* A esta pantalla también se llega sin navegar: por una liga que alguien
    * mandó, o recargando. Ahí el navegador deja el estado en nulo y el
    * módulo creería que estamos en el inicio, así que el primer paso
@@ -89,6 +92,8 @@ export default function Project({ id, sub }) {
    * entera, pero ahora navega en vez de guardar. Alternar entre plano y
    * lista no acumula historial: son el mismo nivel de hondura. */
   const setVista = irSeccion;
+  // Las dudas y el cronograma no se filtran por tipo ni por fase: ahí no hay plano.
+  const sinFiltros = vista === 'dudas' || vista === 'cronograma';
   const [uploading, setUploading] = useState(false);
   const [report, setReport] = useState(false);
   const [editPlan, setEditPlan] = useState(null);
@@ -353,6 +358,7 @@ export default function Project({ id, sub }) {
           {!cli && <button className={'item' + (vista === 'lista' ? ' on' : '')} onClick={() => setVista(vista === 'lista' ? 'plan' : 'lista')}>Ver la obra en lista <small>{data.elements.length}</small></button>}
           <button className={'item' + (vista === 'dudas' ? ' on' : '')} onClick={() => setVista(vista === 'dudas' ? 'plan' : 'dudas')}>{cli ? 'Puntos por definir' : staff ? 'Dudas por contestar' : 'Mis dudas'} <small>{data.dudas_abiertas || 0}</small></button>
           {!cli && <button className={'item' + (drawer ? ' on' : '')} onClick={() => setDrawer(!drawer)}>Ver lista de pendientes <small>{openTotal}</small></button>}
+          {staff && <button className={'item' + (vista === 'cronograma' ? ' on' : '')} onClick={() => setVista(vista === 'cronograma' ? 'plan' : 'cronograma')}>Cronograma</button>}
           {staff && <button className="item" onClick={() => go('/admin')}>Usuarios y accesos</button>}
         </section>
       </aside>
@@ -365,6 +371,7 @@ export default function Project({ id, sub }) {
             <button className={vista === 'dudas' ? 'on' : ''} onClick={() => { setVista('dudas'); setDrawer(false); setMview('plan'); }}>
               {cli ? 'Por definir' : 'Dudas'}{data.dudas_abiertas ? <b className="cuantas">{data.dudas_abiertas}</b> : null}
             </button>
+            {staff && <button className={vista === 'cronograma' ? 'on' : ''} onClick={() => { setVista('cronograma'); setDrawer(false); setMview('plan'); }}>Cronograma</button>}
           </div>
           {/* El nombre del plano era un rótulo muerto y el cambio de plano un
               menú que solo aparecía si ya había dos. Ahora es un botón, siempre,
@@ -406,7 +413,7 @@ export default function Project({ id, sub }) {
               vista siempre; repetirlos aquí arriba era decir dos veces lo
               mismo y quitarle aire al plano. En el celular no hay barra
               lateral, así que aquí es donde tienen que estar. */}
-          {vista !== 'dudas' && <div className="swatches solo-m">
+          {!sinFiltros && <div className="swatches solo-m">
             {tipos.map((t) => (
               <button key={t} className={'swatch' + (apagados.has(t) ? ' off' : '')} onClick={() => prende(t)}
                 style={{ ['--tinte']: colorTipo(t) }} title={apagados.has(t) ? `Mostrar ${t}` : `Ocultar ${t}`}>
@@ -414,13 +421,13 @@ export default function Project({ id, sub }) {
               </button>
             ))}
           </div>}
-          {vista !== 'dudas' && !cli && (
+          {!sinFiltros && !cli && (
             <select className={'btn sm' + (fase ? ' on' : '')} style={{ width: 'auto' }} value={fase} onChange={(ev) => setFase(ev.target.value)} title="Ver una sola fase">
               <option value="">Las dos fases</option>
               {Object.entries(FASES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           )}
-          {vista !== 'dudas' && !cli && (
+          {!sinFiltros && !cli && (
             <select className={'btn sm' + (alcance !== 'dentro' ? ' on' : '')} style={{ width: 'auto' }}
               value={alcance} onChange={(ev) => setAlcance(ev.target.value)} title="Ver los que están fuera del alcance">
               <option value="dentro">En proceso ({cuantosAlcance('dentro')})</option>
@@ -429,7 +436,7 @@ export default function Project({ id, sub }) {
             </select>
           )}
         </div>
-        {(apagados.size > 0 || fase || alcance !== 'dentro') && !adding && vista !== 'dudas' && (
+        {(apagados.size > 0 || fase || alcance !== 'dentro') && !adding && !sinFiltros && (
           <div className="hint">
             Viendo {vista === 'lista' ? listados.length : shown.length} de {vista === 'lista' ? data.elements.length : elements.length} ítems{apagados.size ? ` · sin ${[...apagados].join(', ').toLowerCase()}` : ''}{fase ? ` · ${FASES[fase]}` : ''}{alcance !== 'dentro' ? ` · ${ALCANCES[alcance]}` : ''}
             <button className="btn sm" onClick={() => { setApagados(new Set()); setFase(''); setAlcance('dentro'); }}>Ver todos</button>
@@ -447,7 +454,9 @@ export default function Project({ id, sub }) {
           </div>
         )}
         {moviendo && <div className="hint">Toca el plano donde va ahora {moviendo.code || 'el ítem'} · <button className="btn sm" onClick={() => setMoviendo(null)}>Cancelar</button></div>}
-        {vista === 'dudas' ? (
+        {vista === 'cronograma' ? (
+          <Cronograma pid={id} onIr={(e) => { selectEl(e.id, { planId: e.plan_id }); if (window.innerWidth <= 900) setMview('elem'); }} />
+        ) : vista === 'dudas' ? (
           <Dudas pid={id} staff={staff} user={user} cli={cli}
             onIr={(eid, plid) => { selectEl(eid, { planId: plid }); if (window.innerWidth <= 900) setMview('elem'); }} />
         ) : vista === 'lista' ? (
