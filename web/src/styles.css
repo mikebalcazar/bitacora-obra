@@ -889,3 +889,11 @@ button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;
 .tarea .flecha:not(:disabled):hover{background:var(--accent-soft);color:var(--accent)}
 .fase-nombre{padding:5px 8px;font-size:13px;font-weight:500;min-width:0;border-color:transparent;background:transparent}
 .fase-nombre:hover,.fase-nombre:focus{border-color:var(--line);background:var(--surface)}
+
+/* Los dos candados de la pieza en el cronograma (6-oct-2026). */
+.candados{display:inline-flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap}
+.candados.listo{color:var(--ok);font-weight:500}
+.candados.faltan em{font-style:normal;background:var(--pend-soft);color:var(--pend);padding:1px 6px;border-radius:4px;font-weight:500}
+.candados.faltan small{color:var(--ink3)}
+.g-izq .candados{flex:0 0 auto}
+.panel .meta span.falta{color:var(--pend)}

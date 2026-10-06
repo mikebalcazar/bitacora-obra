@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { nombreDe, ordenaFases } from './Cronograma.jsx';
+import { Candados, nombreDe, ordenaFases } from './Cronograma.jsx';
 
 /* El cronograma gráfico (6-oct-2026).
  *
@@ -148,6 +148,7 @@ export default function Gantt({ c, tareas, items, fechasDe, onPon, onEncadena, o
           <div key={'e-' + f.e.element_id} className="g-fila de-pieza" style={{ top: i * RH }}>
             <div className="g-izq">
               <button className="g-nombre" onClick={() => onIr && onIr(f.e)} title="Abrir el ítem">{f.e.code ? <b>{f.e.code}</b> : null} {f.e.name}</button>
+              <Candados k={f.e.candados} corto />
               {!f.n && <DarFases onOk={(d) => onDarFases(f.e.element_id, d)} />}
             </div>
             <div className="g-linea" style={{ width: ancho }}>
