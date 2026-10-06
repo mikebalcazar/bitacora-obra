@@ -40,7 +40,7 @@ rev(/\{!k\.anticipo && <em[^>]*>\{corto \? '⚠ anticipo' : k\.ligado \? 'Sin an
 rev(/\{!k\.diseno && <em[^>]*>\{corto \? '⚠ diseño' : 'Sin diseño'\}<\/em>\}/.test(crono), 'sin diseño: «Sin diseño»');
 rev(/\{!corto && <small>corre desde hoy<\/small>\}/.test(crono), 'y la lista dice «corre desde hoy»');
 rev(/<Candados k=\{e\.candados\} \/>/.test(crono), 'en la lista, en la cabecera de cada pieza');
-rev(/import \{ Candados, nombreDe, ordenaFases \} from '\.\/Cronograma\.jsx';/.test(gantt) && /<Candados k=\{f\.e\.candados\} corto \/>/.test(gantt), 'en la gráfica, en el renglón de cada pieza, en corto');
+rev(/import \{ Candados, nombreDe, ordenaFases, pesos, responsableDe \} from '\.\/Cronograma\.jsx';/.test(gantt) && /<Candados k=\{f\.e\.candados\} corto \/>/.test(gantt), 'en la gráfica, en el renglón de cada pieza, en corto');
 rev(/Una pieza corre desde que tiene anticipo \(se reparte en dash101 al registrar el pago\) y diseño definido \(se fecha en el ítem\); mientras le falte alguno, corre desde hoy\./.test(crono), 'y la nota de arriba explica la regla');
 rev(/\.candados\.faltan em\{[^}]*background:var\(--pend-soft\);color:var\(--pend\)/.test(css), 'lo que falta se ve en rojo');
 

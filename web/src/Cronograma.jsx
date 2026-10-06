@@ -206,6 +206,11 @@ export default function Cronograma({ pid, onIr }) {
           <b className={c.excede ? 'excede' : ''}>{c.dias_laborables ? fecha(c.fin) : '—'}</b>
           <small>{c.dias_laborables ? `${plural(c.dias_laborables, 'día laborable', 'días laborables')}${c.excede ? ` · se pasa ${plural(c.dias_laborables - c.dias_objetivo, 'día', 'días')}` : ''}` : 'Sin tiempos todavía'}</small>
         </div>
+        <div className="campo total" data-costo-total title="La suma de los costos de todas las fases. Las de piezas ligadas a un ítem son compromisos del proyecto en dash101.">
+          <label>Costo de las fases</label>
+          <b>{pesos(tareas.reduce((s, t) => s + (Number(t.costo) || 0), 0))}</b>
+          <small>{costoDeDash(tareas, items) ? 'en dash101 como compromisos' : 'sin ítem ligado: no sale en dash101'}</small>
+        </div>
         <div className="acciones">
           <span className={'estado' + (estado === 'Guardado' ? ' ok' : '')}>{estado}</span>
           <div className="segm chico">
@@ -216,7 +221,7 @@ export default function Cronograma({ pid, onIr }) {
           <a className="btn sm" href={`${BASE}/api/projects/${pid}/cronograma.xml`} download title="Bajar el cronograma para Microsoft Project (XML)">Project</a>
         </div>
       </div>
-      <div className="crono-nota muted">Los días se cuentan de lunes a sábado. Una pieza corre desde que tiene anticipo (se reparte en dash101 al registrar el pago) y diseño definido (se fecha en el ítem); mientras le falte alguno, corre desde hoy. Dentro de cada proceso, el material llega, luego se fabrica y luego se instala; las instalaciones de los procesos de una pieza van una tras otra. {modo === 'grafica' ? 'Arrastra una barra sobre otra para encadenarla antes o después; al vacío, para fijarle la fecha. ' : ''}{conTiempo} de {items.length} piezas con tiempo.</div>
+      <div className="crono-nota muted">Cada pieza nace con sus tres fases: material 10 días, fabricación 24 e instalación 12, y el costo por tipo de ítem (muebles 30 % materiales y 30 % mano de obra; puertas 35 y 35; servicios 5 y 55; acabados 40 y 20, sobre el precio del ítem). Lo que se quite, se queda quitado. Los días se cuentan de lunes a sábado. Una pieza corre desde que tiene anticipo (se reparte en dash101 al registrar el pago) y diseño definido (se fecha en el ítem); mientras le falte alguno, corre desde hoy. Dentro de cada proceso, el material llega, luego se fabrica y luego se instala; las instalaciones de los procesos de una pieza van una tras otra. {modo === 'grafica' ? 'Arrastra una barra sobre otra para encadenarla antes o después; al vacío, para fijarle la fecha. ' : ''}{conTiempo} de {items.length} piezas con tiempo.</div>
       {!items.length && <div className="empty"><h3>Sin piezas</h3>El cronograma se arma con los ítems de la obra.</div>}
       {modo === 'grafica' && !!items.length && (
         <Gantt c={c} tareas={tareas} items={items} fechasDe={fechasDe} onPon={pon} onEncadena={encadena} onDarFases={darFases} onIr={onIr} />
@@ -231,7 +236,7 @@ export default function Cronograma({ pid, onIr }) {
               <button className="nombre" onClick={() => onIr && onIr(e)} title="Abrir el ítem">{e.code ? <b>{e.code}</b> : null} {e.name}</button>
               <span className="muted">{e.type}{e.plan_name ? ` · ${e.plan_name}` : ''}</span>
               <Candados k={e.candados} />
-              {mias.length ? <span className="fechas">{fecha(vivo?.inicio)} → {fecha(vivo?.fin)} · {plural(vivo?.dias || 0, 'día', 'días')}</span> : null}
+              {mias.length ? <span className="fechas">{fecha(vivo?.inicio)} → {fecha(vivo?.fin)} · {plural(vivo?.dias || 0, 'día', 'días')} · {pesos(mias.reduce((s, t) => s + (Number(t.costo) || 0), 0))}</span> : null}
             </header>
             {!mias.length && <DarTiempo onOk={(d) => daTiempo(e.element_id, d)} />}
             {secciones.map((s) => {
@@ -249,7 +254,7 @@ export default function Cronograma({ pid, onIr }) {
                     </div>
                   )}
                   {deS.map((t, i) => (
-                    <Fila key={t.id} t={t} soloTotal={soloTotal} fechas={fechasDe.get(t.id)} proveedores={c.proveedores}
+                    <Fila key={t.id} t={t} soloTotal={soloTotal} fechas={fechasDe.get(t.id)} proveedores={c.proveedores} contratistas={c.contratistas || []}
                       otras={tareas.filter((o) => o.id !== t.id)} etiqueta={etiqueta}
                       onPon={(p) => pon(t.id, p)} onQuita={() => quita(t.id)}
                       onSube={i > 0 ? () => mueveFase(t.id, -1) : null} onBaja={i < deS.length - 1 ? () => mueveFase(t.id, 1) : null} />
@@ -283,9 +288,13 @@ function DarTiempo({ onOk }) {
   );
 }
 
-function Fila({ t, soloTotal, fechas, proveedores, otras, etiqueta, onPon, onQuita, onSube, onBaja }) {
+function Fila({ t, soloTotal, fechas, proveedores, contratistas = [], otras, etiqueta, onPon, onQuita, onSube, onBaja }) {
   const tipo = TIPO_DE[t.etapa];
   const lista = proveedores.filter((p) => p.tipo === tipo || p.id === t.proveedor_id);
+  /* El responsable es UNO: proveedor o contratista (Mike, 6-oct). El valor
+   * del menú lleva de quién se trata, y escoger uno suelta al otro. */
+  const responsable = t.proveedor_id ? `prov:${t.proveedor_id}` : t.contratista_id ? `con:${t.contratista_id}` : '';
+  const ponResponsable = (v) => onPon(v.startsWith('prov:') ? { proveedor_id: v.slice(5), contratista_id: null } : v.startsWith('con:') ? { proveedor_id: null, contratista_id: v.slice(4) } : { proveedor_id: null, contratista_id: null });
   return (
     <div className="tarea">
       {/* El nombre de la fase se edita aquí mismo (Mike, 6-oct); vacío, vuelve al de su etapa. */}
@@ -297,10 +306,12 @@ function Fila({ t, soloTotal, fechas, proveedores, otras, etiqueta, onPon, onQui
         <input className="fase-nombre" value={t.nombre || ''} placeholder={soloTotal ? 'Tiempo total' : NOMBRE[t.etapa]} title={`Fase de ${NOMBRE[t.etapa].toLowerCase()}: el nombre se puede cambiar`} onChange={(e) => onPon({ nombre: e.target.value || null })} />
       </span>
       <label className="dias"><input type="number" min="1" step="1" inputMode="numeric" value={t.dias} onChange={(e) => onPon({ dias: Math.max(1, Number(e.target.value.replace(/\D/g, '')) || 1) })} /><span>días</span></label>
-      <select className="prov" value={t.proveedor_id || ''} onChange={(e) => onPon({ proveedor_id: e.target.value || null })} title={tipo === 'materiales' ? 'Quién surte el material' : 'Quién lo hace: el taller o un contratista'}>
-        <option value="">{tipo === 'materiales' ? '(sin proveedor)' : '(el taller)'}</option>
-        {lista.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+      <select className="prov" data-responsable value={responsable} onChange={(e) => ponResponsable(e.target.value)} title={tipo === 'materiales' ? 'Quién surte el material' : 'Quién lo hace: el taller, un proveedor de servicios o un contratista de la obra'}>
+        <option value="">{tipo === 'materiales' ? '(sin responsable)' : '(el taller)'}</option>
+        {lista.length ? <optgroup label="Proveedores">{lista.map((p) => <option key={p.id} value={`prov:${p.id}`}>{p.nombre}</option>)}</optgroup> : null}
+        {contratistas.length ? <optgroup label="Contratistas de la obra">{contratistas.map((u) => <option key={u.id} value={`con:${u.id}`}>{u.nombre}{u.empresa ? ` · ${u.empresa}` : ''}</option>)}</optgroup> : null}
       </select>
+      <label className="costo" title="Lo que cuesta esta fase. Con un ítem ligado, es un compromiso del proyecto en dash101 y entra al flujo proyectado">$<input type="number" min="0" step="0.01" inputMode="decimal" data-costo value={(Number(t.costo) || 0) / 100} onChange={(e) => onPon({ costo: Math.max(0, Math.round((parseFloat(e.target.value) || 0) * 100)) })} /></label>
       <select className="despues" value={t.depende_de || ''} onChange={(e) => onPon({ depende_de: e.target.value || null })} title="Esperar a que termine otra tarea de la obra">
         <option value="">Después de… (sigue el orden)</option>
         {otras.map((o) => <option key={o.id} value={o.id}>{etiqueta(o)}</option>)}
@@ -312,8 +323,17 @@ function Fila({ t, soloTotal, fechas, proveedores, otras, etiqueta, onPon, onQui
 }
 
 // ---- utilidades ----
-const tarea = ({ element_id, seccion = '', etapa, nombre = null, pos = null, dias = 1, orden = 0, depende_de = null }) => ({ id: nuevoId(), element_id, seccion, orden, etapa, nombre, pos: Number.isInteger(pos) ? pos : ETAPAS.indexOf(etapa) * 10, dias, proveedor_id: null, depende_de, inicio_fijo: null, notas: null });
-const limpia = (t) => ({ id: t.id, element_id: t.element_id, seccion: t.seccion || '', orden: t.orden || 0, etapa: t.etapa, nombre: t.nombre || null, pos: Number.isInteger(t.pos) ? t.pos : ETAPAS.indexOf(t.etapa) * 10, dias: t.dias, proveedor_id: t.proveedor_id || null, depende_de: t.depende_de || null, inicio_fijo: t.inicio_fijo || null, notas: t.notas || null });
-const aServidor = (t) => ({ id: t.id, element_id: t.element_id, seccion: t.seccion, orden: t.orden, etapa: t.etapa, nombre: t.nombre || null, pos: posDe(t), dias: Number(t.dias) || 1, proveedor_id: t.proveedor_id, depende_de: t.depende_de, inicio_fijo: t.inicio_fijo, notas: t.notas });
+/* 0.73.0 · Cada fase lleva RESPONSABLE (proveedor o contratista, no los dos)
+ * y COSTO en centavos (Mike, 6-oct). El costo nace en el servidor por tipo de
+ * ítem; aquí se corrige. */
+const tarea = ({ element_id, seccion = '', etapa, nombre = null, pos = null, dias = 1, orden = 0, depende_de = null }) => ({ id: nuevoId(), element_id, seccion, orden, etapa, nombre, pos: Number.isInteger(pos) ? pos : ETAPAS.indexOf(etapa) * 10, dias, proveedor_id: null, contratista_id: null, costo: 0, depende_de, inicio_fijo: null, notas: null });
+const limpia = (t) => ({ id: t.id, element_id: t.element_id, seccion: t.seccion || '', orden: t.orden || 0, etapa: t.etapa, nombre: t.nombre || null, pos: Number.isInteger(t.pos) ? t.pos : ETAPAS.indexOf(t.etapa) * 10, dias: t.dias, proveedor_id: t.proveedor_id || null, contratista_id: t.contratista_id || null, costo: Number(t.costo) || 0, depende_de: t.depende_de || null, inicio_fijo: t.inicio_fijo || null, notas: t.notas || null });
+const aServidor = (t) => ({ id: t.id, element_id: t.element_id, seccion: t.seccion, orden: t.orden, etapa: t.etapa, nombre: t.nombre || null, pos: posDe(t), dias: Number(t.dias) || 1, proveedor_id: t.proveedor_id, contratista_id: t.contratista_id || null, costo: Math.max(0, Math.round(Number(t.costo) || 0)), depende_de: t.depende_de, inicio_fijo: t.inicio_fijo, notas: t.notas });
+/** Pesos con centavos, para leer. */
+export const pesos = (centavos) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format((Number(centavos) || 0) / 100);
+/** Quién responde por la fase: el proveedor o el contratista, por nombre. */
+export const responsableDe = (t, c) => (t.proveedor_id ? (c.proveedores.find((p) => p.id === t.proveedor_id) || {}).nombre : t.contratista_id ? (c.contratistas || []).find((u) => u.id === t.contratista_id)?.nombre : '') || '';
 /* Las secciones de una pieza, en el orden en que se crearon. */
+/** Si algo de ese costo llega a dash101: hace falta una pieza LIGADA a un ítem con costo. */
+const costoDeDash = (ts, items) => ts.some((t) => (Number(t.costo) || 0) > 0 && (items.find((e) => e.element_id === t.element_id) || {}).candados?.ligado);
 const seccionesDe = (ts) => [...ts].sort((a, b) => (a.orden || 0) - (b.orden || 0)).reduce((acc, t) => (acc.includes(t.seccion) ? acc : [...acc, t.seccion]), []);

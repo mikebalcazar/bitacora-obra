@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Candados, nombreDe, ordenaFases } from './Cronograma.jsx';
+import { Candados, nombreDe, ordenaFases, pesos, responsableDe } from './Cronograma.jsx';
 
 /* El cronograma gráfico (6-oct-2026).
  *
@@ -162,7 +162,8 @@ export default function Gantt({ c, tareas, items, fechasDe, onPon, onEncadena, o
             <div className="g-izq">
               <span className="g-fase" title={f.t.seccion || ''}>{f.t.seccion ? <small>{f.t.seccion} · </small> : null}{rotulo(f.t)}</span>
               <label className="g-dias-in"><input type="number" min="1" step="1" inputMode="numeric" value={f.t.dias} onChange={(ev) => onPon(f.t.id, { dias: Math.max(1, Number(ev.target.value.replace(/\D/g, '')) || 1) })} /><span>d</span></label>
-              <span className="g-prov muted">{(c.proveedores.find((p) => p.id === f.t.proveedor_id) || {}).nombre || ''}</span>
+              <span className="g-prov muted" title={responsableDe(f.t, c)}>{responsableDe(f.t, c)}</span>
+              {Number(f.t.costo) > 0 && <span className="g-costo muted" title="El costo de la fase (se edita en la lista)">{pesos(f.t.costo)}</span>}
             </div>
             <div className="g-linea" style={{ width: ancho }}>
               {(() => {
