@@ -644,7 +644,7 @@ function NewElementModal({ elements, members, sinUbicar = [], tipoInicial = null
   // quiere otro a mano, puede; la base avisa si choca. En cuanto la persona
   // toca la clave, cambiar de tipo ya no se la pisa.
   const arranca = tipoInicial || 'Mueble';
-  const [f, setF] = useState({ code: siguienteCodigo(elements, arranca), type: arranca, name: '', resp: '', item_id: '' });
+  const [f, setF] = useState({ code: siguienteCodigo(elements, arranca), type: arranca, name: '', resp: '', item_id: '', descripcion: '' });
   const [claveTocada, setClaveTocada] = useState(false);
   const cambiaTipo = (type) => setF({ ...f, type, code: claveTocada ? f.code : siguienteCodigo(elements, type) });
   const resps = [...new Set(members.map((m) => m.company || m.name).filter(Boolean))];
@@ -691,10 +691,19 @@ function NewElementModal({ elements, members, sinUbicar = [], tipoInicial = null
           </div>
         )}
         <div className="two">
-          <div className="field"><label>Clave <small className="muted">propuesta por obra</small></label><input value={f.code} onChange={(e) => { setClaveTocada(true); setF({ ...f, code: e.target.value }); }} /></div>
+          <div className="field"><label>Clave <small className="muted">{enRevision(f.type) ? 'provisional: la definitiva se escoge en quote101 según el tipo de trabajo' : 'propuesta por obra'}</small></label><input value={f.code} onChange={(e) => { setClaveTocada(true); setF({ ...f, code: e.target.value }); }} /></div>
           <div className="field"><label>Tipo</label><select value={f.type} onChange={(e) => cambiaTipo(e.target.value)}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
         </div>
         <div className="field"><label>Nombre</label><input required autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Cocina — isla central" /></div>
+        {/* Mike, 6-oct: «agregar un campo de descripción en la ventana de
+            Nuevo requerimiento, donde se escribe lo que aparecerá como
+            descripción en quote (…) En caso de que no se llene en quell, se
+            puede llenar en quote.» El nombre y la descripción se escriben
+            aquí; la clave definitiva se escoge en quote101. */}
+        {enRevision(f.type) && (
+          <div className="field"><label>Descripción <small className="muted">la que sale en quote101; si la dejas vacía, se llena allá</small></label>
+            <textarea data-campo="descripcion" rows={3} value={f.descripcion} onChange={(e) => setF({ ...f, descripcion: e.target.value })} placeholder="Librero de MDF laqueado blanco, 2.40 × 3.10 m, con iluminación LED" /></div>
+        )}
         <div className="field"><label>Responsable</label><input list="resps" value={f.resp} onChange={(e) => setF({ ...f, resp: e.target.value })} placeholder="Taller 101 / contratista" /><datalist id="resps">{resps.map((r) => <option key={r} value={r} />)}</datalist></div>
         <div className="acts"><button type="button" className="btn" onClick={onCancel}>Cancelar</button><button className="btn primary">Crear ítem</button></div>
       </form>
