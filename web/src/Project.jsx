@@ -365,14 +365,18 @@ export default function Project({ id, sub }) {
 
       <main className={'stage' + (vista !== 'plan' ? ' enlista' : '')}>
         <div className="tools">
-          <div className="segm">
-            <button className={vista === 'plan' ? 'on' : ''} onClick={() => setVista('plan')}>Plano</button>
-            {!cli && <button className={vista === 'lista' ? 'on' : ''} onClick={() => { setVista('lista'); setDrawer(false); setMview('plan'); }}>Lista</button>}
-            <button className={vista === 'dudas' ? 'on' : ''} onClick={() => { setVista('dudas'); setDrawer(false); setMview('plan'); }}>
-              {cli ? 'Por definir' : 'Dudas'}{data.dudas_abiertas ? <b className="cuantas">{data.dudas_abiertas}</b> : null}
-            </button>
-            {staff && <button className={vista === 'cronograma' ? 'on' : ''} onClick={() => { setVista('cronograma'); setDrawer(false); setMview('plan'); }}>Cronograma</button>}
-          </div>
+          {/* La vista, en un menú desplegable (Mike, 6-oct-2026: «No se ven las
+              opciones, hazlo un dropdown menu»). Eran cuatro botones en fila y
+              con el panel del ítem abierto sólo cabían «Plano» y «Li». Un
+              <select> ocupa lo mismo tenga dos opciones o cinco. */}
+          <select className="btn sm vista" value={vista} data-vista
+            onChange={(ev) => { const v = ev.target.value; setVista(v); if (v !== 'plan') { setDrawer(false); setMview('plan'); } }}
+            title="Qué se ve de la obra">
+            <option value="plan">Plano</option>
+            {!cli && <option value="lista">Lista</option>}
+            <option value="dudas">{(cli ? 'Por definir' : 'Dudas') + (data.dudas_abiertas ? ` (${data.dudas_abiertas})` : '')}</option>
+            {staff && <option value="cronograma">Cronograma</option>}
+          </select>
           {/* El nombre del plano era un rótulo muerto y el cambio de plano un
               menú que solo aparecía si ya había dos. Ahora es un botón, siempre,
               y detrás está todo lo de planos: cuáles hay, cuál se ve, subir uno
