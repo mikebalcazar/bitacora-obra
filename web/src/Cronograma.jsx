@@ -199,6 +199,7 @@ export default function Cronograma({ pid, onIr }) {
   return (
     <div className="crono">
       <div className="crono-cab">
+        <InfoDelCronograma modo={modo} conTiempo={conTiempo} total={items.length} />
         <div className="campo"><label>Arranca el</label><input type="date" value={inicio} onChange={(e) => cambia(() => setInicio(e.target.value))} /></div>
         <div className="campo"><label>Días prometidos</label><input type="number" min="0" step="1" inputMode="numeric" placeholder="—" value={objetivo} onChange={(e) => cambia(() => setObjetivo(e.target.value.replace(/\D/g, '')))} /></div>
         <div className="campo total">
@@ -221,7 +222,6 @@ export default function Cronograma({ pid, onIr }) {
           <a className="btn sm" href={`${BASE}/api/projects/${pid}/cronograma.xml`} download title="Bajar el cronograma para Microsoft Project (XML)">Project</a>
         </div>
       </div>
-      <div className="crono-nota muted">Cada pieza nace con sus tres fases: material 10 días, fabricación 24 e instalación 12, y el costo por tipo de ítem (muebles 30 % materiales y 30 % mano de obra; puertas 35 y 35; servicios 5 y 55; acabados 40 y 20, sobre el precio de cada pieza: el del ítem entre su cantidad). Lo que se quite, se queda quitado. Los días se cuentan de lunes a sábado. Una pieza corre desde que tiene anticipo (se reparte en dash101 al registrar el pago) y diseño definido (se fecha en el ítem); mientras le falte alguno, corre desde hoy. Dentro de cada proceso, el material llega, luego se fabrica y luego se instala; las instalaciones de los procesos de una pieza van una tras otra. {modo === 'grafica' ? 'Arrastra una barra sobre otra para encadenarla antes o después; al vacío, para fijarle la fecha. ' : ''}{conTiempo} de {items.length} piezas con tiempo.</div>
       {!items.length && <div className="empty"><h3>Sin piezas</h3>El cronograma se arma con los ítems de la obra.</div>}
       {modo === 'grafica' && !!items.length && (
         <Gantt c={c} tareas={tareas} items={items} fechasDe={fechasDe} onPon={pon} onEncadena={encadena} onDarFases={darFases} onIr={onIr} />
@@ -326,6 +326,39 @@ function Fila({ t, soloTotal, fechas, proveedores, contratistas = [], otras, eti
 /* 0.73.0 · Cada fase lleva RESPONSABLE (proveedor o contratista, no los dos)
  * y COSTO en centavos (Mike, 6-oct). El costo nace en el servidor por tipo de
  * ítem; aquí se corrige. */
+/* La explicación del cronograma, detrás de un ícono (Mike, 6-oct: «elimina
+ * toda esa leyenda y redúcelo a un iconito de info»). Se abre y se cierra con
+ * el ícono, con Escape o picando fuera. */
+function InfoDelCronograma({ modo, conTiempo, total }) {
+  const [abierto, setAbierto] = useState(false);
+  const caja = useRef(null);
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) setAbierto(false); };
+    const tecla = (e) => { if (e.key === 'Escape') setAbierto(false); };
+    document.addEventListener('mousedown', fuera);
+    document.addEventListener('keydown', tecla);
+    return () => { document.removeEventListener('mousedown', fuera); document.removeEventListener('keydown', tecla); };
+  }, [abierto]);
+  return (
+    <div className="crono-info" ref={caja}>
+      <button type="button" className="crono-info-btn" data-crono-info aria-label="Cómo funciona el cronograma" aria-expanded={abierto} title="Cómo funciona el cronograma" onClick={() => setAbierto((a) => !a)}>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" strokeWidth="1.6" /><circle cx="12" cy="7.6" r="1.2" fill="currentColor" /><path d="M12 10.8v6.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+      </button>
+      {abierto && (
+        <div className="crono-ayuda" data-crono-ayuda role="dialog" aria-label="Cómo funciona el cronograma">
+          <p>Cada pieza nace con sus tres fases: material 10 días, fabricación 24 e instalación 12. Lo que se quite, se queda quitado.</p>
+          <p>El costo sale por tipo de ítem: muebles 30 % materiales y 30 % mano de obra; puertas 35 y 35; servicios 5 y 55; acabados 40 y 20. Es sobre el precio de cada pieza: el del ítem entre su cantidad.</p>
+          <p>Los días se cuentan de lunes a sábado. Una pieza corre desde que tiene anticipo (se reparte en dash101 al registrar el pago) y diseño definido (se fecha en el ítem); mientras le falte alguno, corre desde hoy.</p>
+          <p>Dentro de cada proceso, el material llega, luego se fabrica y luego se instala. Las instalaciones de los procesos de una pieza van una tras otra.</p>
+          {modo === 'grafica' && <p>Arrastra una barra sobre otra para encadenarla antes o después; al vacío, para fijarle la fecha.</p>}
+          <p className="cuenta">{conTiempo} de {total} piezas con tiempo.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const tarea = ({ element_id, seccion = '', etapa, nombre = null, pos = null, dias = 1, orden = 0, depende_de = null }) => ({ id: nuevoId(), element_id, seccion, orden, etapa, nombre, pos: Number.isInteger(pos) ? pos : ETAPAS.indexOf(etapa) * 10, dias, proveedor_id: null, contratista_id: null, costo: 0, depende_de, inicio_fijo: null, notas: null });
 const limpia = (t) => ({ id: t.id, element_id: t.element_id, seccion: t.seccion || '', orden: t.orden || 0, etapa: t.etapa, nombre: t.nombre || null, pos: Number.isInteger(t.pos) ? t.pos : ETAPAS.indexOf(t.etapa) * 10, dias: t.dias, proveedor_id: t.proveedor_id || null, contratista_id: t.contratista_id || null, costo: Number(t.costo) || 0, depende_de: t.depende_de || null, inicio_fijo: t.inicio_fijo || null, notas: t.notas || null });
 const aServidor = (t) => ({ id: t.id, element_id: t.element_id, seccion: t.seccion, orden: t.orden, etapa: t.etapa, nombre: t.nombre || null, pos: posDe(t), dias: Number(t.dias) || 1, proveedor_id: t.proveedor_id, contratista_id: t.contratista_id || null, costo: Math.max(0, Math.round(Number(t.costo) || 0)), depende_de: t.depende_de, inicio_fijo: t.inicio_fijo, notas: t.notas });
