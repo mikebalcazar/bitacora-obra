@@ -114,6 +114,11 @@ export default function Cronograma({ pid, onIr }) {
 
   // ---- lo que se edita ----
   const pon = (id, parche) => cambia(() => setTareas((ts) => ts.map((t) => (t.id === id ? { ...t, ...parche } : t))));
+  /* Encadenar `a` después de `b`. Si `b` ya esperaba a `a` (la cadena al
+   * revés, hecha sin querer), esa se quita en el mismo paso: así soltar la
+   * barra del otro lado SOBREESCRIBE la cadena en vez de morderse la cola
+   * (Mike, 6-oct). */
+  const encadena = (a, b) => cambia(() => setTareas((ts) => ts.map((t) => (t.id === a ? { ...t, depende_de: b } : t.id === b && t.depende_de === a ? { ...t, depende_de: null } : t))));
   const quita = (id) => cambia(() => setTareas((ts) => ts.filter((t) => t.id !== id).map((t) => (t.depende_de === id ? { ...t, depende_de: null } : t))));
   const agrega = (lista) => cambia(() => setTareas((ts) => [...ts, ...lista]));
   /* El orden dentro de un proceso es `pos`; después de meter o mover una fase
@@ -197,7 +202,7 @@ export default function Cronograma({ pid, onIr }) {
       <div className="crono-nota muted">Los días se cuentan de lunes a sábado. Dentro de cada proceso, el material llega, luego se fabrica y luego se instala; las instalaciones de los procesos de una pieza van una tras otra. {modo === 'grafica' ? 'Arrastra una barra sobre otra para encadenarla antes o después; al vacío, para fijarle la fecha. ' : ''}{conTiempo} de {items.length} piezas con tiempo.</div>
       {!items.length && <div className="empty"><h3>Sin piezas</h3>El cronograma se arma con los ítems de la obra.</div>}
       {modo === 'grafica' && !!items.length && (
-        <Gantt c={c} tareas={tareas} items={items} fechasDe={fechasDe} onPon={pon} onDarFases={darFases} onIr={onIr} />
+        <Gantt c={c} tareas={tareas} items={items} fechasDe={fechasDe} onPon={pon} onEncadena={encadena} onDarFases={darFases} onIr={onIr} />
       )}
       {modo === 'lista' && items.map((e) => {
         const mias = tareas.filter((t) => t.element_id === e.element_id);

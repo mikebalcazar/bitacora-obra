@@ -28,7 +28,7 @@ console.log('· la gráfica es la vista');
 rev(/import Gantt from '\.\/Gantt\.jsx';/.test(crono), 'Cronograma.jsx trae la gráfica');
 rev(/localStorage\.getItem\('crono_modo'\) \|\| 'grafica'/.test(crono), 'arranca en gráfica y recuerda la última');
 rev(/<button className=\{modo === 'grafica' \? 'on' : ''\} onClick=\{\(\) => cambiaModo\('grafica'\)\}>Gráfica<\/button>/.test(crono) && /<button className=\{modo === 'lista' \? 'on' : ''\} onClick=\{\(\) => cambiaModo\('lista'\)\}>Lista<\/button>/.test(crono), 'con los dos botones Gráfica / Lista');
-rev(/modo === 'grafica' && !!items\.length && \(\s*<Gantt c=\{c\} tareas=\{tareas\} items=\{items\} fechasDe=\{fechasDe\} onPon=\{pon\} onDarFases=\{darFases\} onIr=\{onIr\} \/>/.test(crono), 'y pinta <Gantt> con lo que edita y lo que contestó el servidor');
+rev(/modo === 'grafica' && !!items\.length && \(\s*<Gantt c=\{c\} tareas=\{tareas\} items=\{items\} fechasDe=\{fechasDe\} onPon=\{pon\} onEncadena=\{encadena\} onDarFases=\{darFases\} onIr=\{onIr\} \/>/.test(crono), 'y pinta <Gantt> con lo que edita y lo que contestó el servidor');
 
 console.log('· los días de cada fase de cada ítem');
 rev(/const DW = 28;/.test(gantt) && /if \(aFecha\(d\)\.getDay\(\) !== 0\) salida\.push\(d\);/.test(gantt), 'un día laborable por columna, sin domingos');
@@ -38,7 +38,9 @@ rev(/const darFases = \(element_id, dias\) => agrega\(ETAPAS\.filter\(\(k\) => d
 
 console.log('· arrastrar para encadenar');
 rev(/lado: ev\.clientX < r\.left \+ r\.width \/ 2 \? 'antes' : 'despues'/.test(gantt), 'la mitad de la otra barra decide antes o después');
-rev(/if \(sobre\.lado === 'despues'\) onPon\(t\.id, \{ depende_de: sobre\.id \}\);\s*else onPon\(sobre\.id, \{ depende_de: t\.id \}\);/.test(gantt), '«después de»: ésta espera a aquélla; «antes de»: aquélla espera a ésta');
+rev(/if \(sobre\.lado === 'despues'\) onEncadena\(t\.id, sobre\.id\);\s*else onEncadena\(sobre\.id, t\.id\);/.test(gantt), '«después de»: ésta espera a aquélla; «antes de»: aquélla espera a ésta');
+rev(/const encadena = \(a, b\) => cambia\(\(\) => setTareas\(\(ts\) => ts\.map\(\(t\) => \(t\.id === a \? \{ \.\.\.t, depende_de: b \} : t\.id === b && t\.depende_de === a \? \{ \.\.\.t, depende_de: null \} : t\)\)\)\);/.test(crono), 'soltar del otro lado sobreescribe: la cadena al revés se quita en el mismo paso (Mike, 6-oct)');
+rev(/\{f\.t\.depende_de && <button className="g-pin" title=\{`Espera a \$\{etiqueta\(f\.t\.depende_de\)\}\. Picar para quitar la cadena\.`\}[\s\S]*?onClick=\{\(\) => onPon\(f\.t\.id, \{ depende_de: null \}\)\}>⛓<\/button>\}/.test(gantt), 'una barra encadenada trae un eslabón que quita la cadena');
 rev(/data-barra=\{f\.t\.id\}/.test(gantt) && /el\.dataset\.barra !== origen\.current\.id/.test(gantt), 'la barra de abajo se reconoce por data-barra, sin contarse a sí misma');
 rev(/\{destino === 'despues' \? `\$\{etiqueta\(arrastre\.id\)\} después de ésta` : `\$\{etiqueta\(arrastre\.id\)\} antes de ésta`\}/.test(gantt), 'y mientras se arrastra, la barra de destino dice qué va a pasar');
 

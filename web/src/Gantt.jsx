@@ -39,7 +39,7 @@ function diasEntre(a, b) {
   return salida;
 }
 
-export default function Gantt({ c, tareas, items, fechasDe, onPon, onDarFases, onIr }) {
+export default function Gantt({ c, tareas, items, fechasDe, onPon, onEncadena, onDarFases, onIr }) {
   const hoy = aIso(new Date());
   const inicio = c.inicio < hoy ? c.inicio : hoy;
   const finMin = sumaDias(inicio, 21);
@@ -97,8 +97,8 @@ export default function Gantt({ c, tareas, items, fechasDe, onPon, onDarFases, o
     origen.current = null;
     setArrastre(null);
     if (sobre) {
-      if (sobre.lado === 'despues') onPon(t.id, { depende_de: sobre.id });
-      else onPon(sobre.id, { depende_de: t.id });
+      if (sobre.lado === 'despues') onEncadena(t.id, sobre.id);
+      else onEncadena(sobre.id, t.id);
       return;
     }
     const pasos = Math.round(dx / DW);
@@ -173,7 +173,8 @@ export default function Gantt({ c, tareas, items, fechasDe, onPon, onDarFases, o
                   <div data-barra={f.t.id} className={'g-barra ' + f.t.etapa + (yo ? ' va' : '') + (destino ? ' destino ' + destino : '')}
                     style={{ left: pos.left, width: pos.width, transform: yo ? `translateX(${arrastre.dx}px)` : undefined }}
                     onPointerDown={baja(f.t)} onPointerUp={suelta(f.t)} onPointerCancel={() => { origen.current = null; setArrastre(null); }}
-                    title={`${f.e.code || ''} ${rotulo(f.t)}: ${fechasDe.get(f.t.id).inicio} → ${fechasDe.get(f.t.id).fin}. Arrastra sobre otra barra para encadenar; al vacío para fijar la fecha.`}>
+                    title={`${f.e.code || ''} ${rotulo(f.t)}: ${fechasDe.get(f.t.id).inicio} → ${fechasDe.get(f.t.id).fin}. Arrastra sobre otra barra para encadenar (del otro lado, para voltear la cadena); al vacío para fijar la fecha.${f.t.depende_de ? ' El eslabón quita la cadena.' : ''}`}>
+                    {f.t.depende_de && <button className="g-pin" title={`Espera a ${etiqueta(f.t.depende_de)}. Picar para quitar la cadena.`} onPointerDown={(ev) => ev.stopPropagation()} onClick={() => onPon(f.t.id, { depende_de: null })}>⛓</button>}
                     {f.t.inicio_fijo && <button className="g-pin" title={`Empieza el ${f.t.inicio_fijo} o después. Picar para soltar la fecha.`} onPointerDown={(ev) => ev.stopPropagation()} onClick={() => onPon(f.t.id, { inicio_fijo: null })}>📌</button>}
                     <span>{f.t.dias}d</span>
                     {destino && <em className="g-aviso">{destino === 'despues' ? `${etiqueta(arrastre.id)} después de ésta` : `${etiqueta(arrastre.id)} antes de ésta`}</em>}
