@@ -132,7 +132,7 @@ console.log('· y la pantalla está cableada a esto, no a variables sueltas');
 const proyecto = readFileSync('web/src/Project.jsx', 'utf8');
 rev(!/useState\(null\);?\s*$/m.test(proyecto.match(/const \[sel,[^\n]*/)?.[0] || ''),
     '`sel` ya no es un useState: sale de la dirección');
-rev(/const sel = trozos\[0\] === 'e'/.test(proyecto), 'el ítem abierto se lee del hash');
+rev(/const enE = trozos\.indexOf\('e'\);\s*const sel = enE >= 0 \? trozos\[enE \+ 1\]/.test(proyecto), 'el ítem abierto se lee del hash (después de la vista, desde el 6-oct)');
 rev(/const vista = \['lista', 'dudas'\]\.includes/.test(proyecto), 'y la sección también');
 rev(!/setSel\(/.test(proyecto), 'no queda ningún `setSel` que se salte el historial');
 const cuantasVentanas = (proyecto.match(/useEncima\(/g) || []).length;

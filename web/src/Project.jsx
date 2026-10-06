@@ -33,10 +33,19 @@ export default function Project({ id, sub }) {
    * Derivarlos en vez de duplicarlos es lo que impide que la pantalla y la
    * barra de direcciones se contradigan: no hay dos copias que sincronizar. */
   const trozos = (sub || '').split('/').filter(Boolean);
-  const sel = trozos[0] === 'e' ? trozos[1] || null : null;
+  /* El ítem abierto va DESPUÉS de la vista (6-oct-2026): «…/cronograma/e/ITEM».
+   * Mike: «cuando dé click en el ítem desde otra ubicación no quiero que me
+   * regrese a la pantalla de plano, quiero sólo que me abra la barra lateral
+   * con la info del ítem, sin que la ventana central se salga de lo que
+   * estoy trabajando». Antes la dirección del ítem era sólo «…/e/ITEM» y por
+   * eso abrir uno siempre era volver al plano. «…/e/ITEM» sigue sirviendo:
+   * es el ítem sobre el plano, como las ligas que ya se mandaron. */
+  const enE = trozos.indexOf('e');
+  const sel = enE >= 0 ? trozos[enE + 1] || null : null;
+  const deVista = enE === 0 ? null : trozos[0];
   /* 'cronograma' sólo existe para quien dirige la obra (5-oct-2026); para
    * los demás esa dirección es el plano. */
-  const vista = ['lista', 'dudas'].includes(trozos[0]) || (trozos[0] === 'cronograma' && staff) ? trozos[0] : 'plan';
+  const vista = ['lista', 'dudas'].includes(deVista) || (deVista === 'cronograma' && staff) ? deVista : 'plan';
   /* A esta pantalla también se llega sin navegar: por una liga que alguien
    * mandó, o recargando. Ahí el navegador deja el estado en nulo y el
    * módulo creería que estamos en el inicio, así que el primer paso
@@ -44,7 +53,8 @@ export default function Project({ id, sub }) {
   useEffect(() => {
     sellar(sel ? HONDURA.item : vista !== 'plan' ? HONDURA.seccion : HONDURA.obra);
   }, [sel, vista]);
-  const irSeccion = (v) => irA(`/p/${id}${v && v !== 'plan' ? '/' + v : ''}`, v && v !== 'plan' ? HONDURA.seccion : HONDURA.obra);
+  const rutaDe = (v) => `/p/${id}${v && v !== 'plan' ? '/' + v : ''}`;
+  const irSeccion = (v) => irA(rutaDe(v), v && v !== 'plan' ? HONDURA.seccion : HONDURA.obra);
   const [flash, setFlash] = useState(null);
   const [adding, setAdding] = useState(false);
   /* Con qué tipo nace el ítem que se está clavando. `null` es el alta de
@@ -91,7 +101,9 @@ export default function Project({ id, sub }) {
   /* `setVista` se queda con el mismo nombre para no reescribir la pantalla
    * entera, pero ahora navega en vez de guardar. Alternar entre plano y
    * lista no acumula historial: son el mismo nivel de hondura. */
-  const setVista = irSeccion;
+  /* Cambiar de vista con un ítem abierto lo deja abierto: cambia lo de en
+   * medio y el panel se queda (mismo nivel: reemplaza, no apila). */
+  const setVista = (v) => (sel ? irA(`${rutaDe(v)}/e/${sel}`, HONDURA.item) : irSeccion(v));
   // Las dudas y el cronograma no se filtran por tipo ni por fase: ahí no hay plano.
   const sinFiltros = vista === 'dudas' || vista === 'cronograma';
   const [uploading, setUploading] = useState(false);
@@ -186,12 +198,28 @@ export default function Project({ id, sub }) {
     setFlash(opts.flash || null);
     if (opts.planId && opts.planId !== planId) setPlanId(opts.planId);
     if (opts.mobile !== false) setMview('elem');
-    irA(`/p/${id}/e/${eid}`, HONDURA.item);
+    const v = opts.vista || vista;
+    const base = rutaDe(v);
+    const yaAbierto = !!sel;
+    irA(`${base}/e/${eid}`, HONDURA.item);
+    /* De dónde se abrió, para cerrarlo regresando ahí (ver `cerrarEl`). Si
+     * ya había uno abierto, se reemplazó y el de abajo sigue siendo el que
+     * era: no se toca. */
+    if (!yaAbierto) history.replaceState({ ...(history.state || {}), base }, '', null);
   }
   /** Cerrar el ítem: se sale hacia afuera, que `irA` resuelve con el propio
    *  historial. Si escribiera una entrada nueva, el siguiente «atrás»
    *  reabriría el ítem que la persona acaba de cerrar. */
-  const cerrarEl = () => { setMview('plan'); irSeccion(vista); };
+  const cerrarEl = () => {
+    setMview('plan');
+    /* Si se abrió desde esta misma vista, cerrar es «atrás» (no queda una
+     * entrada hacia adelante que lo reabra). Si se cambió de vista con el
+     * ítem abierto, «atrás» regresaría a la vista anterior y sacaría a Mike
+     * de donde está: entonces se reemplaza por la vista de ahora. */
+    if (history.state && history.state.base === rutaDe(vista)) { irSeccion(vista); return; }
+    history.replaceState({ hondura: vista !== 'plan' ? HONDURA.seccion : HONDURA.obra }, '', '#' + rutaDe(vista));
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  };
   /* Lo que se abre ENCIMA: «atrás» lo cierra en vez de salir de la obra.
    * Están juntas a propósito — si mañana se agrega una ventana y no se
    * apunta en esta lista, el «atrás» vuelve a sacar de la app y nadie lo
@@ -459,7 +487,14 @@ export default function Project({ id, sub }) {
         )}
         {moviendo && <div className="hint">Toca el plano donde va ahora {moviendo.code || 'el ítem'} · <button className="btn sm" onClick={() => setMoviendo(null)}>Cancelar</button></div>}
         {vista === 'cronograma' ? (
-          <Cronograma pid={id} onIr={(e) => { selectEl(e.id, { planId: e.plan_id }); if (window.innerWidth <= 900) setMview('elem'); }} />
+          <Cronograma pid={id} onIr={(e) => {
+            /* Los renglones del cronograma traen la pieza como `element_id`
+             * y sin `plan_id`; con `e.id` se abría «undefined» y el panel se
+             * quedaba cargando (Mike, 6-oct). */
+            const eid = e.element_id || e.id;
+            selectEl(eid, { planId: e.plan_id || (data.elements || []).find((x) => x.id === eid)?.plan_id });
+            if (window.innerWidth <= 900) setMview('elem');
+          }} />
         ) : vista === 'dudas' ? (
           <Dudas pid={id} staff={staff} user={user} cli={cli}
             onIr={(eid, plid) => { selectEl(eid, { planId: plid }); if (window.innerWidth <= 900) setMview('elem'); }} />
@@ -495,9 +530,12 @@ export default function Project({ id, sub }) {
            * también `setVista('plan')`, y `setVista` NAVEGA: con el ítem
            * abierto (hondura 3) ir al plano (hondura 1) es un `history.back()`
            * que cierra el ítem, y su `popstate` tardío le llegaba al
-           * `useEncima` de `moviendo` recién armado, que lo apagaba. No hace
-           * falta: con un ítem abierto la vista ya es el plano (sale de la
-           * dirección). Sólo se cambia la pestaña del celular, que es local. */
+           * `useEncima` de `moviendo` recién armado, que lo apagaba.
+           * Desde el 6-oct un ítem se abre sin salir de la vista (lista,
+           * cronograma, dudas), así que aquí SÍ hay que pasar al plano: se
+           * hace al MISMO nivel (`irA` reemplaza; no hay `history.back()` ni
+           * `popstate`), con el ítem abierto. La pestaña del celular es local. */
+          if (vista !== 'plan') { if (e.plan_id && e.plan_id !== planId) setPlanId(e.plan_id); irA(`/p/${id}/e/${e.id}`, HONDURA.item); }
           setMoviendo({ id: e.id, code: e.code }); setMview('plan');
         }} />
 
