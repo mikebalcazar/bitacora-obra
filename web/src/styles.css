@@ -807,8 +807,6 @@ button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;
 .pieza .dar label{font-size:13px;color:var(--ink2)}
 .pieza .dar input{width:90px;padding:6px 10px}
 .seccion{display:flex;flex-direction:column;gap:6px;padding-left:8px;border-left:3px solid var(--line2)}
-.seccion-nombre{width:auto;max-width:260px;padding:4px 8px;font-weight:600;border-color:transparent;background:transparent}
-.seccion-nombre:hover,.seccion-nombre:focus{border-color:var(--line);background:var(--surface)}
 /* Una etapa es un renglón: qué, cuántos días, quién, después de qué, y cuándo cae. */
 .tarea{display:grid;grid-template-columns:150px 92px minmax(120px,1fr) minmax(150px,1fr) 118px 28px;gap:8px;align-items:center}
 .tarea .etapa{font-size:13px;font-weight:500}
@@ -826,3 +824,63 @@ button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;
   .tarea .prov,.tarea .despues{grid-column:1/-1}
   .tarea .cuando{grid-column:1/-1;text-align:left}
 }
+
+/* ─── el cronograma gráfico (6-oct-2026): una barra por fase, un día por columna ─── */
+.crono>.gantt{width:min(1400px,100%)}
+.segm.chico button{padding:4px 10px;min-height:28px;font-size:12px}
+.gantt{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:auto;position:relative;max-height:calc(100vh - 230px);user-select:none}
+.g-cab{display:flex;position:sticky;top:0;z-index:3;background:var(--surface);border-bottom:1px solid var(--line);height:40px}
+.g-cab .g-izq{display:flex;align-items:flex-end;font-size:12px;color:var(--ink3);padding-bottom:6px}
+.g-izq{position:sticky;left:0;z-index:2;width:300px;min-width:300px;background:var(--surface);border-right:1px solid var(--line);padding:0 10px;display:flex;align-items:center;gap:8px;overflow:hidden}
+.g-dias{display:flex;height:40px;align-items:flex-end}
+.g-dia{height:40px;display:flex;align-items:flex-end;justify-content:center;border-left:1px solid transparent;font-size:10px;color:var(--ink3);padding-bottom:5px;white-space:nowrap}
+.g-dia.lunes{border-left-color:var(--line);align-items:flex-start;padding-top:5px;justify-content:flex-start;overflow:visible}
+.g-dia.lunes small{position:relative;left:3px;font-weight:600;color:var(--ink2)}
+.g-dia.sab{background:var(--surface2)}
+.g-dia.hoy{color:var(--accent);font-weight:700}
+.g-cuerpo{position:relative}
+.g-fila{position:absolute;left:0;right:0;height:34px;display:flex}
+.g-fila.item .g-izq{font-weight:600;background:var(--surface2)}
+.g-fila.item .g-linea{background:var(--surface2)}
+.g-nombre{text-align:left;padding:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.g-nombre:hover{color:var(--accent)}
+.g-linea{position:relative;height:34px;border-bottom:1px solid var(--line2);
+  background-image:linear-gradient(to right,var(--line2) 1px,transparent 1px);background-size:28px 100%}
+.g-resumen{position:absolute;top:13px;height:8px;border-radius:4px;background:var(--line)}
+.g-fase{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.g-fase small{color:var(--ink3)}
+.g-dias-in{display:flex;align-items:center;gap:2px;font-size:11px;color:var(--ink3)}
+.g-dias-in input{width:44px;padding:3px 6px;text-align:right;font-size:12px}
+.g-prov{font-size:11px;max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-barra{position:absolute;top:7px;height:20px;border-radius:5px;display:flex;align-items:center;padding:0 6px;font-size:11px;color:#fff;cursor:grab;touch-action:none;z-index:1;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.g-barra.material{background:#8A6209}.g-barra.fabricacion{background:var(--accent)}.g-barra.instalacion{background:var(--ok)}
+.g-barra.va{opacity:.75;z-index:4;cursor:grabbing;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.g-barra.destino{outline:3px solid var(--pend);outline-offset:2px}
+.g-barra.destino.antes{box-shadow:-6px 0 0 var(--pend)}
+.g-barra.destino.despues{box-shadow:6px 0 0 var(--pend)}
+.g-aviso{position:absolute;top:-22px;left:0;background:var(--ink);color:#fff;font-style:normal;font-size:11px;padding:2px 8px;border-radius:6px;white-space:nowrap;z-index:5}
+.g-pin{font-size:11px;padding:0;margin-right:4px;line-height:1}
+.g-espera{position:absolute;left:6px;top:8px;font-size:12px}
+.g-ligas{position:absolute;top:0;pointer-events:none;overflow:visible}
+.g-ligas path{fill:none;stroke:var(--line);stroke-width:1.5}
+.g-ligas path.fuerte{stroke:var(--pend);stroke-width:2}
+.g-dar{display:flex;align-items:center;gap:4px;font-weight:400}
+.g-dar label{display:flex;align-items:center;gap:2px;font-size:11px;color:var(--ink3)}
+.g-dar input{width:38px;padding:3px 4px;text-align:right;font-size:12px}
+.g-dar .btn.sm{padding:3px 8px;min-height:26px;font-size:12px}
+@media (max-width:900px){
+  .g-izq{width:200px;min-width:200px}
+  .g-ligas{left:200px !important}
+  .g-prov{display:none}
+}
+/* El nombre del proceso y el de cada fase se editan ahí mismo (6-oct-2026). */
+.seccion-nombre{display:inline-flex;align-items:center;gap:6px;width:auto;max-width:300px;padding:0 0 0 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.seccion-nombre i{font-style:normal;color:var(--ink3);font-size:12px}
+.seccion-nombre input{border:0;padding:5px 8px 5px 0;font-weight:600;width:220px;background:transparent}
+.tarea .etapa{display:flex;align-items:center;gap:4px;min-width:0}
+.tarea .orden{display:flex;flex-direction:column;gap:0}
+.tarea .flecha{font-size:8px;line-height:1;padding:1px 3px;color:var(--ink3);border-radius:3px}
+.tarea .flecha:disabled{opacity:.25}
+.tarea .flecha:not(:disabled):hover{background:var(--accent-soft);color:var(--accent)}
+.fase-nombre{padding:5px 8px;font-size:13px;font-weight:500;min-width:0;border-color:transparent;background:transparent}
+.fase-nombre:hover,.fase-nombre:focus{border-color:var(--line);background:var(--surface)}
