@@ -145,7 +145,7 @@ export default function Gantt({ c, tareas, items, fechasDe, onPon, onDarFases, o
       </div>
       <div className="g-cuerpo" style={{ height: filas.length * RH }}>
         {filas.map((f, i) => f.tipo === 'item' ? (
-          <div key={'e-' + f.e.element_id} className="g-fila item" style={{ top: i * RH }}>
+          <div key={'e-' + f.e.element_id} className="g-fila de-pieza" style={{ top: i * RH }}>
             <div className="g-izq">
               <button className="g-nombre" onClick={() => onIr && onIr(f.e)} title="Abrir el ítem">{f.e.code ? <b>{f.e.code}</b> : null} {f.e.name}</button>
               {!f.n && <DarFases onOk={(d) => onDarFases(f.e.element_id, d)} />}
@@ -157,7 +157,7 @@ export default function Gantt({ c, tareas, items, fechasDe, onPon, onDarFases, o
             </div>
           </div>
         ) : (
-          <div key={f.t.id} className="g-fila tarea" style={{ top: i * RH }}>
+          <div key={f.t.id} className="g-fila de-fase" style={{ top: i * RH }}>
             <div className="g-izq">
               <span className="g-fase" title={f.t.seccion || ''}>{f.t.seccion ? <small>{f.t.seccion} · </small> : null}{rotulo(f.t)}</span>
               <label className="g-dias-in"><input type="number" min="1" step="1" inputMode="numeric" value={f.t.dias} onChange={(ev) => onPon(f.t.id, { dias: Math.max(1, Number(ev.target.value.replace(/\D/g, '')) || 1) })} /><span>d</span></label>

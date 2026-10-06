@@ -807,8 +807,14 @@ button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;
 .pieza .dar label{font-size:13px;color:var(--ink2)}
 .pieza .dar input{width:90px;padding:6px 10px}
 .seccion{display:flex;flex-direction:column;gap:6px;padding-left:8px;border-left:3px solid var(--line2)}
-/* Una etapa es un renglón: qué, cuántos días, quién, después de qué, y cuándo cae. */
-.tarea{display:grid;grid-template-columns:150px 92px minmax(120px,1fr) minmax(150px,1fr) 118px 28px;gap:8px;align-items:center}
+/* Una etapa es un renglón: qué, cuántos días, quién, después de qué, y cuándo
+   cae. Es flexible y se dobla: con el panel del ítem abierto el escenario
+   queda angosto y antes la fecha se cortaba (Mike, 6-oct: «15 ag»). */
+.tarea{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+.tarea .etapa{flex:1 1 150px;max-width:220px}
+.tarea .prov{flex:1 1 130px}
+.tarea .despues{flex:2 1 170px}
+.tarea .cuando{flex:0 0 auto;min-width:100px}
 .tarea .etapa{font-size:13px;font-weight:500}
 .tarea .dias{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink3)}
 .tarea .dias input{width:52px;padding:6px 8px;text-align:right}
@@ -820,9 +826,8 @@ button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;
 @media (max-width:900px){
   .crono{padding-top:64px}
   .crono-cab .acciones{margin-left:0;width:100%;justify-content:flex-end}
-  .tarea{grid-template-columns:1fr 92px 28px;grid-auto-rows:auto}
-  .tarea .prov,.tarea .despues{grid-column:1/-1}
-  .tarea .cuando{grid-column:1/-1;text-align:left}
+  .tarea .etapa{max-width:none}
+  .tarea .cuando{text-align:left}
 }
 
 /* ─── el cronograma gráfico (6-oct-2026): una barra por fase, un día por columna ─── */
@@ -840,8 +845,8 @@ button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;
 .g-dia.hoy{color:var(--accent);font-weight:700}
 .g-cuerpo{position:relative}
 .g-fila{position:absolute;left:0;right:0;height:34px;display:flex}
-.g-fila.item .g-izq{font-weight:600;background:var(--surface2)}
-.g-fila.item .g-linea{background:var(--surface2)}
+.g-fila.de-pieza .g-izq{font-weight:600;background:var(--surface2)}
+.g-fila.de-pieza .g-linea{background:var(--surface2)}
 .g-nombre{text-align:left;padding:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
 .g-nombre:hover{color:var(--accent)}
 .g-linea{position:relative;height:34px;border-bottom:1px solid var(--line2);
