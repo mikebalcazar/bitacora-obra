@@ -39,7 +39,17 @@ console.log('· la captura');
 rev(/const ETAPAS = \['material', 'fabricacion', 'instalacion'\];/.test(crono), 'las tres etapas');
 rev(/material: 'materiales', fabricacion: 'servicios', instalacion: 'servicios'/.test(crono), 'el material lo surte un proveedor de materiales; fabricar e instalar, uno de servicios');
 rev(/proveedores\.filter\(\(p\) => p\.tipo === tipo \|\| p\.id === t\.proveedor_id\)/.test(crono), 'y la lista de proveedores se filtra por ese tipo');
-rev(/<option value="">\{tipo === 'materiales' \? '\(sin proveedor\)' : '\(el taller\)'\}<\/option>/.test(crono), 'con «(el taller)» como opción de hacerlo uno mismo');
+rev(/<option value="">\{tipo === 'materiales' \? '\(sin responsable\)' : '\(el taller\)'\}<\/option>/.test(crono), 'con «(el taller)» como opción de hacerlo uno mismo');
+
+console.log('· el responsable y el costo de cada fase (Mike, 6-oct)');
+rev(/<optgroup label="Proveedores">/.test(crono) && /<optgroup label="Contratistas de la obra">/.test(crono), 'el menú de responsable trae proveedores Y contratistas de la obra');
+rev(/const responsable = t\.proveedor_id \? `prov:\$\{t\.proveedor_id\}` : t\.contratista_id \? `con:\$\{t\.contratista_id\}` : '';/.test(crono), 'y es UNO: proveedor o contratista');
+rev(/\{ proveedor_id: v\.slice\(5\), contratista_id: null \}/.test(crono) && /\{ proveedor_id: null, contratista_id: v\.slice\(4\) \}/.test(crono), 'escoger uno suelta al otro');
+rev(/<input type="number" min="0" step="0\.01" inputMode="decimal" data-costo value=\{\(Number\(t\.costo\) \|\| 0\) \/ 100\}/.test(crono), 'el costo se captura en pesos y se guarda en centavos');
+rev(/costo: Math\.max\(0, Math\.round\(Number\(t\.costo\) \|\| 0\)\)/.test(crono) && /contratista_id: t\.contratista_id \|\| null/.test(crono), 'y viajan al servidor contratista_id y costo');
+rev(/data-costo-total/.test(crono) && /Costo de las fases/.test(crono), 'arriba, la suma de los costos de todas las fases');
+rev(/material 10 días, fabricación 24 e instalación 12/.test(crono) && /muebles 30 % materiales y 30 % mano de obra; puertas 35 y 35; servicios 5 y 55; acabados 40 y 20/.test(crono), 'la nota dice las fases default y los porcentajes por tipo');
+rev(/\.tarea \.costo input\{[^}]*width:96px/.test(css), 'el campo del costo cabe un monto con centavos');
 rev(/function DarTiempo/.test(crono) && /<label>Tiempo total<\/label>/.test(crono) && /etapa: 'fabricacion', dias \}\)\]\)/.test(crono), 'una pieza sin tiempo arranca con un número: el tiempo total, como fabricación');
 rev(/soloTotal \? 'Tiempo total' : NOMBRE\[t\.etapa\]/.test(crono) && /Desglosar:/.test(crono), 'esa única etapa se llama «Tiempo total» y ofrece desglosar en las otras');
 rev(/\+ Otro proceso/.test(crono) && /etapa: 'instalacion', dias: 1, orden, depende_de: previa \? previa\.id : null/.test(crono), '«Otro proceso» nace con su instalación encadenada a la instalación del proceso anterior');

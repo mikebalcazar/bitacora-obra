@@ -815,6 +815,8 @@ button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;
 .tarea .prov{flex:1 1 130px}
 .tarea .despues{flex:2 1 170px}
 .tarea .cuando{flex:0 0 auto;min-width:100px}
+.tarea .costo{display:flex;align-items:center;gap:2px;font-size:12px;color:var(--ink3)}
+.tarea .costo input{width:96px;padding:6px 8px;text-align:right}
 .tarea .etapa{font-size:13px;font-weight:500}
 .tarea .dias{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink3)}
 .tarea .dias input{width:52px;padding:6px 8px;text-align:right}
@@ -857,6 +859,7 @@ button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;
 .g-dias-in{display:flex;align-items:center;gap:2px;font-size:11px;color:var(--ink3)}
 .g-dias-in input{width:44px;padding:3px 6px;text-align:right;font-size:12px}
 .g-prov{font-size:11px;max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-costo{font-size:11px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .g-barra{position:absolute;top:7px;height:20px;border-radius:5px;display:flex;align-items:center;padding:0 6px;font-size:11px;color:#fff;cursor:grab;touch-action:none;z-index:1;box-shadow:0 1px 2px rgba(0,0,0,.15)}
 .g-barra.material{background:#8A6209}.g-barra.fabricacion{background:var(--accent)}.g-barra.instalacion{background:var(--ok)}
 .g-barra.va{opacity:.75;z-index:4;cursor:grabbing;box-shadow:0 4px 12px rgba(0,0,0,.25)}
