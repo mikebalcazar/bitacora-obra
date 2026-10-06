@@ -117,6 +117,11 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
           {!staff && contratistas.length > 0 && <span>Contratistas: <b style={{ fontWeight: 500, color: 'var(--ink2)' }}>{contratistas.map((c) => c.name).join(', ')}</b></span>}
           <span>{e.plan_name}</span>
           <span>{e.fase === 'punchlist' && e.entregado_en ? `Entregado ${fmtD(e.entregado_en)}` : `Creado ${fmtD(e.created_at)}`}</span>
+          {/* Los dos candados del cronograma (Mike, 6-oct-2026): el diseño se
+              fecha aquí (en «Editar»); el anticipo se reparte en dash101 al
+              registrar el pago. Sin los dos, la pieza corre desde hoy. */}
+          {staff && <span data-candado="diseno" className={e.diseno_definido ? '' : 'falta'} title="La fecha en que quedó definido el diseño; se cambia en «Editar». Es uno de los dos candados del cronograma.">Diseño {e.diseno_definido ? `definido ${fmtD(e.diseno_definido)}` : 'sin definir'}</span>}
+          {staff && <span data-candado="anticipo" className={e.anticipo_fecha ? '' : 'falta'} title={e.item_id ? 'El anticipo se reparte en dash101 al registrar el pago del cliente.' : 'La pieza no está ligada a un ítem de dash101: liga la obra al proyecto para poder registrarle el anticipo.'}>{e.anticipo_fecha ? `Anticipo ${fmtD(e.anticipo_fecha)}` : e.item_id ? 'Sin anticipo' : 'Sin ítem en dash101'}</span>}
         </div>
         {/* EN REVISIÓN. Mike, 22-sep: un requerimiento «sí aparece en mapa, sí
             aparece en ítems, pero está pendiente de cotizarse y autorizarse
@@ -636,7 +641,7 @@ function Evidencia({ k, onListo, onCancel }) {
 
 function EditElement({ e, onClose, onChanged, onDeleted, onReubicar }) {
   const { toast } = useApp();
-  const [f, setF] = useState({ code: e.code, type: e.type, name: e.name, resp: e.resp });
+  const [f, setF] = useState({ code: e.code, type: e.type, name: e.name, resp: e.resp, diseno_definido: e.diseno_definido || '' });
   const [confirm, setConfirm] = useState(false);
   // Un ítem viejo con un tipo que ya no está en la lista conserva el suyo.
   const tipos = [...TIPOS.map((t) => t.clave), ...(TIPOS.some((t) => t.clave === e.type) ? [] : [e.type])];
@@ -647,6 +652,10 @@ function EditElement({ e, onClose, onChanged, onDeleted, onReubicar }) {
         <div className="two"><div className="field"><label>Clave</label><input value={f.code} onChange={(ev) => setF({ ...f, code: ev.target.value })} /></div><div className="field"><label>Tipo</label><select value={f.type} onChange={(ev) => setF({ ...f, type: ev.target.value })}>{tipos.map((t) => <option key={t}>{t}</option>)}</select></div></div>
         <div className="field"><label>Nombre</label><input required value={f.name} onChange={(ev) => setF({ ...f, name: ev.target.value })} /></div>
         <div className="field"><label>Responsable <small className="muted">(texto, como siempre; los contratistas con cuenta van arriba)</small></label><input value={f.resp} onChange={(ev) => setF({ ...f, resp: ev.target.value })} /></div>
+        {/* Mike, 6-oct-2026: «poder marcar en el ítem la fecha de definición de
+            diseño, y si hay cambios, poder editarla. Esa edición (…) movería
+            todo el ítem dentro del cronograma». Vacía = sin definir. */}
+        <div className="field"><label>Diseño definido el <small className="muted">(candado del cronograma; vacío = sin definir)</small></label><input type="date" value={f.diseno_definido} onChange={(ev) => setF({ ...f, diseno_definido: ev.target.value })} /></div>
         {onReubicar && <button type="button" className="btn" onClick={onReubicar}>Reubicar en el plano…</button>}
         {!confirm ? <button type="button" className="btn danger" onClick={() => setConfirm(true)}>Borrar ítem (bitácora y punchlist incluidos)…</button>
           : <button type="button" className="btn danger" onClick={async () => { await api.del(`/elements/${e.id}`).catch((x) => toast(x.message)); onDeleted(); }}>Confirmar borrado definitivo</button>}

@@ -52,7 +52,7 @@ rev(/etapa: t\.etapa, nombre: t\.nombre \|\| null, pos: posDe\(t\), dias: Number
 rev(/etapa: t\.etapa, nombre: t\.nombre \|\| null, pos: Number\.isInteger\(t\.pos\) \? t\.pos : ETAPAS\.indexOf\(t\.etapa\) \* 10, dias: t\.dias,/.test(crono), 'y se leen de vuelta (lo viejo sin pos queda 0/10/20 por etapa)');
 
 console.log('· la gráfica');
-rev(/import \{ nombreDe, ordenaFases \} from '\.\/Cronograma\.jsx';/.test(gantt) && /\{rotulo\(f\.t\)\}<\/span>/.test(gantt), 'la gráfica rotula cada barra con el nombre de la fase');
+rev(/import \{ Candados, nombreDe, ordenaFases \} from '\.\/Cronograma\.jsx';/.test(gantt) && /\{rotulo\(f\.t\)\}<\/span>/.test(gantt), 'la gráfica rotula cada barra con el nombre de la fase');
 rev(/const mias = procesos\.flatMap\(\(ts\) => ordenaFases\(ts\)\);/.test(gantt), 'y ordena las fases de cada proceso por pos');
 
 console.log('· lo armado lo trae');

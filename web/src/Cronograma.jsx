@@ -56,6 +56,23 @@ const nuevoId = () => 'nuevo-' + (crypto.randomUUID ? crypto.randomUUID() : Stri
 const fecha = (iso) => (iso ? new Date(iso + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '—');
 const plural = (n, una, varias) => `${n} ${n === 1 ? una : varias}`;
 
+/* Los dos candados de una pieza (Mike, 6-oct-2026): «todos los ítems
+ * necesitan cumplir 2 parámetros para que se fije su fecha de inicio (…)
+ * anticipo y definición de diseño. Mientras no se cumplan, la fecha de inicio
+ * se sigue recorriendo al día presente». El servidor dice cuáles faltan y
+ * desde cuándo corre la pieza; aquí sólo se enseña. */
+export function Candados({ k, corto = false }) {
+  if (!k) return null;
+  if (k.listo) return <span className="candados listo" title={`Anticipo ${fecha(k.anticipo)} · diseño definido ${fecha(k.diseno)}: la pieza corre desde ${fecha(k.arranque)}.`}>{corto ? '✓' : `Arranca ${fecha(k.arranque)}`}</span>;
+  return (
+    <span className="candados faltan" title="Sin los dos candados la pieza corre desde hoy y se recorre sola día con día.">
+      {!k.anticipo && <em title={k.ligado ? 'El anticipo se reparte en dash101 al registrar el pago del cliente.' : 'Sin ítem en dash101: liga la obra al proyecto para registrarle el anticipo.'}>{corto ? '⚠ anticipo' : k.ligado ? 'Sin anticipo' : 'Sin ítem en dash101'}</em>}
+      {!k.diseno && <em title="La fecha de definición de diseño se pone en el ítem, en «Editar».">{corto ? '⚠ diseño' : 'Sin diseño'}</em>}
+      {!corto && <small>corre desde hoy</small>}
+    </span>
+  );
+}
+
 export default function Cronograma({ pid, onIr }) {
   const { toast } = useApp();
   const [c, setC] = useState(null);          // lo último que contestó el servidor (fechas)
@@ -199,7 +216,7 @@ export default function Cronograma({ pid, onIr }) {
           <a className="btn sm" href={`${BASE}/api/projects/${pid}/cronograma.xml`} download title="Bajar el cronograma para Microsoft Project (XML)">Project</a>
         </div>
       </div>
-      <div className="crono-nota muted">Los días se cuentan de lunes a sábado. Dentro de cada proceso, el material llega, luego se fabrica y luego se instala; las instalaciones de los procesos de una pieza van una tras otra. {modo === 'grafica' ? 'Arrastra una barra sobre otra para encadenarla antes o después; al vacío, para fijarle la fecha. ' : ''}{conTiempo} de {items.length} piezas con tiempo.</div>
+      <div className="crono-nota muted">Los días se cuentan de lunes a sábado. Una pieza corre desde que tiene anticipo (se reparte en dash101 al registrar el pago) y diseño definido (se fecha en el ítem); mientras le falte alguno, corre desde hoy. Dentro de cada proceso, el material llega, luego se fabrica y luego se instala; las instalaciones de los procesos de una pieza van una tras otra. {modo === 'grafica' ? 'Arrastra una barra sobre otra para encadenarla antes o después; al vacío, para fijarle la fecha. ' : ''}{conTiempo} de {items.length} piezas con tiempo.</div>
       {!items.length && <div className="empty"><h3>Sin piezas</h3>El cronograma se arma con los ítems de la obra.</div>}
       {modo === 'grafica' && !!items.length && (
         <Gantt c={c} tareas={tareas} items={items} fechasDe={fechasDe} onPon={pon} onEncadena={encadena} onDarFases={darFases} onIr={onIr} />
@@ -213,6 +230,7 @@ export default function Cronograma({ pid, onIr }) {
             <header>
               <button className="nombre" onClick={() => onIr && onIr(e)} title="Abrir el ítem">{e.code ? <b>{e.code}</b> : null} {e.name}</button>
               <span className="muted">{e.type}{e.plan_name ? ` · ${e.plan_name}` : ''}</span>
+              <Candados k={e.candados} />
               {mias.length ? <span className="fechas">{fecha(vivo?.inicio)} → {fecha(vivo?.fin)} · {plural(vivo?.dias || 0, 'día', 'días')}</span> : null}
             </header>
             {!mias.length && <DarTiempo onOk={(d) => daTiempo(e.element_id, d)} />}
