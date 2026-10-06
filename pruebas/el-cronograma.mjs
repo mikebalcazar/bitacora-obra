@@ -58,8 +58,7 @@ rev(/href=\{`\$\{BASE\}\/api\/projects\/\$\{pid\}\/cronograma\.xml`\} download/.
 
 console.log('· el estilo');
 rev(/\.crono\{position:absolute;inset:0;overflow:auto/.test(css), '.crono ocupa el escenario, como las dudas');
-rev(/\.tarea\{display:grid;grid-template-columns:150px 92px minmax\(120px,1fr\) minmax\(150px,1fr\) 118px 28px/.test(css), 'cada etapa es un renglón de seis columnas');
-rev(/\.tarea\{grid-template-columns:1fr 92px 28px;/.test(css), 'y en el celular se apila');
+rev(/\.tarea\{display:flex;flex-wrap:wrap;/.test(css) && /\.tarea \.cuando\{flex:0 0 auto;min-width:100px\}/.test(css), 'cada etapa es un renglón que se dobla cuando no cabe, y la fecha no se corta');
 
 console.log('· lo armado lo trae');
 const dir = 'web/dist/assets';
