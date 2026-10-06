@@ -32,7 +32,7 @@ rev(/import Cronograma from '\.\/Cronograma\.jsx';/.test(proy), 'Project.jsx imp
 rev(/\(trozos\[0\] === 'cronograma' && staff\)/.test(proy), 'la dirección #/p/OBRA/cronograma sólo vale para quien dirige; para los demás es el plano');
 rev(/vista === 'cronograma' \? \(\s*<Cronograma pid=\{id\}/.test(proy), 'y con esa vista se pinta <Cronograma>');
 rev(/\{staff && <button className=\{'item' \+ \(vista === 'cronograma' \? ' on' : ''\)\} onClick=\{\(\) => setVista\(vista === 'cronograma' \? 'plan' : 'cronograma'\)\}>Cronograma<\/button>\}/.test(proy), 'en la barra lateral hay un botón «Cronograma», sólo para staff');
-rev(/\{staff && <button className=\{vista === 'cronograma' \? 'on' : ''\} onClick=\{\(\) => \{ setVista\('cronograma'\);[^}]*\}\}>Cronograma<\/button>\}/.test(proy), 'y en los selectores de arriba');
+rev(/<select className="btn sm vista" value=\{vista\} data-vista/.test(proy) && /\{staff && <option value="cronograma">Cronograma<\/option>\}/.test(proy), 'y en el menú de vista de arriba (un desplegable, Mike 6-oct: los botones se cortaban)');
 rev(/const sinFiltros = vista === 'dudas' \|\| vista === 'cronograma';/.test(proy) && !/vista !== 'dudas'/.test(proy), 'los filtros de tipo y fase se esconden ahí, igual que en las dudas');
 
 console.log('· la captura');
