@@ -36,11 +36,26 @@ export default function Home() {
     catch (x) { toast(x.message); }
   }
 
+  /* Mike, 6-oct: «Cree un nuevo proyecto en Quell, con un cliente nuevo.
+   * Pero no me aparece ni el cliente ni el proyecto ni en quote ni en dash.»
+   * Desde la API 0.77.0 el proyecto nace también en la suite (`suite: true`):
+   * con el cliente que se escoja de la lista, o uno nuevo con lo que se
+   * escriba. El mismo nombre es el mismo cliente, sin duplicarlo. */
   async function create(e) {
     e.preventDefault();
-    const r = await api.post('/projects', f).catch((x) => toast(x.message));
-    if (r) { setCreating(false); setF({ name: '', client: '' }); go(`/p/${r.id}`); }
+    const ya = clienteIgual(clientes, f.client);
+    const r = await api.post('/projects', { name: f.name, client: f.client, suite: true, ...(ya ? { cliente_id: ya.id } : {}) }).catch((x) => toast(x.message));
+    if (!r) return;
+    if (r.proyecto_id) toast(r.cliente_nuevo ? `Listo: el cliente «${f.client.trim()}» y el proyecto ya están en dash101 y quote101.` : 'Listo: el proyecto ya está en dash101 y quote101.');
+    setCreating(false); setF({ name: '', client: '' }); go(`/p/${r.id}`);
   }
+
+  // Los clientes de la suite, para escoger uno en «+ Proyecto».
+  const [clientes, setClientes] = useState([]);
+  useEffect(() => {
+    if (!creating || !staff) return;
+    api.get('/clientes-suite').then((r) => setClientes(r.clientes || [])).catch(() => setClientes([]));
+  }, [creating]);
 
   return (
     <div className="home">
@@ -109,12 +124,38 @@ export default function Home() {
           <form className="modal" onSubmit={create}>
             <h2>Nuevo proyecto</h2>
             <div className="field"><label>Nombre</label><input required autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Casa Lomas 214" /></div>
-            <div className="field"><label>Cliente</label><input value={f.client} onChange={(e) => setF({ ...f, client: e.target.value })} placeholder="Fam. Ortega" /></div>
+            <div className="field"><label>Cliente</label>
+              <input list="clientes-suite" data-campo="cliente" value={f.client} onChange={(e) => setF({ ...f, client: e.target.value })} placeholder="Escoge uno o escribe uno nuevo" />
+              <datalist id="clientes-suite">{clientes.map((c) => <option key={c.id} value={c.nombre} />)}</datalist>
+              <AvisoCliente clientes={clientes} nombre={f.client} />
+            </div>
             <div className="acts"><button type="button" className="btn" onClick={() => setCreating(false)}>Cancelar</button><button className="btn primary">Crear</button></div>
           </form>
         </div>
       )}
     </div>
+  );
+}
+
+// Mismas reglas que la suite (`normalizar`): sin acentos, sin mayúsculas, sin
+// espacios de más. Así se dice aquí lo mismo que va a hacer la API.
+const normalizar = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const clienteIgual = (clientes, nombre) => { const n = normalizar(nombre); return n ? clientes.find((c) => normalizar(c.nombre) === n) : null; };
+
+// Lo que va a pasar con el cliente, dicho antes de crear: el que ya existe, uno
+// nuevo (y si se parece a otro, cuál, para no duplicarlo por un «S.A.»), o
+// nada, que deja la obra sin proyecto en dash101 y quote101.
+function AvisoCliente({ clientes, nombre }) {
+  const n = normalizar(nombre);
+  if (!n) return <small className="muted" data-aviso-cliente="vacio">Sin cliente, la obra no llega a dash101 ni a quote101 hasta que se active allá.</small>;
+  const ya = clienteIgual(clientes, nombre);
+  if (ya) return <small className="muted" data-aviso-cliente="existe">Se usa el cliente que ya existe: <b>{ya.nombre}</b>.</small>;
+  const parecidos = n.length >= 3 ? clientes.filter((c) => { const o = normalizar(c.nombre); return o.length >= 3 && (o.includes(n) || n.includes(o)); }) : [];
+  return (
+    <small className="muted" data-aviso-cliente="nuevo">
+      Cliente nuevo: se da de alta en dash101 y quote101.
+      {parecidos.length > 0 && <> Se parece a {parecidos.slice(0, 3).map((c, i) => <React.Fragment key={c.id}>{i ? ', ' : ''}<b>{c.nombre}</b></React.Fragment>)}; si es el mismo, escógelo de la lista.</>}
+    </small>
   );
 }
 
