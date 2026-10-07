@@ -326,6 +326,8 @@ function Hoja({ doc, marcas, modo, onNota, onTrazo, onBorrar }) {
   const [trazando, setTrazando] = useState(null);
   const [abierta, setAbierta] = useState(null); // id de la nota abierta
 
+  // 'cargando' | 'listo' | el motivo, si no se pudo pintar.
+  const [estado, setEstado] = useState('cargando');
   useEffect(() => { setPagina(1); setAbierta(null); setZoom(1); }, [doc.id]);
   useEffect(() => { setAnchoCaja(caja.current?.clientWidth || 0); }, [doc.id]);
 
@@ -339,6 +341,7 @@ function Hoja({ doc, marcas, modo, onNota, onTrazo, onBorrar }) {
   useEffect(() => {
     if (imagen) return;
     let vivo = true, tarea = null, pdf = null;
+    setEstado('cargando');
     (async () => {
       try {
         const lib = await pdfjs();
@@ -357,11 +360,15 @@ function Hoja({ doc, marcas, modo, onNota, onTrazo, onBorrar }) {
         c.width = m.ancho; c.height = m.alto;
         tarea = pg.render({ canvasContext: c.getContext('2d'), viewport: vp });
         await tarea.promise;
+        if (vivo) setEstado('listo');
       } catch (x) {
-        /* Memoria, un PDF que pdf.js no puede: se queda la hoja en blanco en
-         * vez de tumbar la pestaña. El archivo sigue abriéndose aparte con la
-         * flecha de la barra. */
-        if (x?.name !== 'RenderingCancelledException') console.warn('no se pudo pintar el documento', x);
+        /* Memoria, un navegador viejo, un PDF que pdf.js no puede: no se
+         * tumba la pestaña, pero TAMPOCO se deja la hoja en blanco callada
+         * (7-oct: «nunca carga»). Se dice que no se pudo, con el motivo, y se
+         * ofrece abrir el archivo aparte. */
+        if (x?.name === 'RenderingCancelledException') return;
+        console.warn('no se pudo pintar el documento', x);
+        if (vivo) setEstado(String(x?.message || x || 'error desconocido').slice(0, 160));
       }
     })();
     return () => { vivo = false; try { tarea?.cancel(); } catch {} pdf?.destroy?.(); };
@@ -432,7 +439,16 @@ function Hoja({ doc, marcas, modo, onNota, onTrazo, onBorrar }) {
       <div className={'lamina' + (modo ? ' anotando' : '')} style={anchoLamina ? { width: anchoLamina } : undefined}>
         {imagen
           ? <img src={url} alt={doc.nombre} />
-          : <canvas ref={lienzo} />}
+          : <canvas ref={lienzo} hidden={estado !== 'listo' && estado !== 'cargando'} />}
+        {!imagen && estado === 'cargando' && <div className="hoja-aviso" data-hoja="cargando">Abriendo el PDF…</div>}
+        {!imagen && estado !== 'cargando' && estado !== 'listo' && (
+          <div className="hoja-aviso falla" data-hoja="no-se-pudo">
+            <b>Este PDF no se pudo mostrar aquí.</b>
+            <span>Ábrelo aparte: se ve con el visor del teléfono.</span>
+            <a className="btn sm" href={url} target="_blank" rel="noopener">Abrir el PDF ↗</a>
+            <small>Motivo: {estado}</small>
+          </div>
+        )}
         {/* La capa va encima y ocupa exactamente la hoja. viewBox 0 0 1 1:
             las marcas se guardan de 0 a 1 y se pintan tal cual; el navegador
             hace la conversión, y así no hay una cuenta de píxeles aquí que
