@@ -69,6 +69,8 @@ apps/windows-nativo/ piloto PDFium + Win32 en C++    ┘  al menos que yo explí
 .github/workflows/
    deploy.yml       cada push a main: crea D1/R2 si no existen, migraciones, deploy, secretos, salud
    apps.yml         workflow_dispatch: android · windows · windows-nativo · windows-piloto → R2
+                    Android firma SIEMPRE con la llave de R2 `quell101-llaves/android/firma.keystore`
+                    (9-oct; `crear_llave` sólo la primera vez). Sin ella no se actualiza encima.
 Logo taller101 - NEW.svg   el logotipo original de taller101, fuente de verdad de la geometría
 ```
 

@@ -17,6 +17,11 @@ on:
         description: 'Dirección del servidor con el que van a hablar las apps'
         required: true
         default: 'https://bitacora-obra.mike-929.workers.dev'
+      crear_llave:
+        description: 'Android: crear la llave de firma (sólo la primera vez; si ya existe, no se toca)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   android:
@@ -57,11 +62,70 @@ jobs:
           cp -r apps/android/res/. android/app/src/main/res/
           npx cap sync android
 
+      # La llave de firma es SIEMPRE la misma (Mike, 9-oct-2026): con una llave
+      # distinta en cada corrida, Android se niega a instalar la versión nueva
+      # encima de la vieja y hay que desinstalar, con riesgo de perder lo que no
+      # se ha subido. Vive en el bucket privado `quell101-llaves`, al que no está
+      # atado ningún Worker: no hay dirección por la que se pueda bajar.
+      #
+      # Va como la llave de depuración que Gradle ya usa sola
+      # (`~/.android/debug.keystore`, alias `androiddebugkey`, clave `android`),
+      # así que el proyecto que rehace `cap add` no se toca. Lo secreto es el
+      # archivo, no la clave.
+      #
+      # Sólo se CREA si se pide (`crear_llave`) y si R2 contesta que no existe.
+      # Cualquier otra falla al leerla tumba el armado: generar una llave nueva
+      # por un tropiezo de red rompería las actualizaciones de todos.
+      - name: La llave de firma de siempre
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CREAR: ${{ inputs.crear_llave }}
+        run: |
+          set -e
+          mkdir -p ~/.android
+          rm -f ~/.android/debug.keystore
+          if npx wrangler r2 object get quell101-llaves/android/firma.keystore \
+               --file="$HOME/.android/debug.keystore" --remote > "$RUNNER_TEMP/llave.log" 2>&1; then
+            echo "Se usa la llave guardada."
+          elif grep -qiE 'does not exist|NoSuchKey|not found' "$RUNNER_TEMP/llave.log"; then
+            if [ "$CREAR" != "true" ]; then
+              echo "::error::No hay llave de firma en quell101-llaves/android/firma.keystore. Correr una vez con crear_llave."
+              exit 1
+            fi
+            rm -f ~/.android/debug.keystore
+            keytool -genkeypair -keystore ~/.android/debug.keystore -storetype JKS \
+              -alias androiddebugkey -storepass android -keypass android \
+              -keyalg RSA -keysize 4096 -validity 36500 \
+              -dname "CN=quell101, O=FORESPOT, C=MX"
+            npx wrangler r2 object put quell101-llaves/android/firma.keystore \
+              --file="$HOME/.android/debug.keystore" --remote
+            echo "Llave nueva creada y guardada."
+          else
+            cat "$RUNNER_TEMP/llave.log"
+            echo "::error::No se pudo leer la llave de firma; no se arma con otra."
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/llave.log"
+          keytool -list -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey | grep 'SHA256:'
+
       - name: Armar el .apk
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
+
+      # Que de verdad salió firmada con la llave de siempre, y su huella a la vista.
+      - name: Revisar la firma
+        run: |
+          set -e
+          APK=$(ls android/app/build/outputs/apk/debug/*.apk | head -1)
+          FIRMA=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$FIRMA" verify --print-certs "$APK" | tee "$RUNNER_TEMP/firma.txt"
+          APK_SHA=$(grep -m1 'SHA-256 digest' "$RUNNER_TEMP/firma.txt" | awk '{print $NF}')
+          LLAVE_SHA=$(keytool -list -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey \
+            | grep 'SHA256:' | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
+          echo "apk: $APK_SHA"; echo "llave: $LLAVE_SHA"
+          [ "$APK_SHA" = "$LLAVE_SHA" ] || { echo "::error::El .apk no salió firmado con la llave de siempre"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
