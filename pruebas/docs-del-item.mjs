@@ -42,7 +42,7 @@ const js = readdirSync(dir).filter((f) => f.endsWith('.js')).map((f) => readFile
 const css = readdirSync(dir).filter((f) => f.endsWith('.css')).map((f) => readFileSync(`${dir}/${f}`, 'utf8')).join('\n');
 
 console.log('· el botón está en el encabezado del ítem, donde lo pidió Mike');
-rev(/import Docs from '\.\/DocsItem\.jsx'/.test(panel), 'el panel del ítem trae el apartado');
+rev(/import Docs(, \{[^}]*\})? from '\.\/DocsItem\.jsx'/.test(panel), 'el panel del ítem trae el apartado');
 rev(/<Docs e=\{e\} staff=\{staff\} \/>/.test(panel), 'y lo pinta en el encabezado, no en una pestaña aparte');
 rev(/Archivos del ítem/.test(docs), 'el botón se llama «Archivos del ítem»');
 

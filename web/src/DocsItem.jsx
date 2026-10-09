@@ -39,7 +39,7 @@ import { medidasDeHoja } from './nitidez.js';
 import { planoDe, nombreDePlanoPegado } from './pegar.js';
 import { BotonCompartir } from './Fotos.jsx';
 
-const idOp = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
+export const idOp = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 const kb = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const esImagen = (d) => /^image\//.test(d?.mime || '') || /\.(png|jpe?g|webp|gif)$/i.test(d?.nombre || '');
 
@@ -47,7 +47,7 @@ const esImagen = (d) => /^image\//.test(d?.mime || '') || /\.(png|jpe?g|webp|gif
  *  archivo: contarlo en el servidor obligaría a la API a cargar pdf.js para
  *  algo que el navegador ya tiene abierto. Si no se puede, va 1 y la hoja se
  *  las arregla. */
-async function cuentaPaginas(file) {
+export async function cuentaPaginas(file) {
   if (!esPdf(file.name)) return 1;
   try {
     const lib = await pdfjs();
@@ -291,6 +291,9 @@ function Tarjeta({ doc, on, onVer, onArchivar, nota }) {
     <div className={'dcard' + (on ? ' on' : '')}>
       <button className="cual" onClick={onVer}>
         <div className="t">{doc.nombre}</div>
+        {/* 0.90.0 · El archivo del diseño definido va aparte del plano
+            principal (Mike, 9-oct), y aquí se dice cuál es. */}
+        {doc.diseno ? <div className="s" data-diseno-tarjeta><span className="pill diseno">Diseño definido</span></div> : null}
         <div className="s">
           {doc.rol === 'principal' ? `v${doc.version} · ` : ''}{kb(doc.bytes || 0)}
           {doc.paginas > 1 ? ` · ${doc.paginas} págs.` : ''}

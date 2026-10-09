@@ -3,7 +3,8 @@ import { api, leer, escribir, fileUrl, FASES, ALCANCES, MOVIMIENTOS_ALCANCE, TIP
 import { useApp } from './App.jsx';
 import { Photos, usePending, PhotoInput, PendingStrip, usePegarYSoltar, Lightbox } from './Fotos.jsx';
 import { Duda } from './Dudas.jsx';
-import Docs from './DocsItem.jsx';
+import Docs, { idOp, cuentaPaginas } from './DocsItem.jsx';
+import { planoDe, nombreDePlanoPegado } from './pegar.js';
 
 // staff = puede escribir. veTodo = puede ver la obra completa. No son lo mismo:
 // el trabajador ve todo y no escribe nada, y el contratista ni ve todo ni
@@ -120,7 +121,7 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
           {/* Los dos candados del cronograma (Mike, 6-oct-2026): el diseño se
               fecha aquí (en «Editar»); el anticipo se reparte en dash101 al
               registrar el pago. Sin los dos, la pieza corre desde hoy. */}
-          {staff && <span data-candado="diseno" className={e.diseno_definido ? '' : 'falta'} title="La fecha en que quedó definido el diseño; se cambia en «Editar». Es uno de los dos candados del cronograma.">Diseño {e.diseno_definido ? `definido ${fmtD(e.diseno_definido)}` : 'sin definir'}</span>}
+          {staff && <DisenoDefinido e={e} onChanged={changed} />}
           {staff && <span data-candado="anticipo" className={e.anticipo_fecha ? '' : 'falta'} title={e.item_id ? 'El anticipo se reparte en dash101 al registrar el pago del cliente.' : 'La pieza no está ligada a un ítem de dash101: liga la obra al proyecto para poder registrarle el anticipo.'}>{e.anticipo_fecha ? `Anticipo ${fmtD(e.anticipo_fecha)}` : e.item_id ? 'Sin anticipo' : 'Sin ítem en dash101'}</span>}
         </div>
         {/* EN REVISIÓN. Mike, 22-sep: un requerimiento «sí aparece en mapa, sí
@@ -635,6 +636,108 @@ function Evidencia({ k, onListo, onCancel }) {
         <button className="btn sm" onClick={() => { clear(); onCancel(); }}>Cancelar</button>
         <button className="btn primary sm" disabled={busy || (!nota.trim() && !pending.length)} onClick={enviar}>{busy ? 'Subiendo…' : 'Marcar terminado'}</button>
       </div>
+    </div>
+  );
+}
+
+/* El diseño definido de la pieza, con su archivo (Mike, 9-oct-2026: «desde
+ * quell quiero poder marcar que el diseño ya está definido y poder adjuntar
+ * un plano (pdf) o imagen del diseño definido»). Con botones escogió que el
+ * archivo vaya APARTE: entra como archivo de soporte marcado como diseño y
+ * el plano principal no se toca. Uno vivo por pieza; uno nuevo archiva el
+ * anterior (API 0.90.0). La fecha sigue siendo el candado del cronograma.
+ *
+ * La fecha llega como AAAA-MM-DD: se lee a mediodía para que en la Ciudad
+ * de México no salga el día anterior. */
+const diaDe = (f) => fmtD(`${f}T12:00:00`);
+function DisenoDefinido({ e, onChanged }) {
+  const [abierto, setAbierto] = useState(false);
+  const doc = e.diseno_doc;
+  return (
+    <>
+      <span data-candado="diseno" className={e.diseno_definido ? '' : 'falta'} title="La fecha en que quedó definido el diseño, con su plano o imagen. Es uno de los dos candados del cronograma.">
+        <button type="button" className="liga" data-diseno="marcar" onClick={() => setAbierto(true)}>Diseño {e.diseno_definido ? `definido ${diaDe(e.diseno_definido)}` : 'sin definir'}</button>
+        {doc && <> · <a className="liga" data-diseno="ver" href={fileUrl(doc.r2_key)} target="_blank" rel="noreferrer" title={doc.nombre}>ver diseño</a></>}
+      </span>
+      {abierto && <MarcarDiseno e={e} onClose={() => setAbierto(false)} onChanged={onChanged} />}
+    </>
+  );
+}
+
+function MarcarDiseno({ e, onClose, onChanged }) {
+  const { toast } = useApp();
+  const [fecha, setFecha] = useState(e.diseno_definido || todayISO());
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [soltando, setSoltando] = useState(false);
+  const doc = e.diseno_doc;
+  // Pegar (Ctrl-V) o arrastrar, igual que el plano principal.
+  const toma = (dt) => {
+    const f = planoDe(dt);
+    if (!f) return false;
+    const nombre = nombreDePlanoPegado(f);
+    setFile(f.name === nombre ? f : new File([f], nombre, { type: f.type }));
+    return true;
+  };
+  useEffect(() => {
+    const onPaste = (ev) => { if (toma(ev.clipboardData)) ev.preventDefault(); };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, []);
+
+  async function guardar(ev) {
+    ev.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (file) {
+        const fd = new FormData();
+        fd.append('archivo', file);
+        fd.append('op_id', idOp());
+        fd.append('nombre', file.name);
+        fd.append('paginas', String(await cuentaPaginas(file)));
+        fd.append('diseno', '1');
+        fd.append('diseno_definido', fecha);
+        const r = await api.form(`/elements/${e.id}/docs`, fd);
+        toast(r.archivada ? 'Diseño guardado. El archivo anterior quedó archivado.' : 'Diseño guardado.');
+      } else {
+        await api.patch(`/elements/${e.id}`, { diseno_definido: fecha });
+        toast('Diseño marcado como definido.');
+      }
+      onChanged();
+      onClose();
+    } catch (x) { toast(x.message); } finally { setBusy(false); }
+  }
+  async function quitar() {
+    setBusy(true);
+    try {
+      await api.patch(`/elements/${e.id}`, { diseno_definido: null });
+      toast('El diseño quedó sin definir. Su archivo sigue en «Archivos del ítem».');
+      onChanged();
+      onClose();
+    } catch (x) { toast(x.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="ov" onClick={(ev) => ev.target === ev.currentTarget && onClose()}>
+      <form className="modal" data-diseno="cuadro" onSubmit={guardar}>
+        <h2>Diseño definido</h2>
+        <div className="field"><label>Definido el</label><input type="date" required value={fecha} onChange={(ev) => setFecha(ev.target.value)} /></div>
+        <div
+          className={'field diseno-archivo' + (soltando ? ' soltando' : '')}
+          onDragOver={(ev) => { ev.preventDefault(); setSoltando(true); }}
+          onDragLeave={() => setSoltando(false)}
+          onDrop={(ev) => { ev.preventDefault(); setSoltando(false); toma(ev.dataTransfer); }}
+        >
+          <label>Plano o imagen del diseño <small className="muted">(PDF o imagen; también se pega o se arrastra)</small></label>
+          <label className="btn sm">{file ? 'Cambiar archivo' : 'Escoger archivo'}<input type="file" accept=".pdf,application/pdf,image/*" hidden onChange={(ev) => { const f = ev.target.files?.[0]; if (f) setFile(f); ev.target.value = ''; }} /></label>
+          {file && <div className="muted" data-diseno="escogido">{file.name}</div>}
+          {doc && <div className="muted">Ahora: <a className="liga" href={fileUrl(doc.r2_key)} target="_blank" rel="noreferrer">{doc.nombre}</a>{doc.version > 1 ? ` (v${doc.version})` : ''}.{file ? ' Al guardar, éste queda archivado.' : ''}</div>}
+          <div className="muted">Va aparte del plano principal, que no se toca. Se ve también en «Archivos del ítem».</div>
+        </div>
+        {e.diseno_definido && <button type="button" className="btn" disabled={busy} onClick={quitar}>Quitar la marca (diseño sin definir)</button>}
+        <div className="acts"><button type="button" className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || !fecha}>{busy ? 'Guardando…' : 'Guardar'}</button></div>
+      </form>
     </div>
   );
 }

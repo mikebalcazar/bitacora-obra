@@ -910,6 +910,10 @@ button.liga{background:none;border:0;padding:0;color:var(--accent);font:inherit;
 .candados.faltan small{color:var(--ink3)}
 .g-izq .candados{flex:0 0 auto}
 .panel .meta span.falta{color:var(--pend)}
+.panel .meta span[data-candado=diseno] button.liga{color:inherit}
+.diseno-archivo{border:1px dashed var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.diseno-archivo.soltando{border-color:var(--accent);background:var(--accent-soft)}
+.pill.diseno{background:var(--ok-soft);color:var(--ok)}
 
 /* El selector de vista (plano, lista, dudas, cronograma) es un menú: no se recorta (6-oct-2026). */
 .stage .tools .vista{width:auto;flex:0 0 auto;font-weight:600;color:var(--accent);border-color:var(--accent);background:var(--accent-soft);pointer-events:auto}
