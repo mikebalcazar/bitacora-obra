@@ -47,20 +47,35 @@ jobs:
 
       # La app lleva el sitio adentro, así que la dirección del servidor se fija
       # aquí: dentro de la app las rutas relativas no llevan a ningún lado.
+      # El número de esta corrida es la versión del .apk: la app lo lleva
+      # adentro y lo compara con /descargas/android.json para avisar que hay
+      # una nueva (web/src/VersionNueva.jsx).
       - name: Armar la aplicación
         env:
           VITE_API_BASE: ${{ inputs.servidor }}
+          VITE_VERSION_ANDROID: ${{ github.run_number }}
         run: npm run build
 
       - name: Preparar el proyecto de Android
         run: |
           set -e
-          npm i --no-save @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7
+          # `App` y `Browser` son los plugins con los que Google se abre encima
+          # de la app y su vuelta llega a la app (web/src/nativo.js). Van con
+          # --save (sólo en esta corrida): Capacitor encuentra los plugins por
+          # el package.json. Todo en UNA instalación: un segundo `npm i --save`
+          # borraría lo que se puso con --no-save.
+          npm i --save @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7 @capacitor/app@^7 @capacitor/browser@^7
           npx cap add android
           # `cap add` rehace el proyecto en cada corrida, así que el ícono se
           # copia encima: si no, la app sale con el de Capacitor.
           cp -r apps/android/res/. android/app/src/main/res/
+          python3 apps/android/ligas.py
+          # La versión que Android compara para instalar encima: siempre crece.
+          sed -i -E "s/versionCode [0-9]+/versionCode ${{ github.run_number }}/; s/versionName \"[^\"]*\"/versionName \"1.${{ github.run_number }}\"/" android/app/build.gradle
+          grep -q "versionCode ${{ github.run_number }}" android/app/build.gradle
           npx cap sync android
+          grep -q '@capacitor/app' android/capacitor.settings.gradle
+          grep -q '@capacitor/browser' android/capacitor.settings.gradle
 
       # La llave de firma es SIEMPRE la misma (Mike, 9-oct-2026): con una llave
       # distinta en cada corrida, Android se niega a instalar la versión nueva
@@ -149,6 +164,11 @@ jobs:
           APK=$(ls android/app/build/outputs/apk/debug/*.apk | head -1)
           npx wrangler r2 object put bitacora-obra-files/apps/android.apk \
             --file="$APK" --content-type=application/vnd.android.package-archive --remote
+          # Y DESPUÉS su número: si se subiera antes, una app avisaría de una
+          # versión que todavía no se puede bajar.
+          printf '{"version":%s,"fecha":"%s"}' "${{ github.run_number }}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$RUNNER_TEMP/android.json"
+          npx wrangler r2 object put bitacora-obra-files/apps/android.json \
+            --file="$RUNNER_TEMP/android.json" --content-type=application/json --remote
 
   windows:
     name: Windows (instalador)
