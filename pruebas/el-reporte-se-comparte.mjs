@@ -45,8 +45,9 @@ rev(/onClick=\{\(\) => window\.print\(\)\}[^>]*>Imprimir<\/button>/.test(proj), 
 
 console.log('· compartir');
 rev(/const nativos = \(\) => \(esAndroid\(\) \? \{ Fs: plugin\('Filesystem'\), Share: plugin\('Share'\) \} : \{\}\);/.test(comp), 'en la app de Android, con los plugins Filesystem y Share');
-rev(/Fs\.writeFile\(\{ path: archivo\.name, data: await aBase64\(archivo\), directory: 'CACHE' \}\)/.test(comp) && /Share\.share\(\{ title: archivo\.name, files: \[uri\] \}\)/.test(comp), 'se guarda en la caché de la app y se abre la hoja de Android con él');
-rev(/navigator\.share\(\{ files: \[archivo\], title: archivo\.name \}\)/.test(comp), 'en el navegador (iPhone, Chrome), la hoja del navegador');
+rev(/Fs\.writeFile\(\{ path: archivo\.name, data: await aBase64\(archivo\), directory: 'CACHE' \}\)/.test(comp) && /Share\.share\(\{ files: \[uri\], dialogTitle: 'Compartir' \}\)/.test(comp), 'se guarda en la caché de la app y se abre la hoja de Android con él');
+rev(/navigator\.share\(\{ files: \[archivo\] \}\)/.test(comp), 'en el navegador (iPhone, Chrome), la hoja del navegador');
+rev(!/share\(\{[^}]*\b(title|text|url):/.test(comp), 'sólo el ARCHIVO, sin título, texto ni liga (WhatsApp se quedaba con el texto)');
 rev(/return entregar\(new File\(\[blob\]/.test(comp), 'las fotos y planos comparten igual (también en la app de Android)');
 rev(/@capacitor\/filesystem@\^7 @capacitor\/share@\^7/.test(apps) && /grep -q '@capacitor\/share' android\/capacitor\.settings\.gradle/.test(apps), 'el armado de la app instala los dos plugins y lo revisa');
 rev(/grep -q 'cache-path' android\/app\/src\/main\/res\/xml\/file_paths\.xml/.test(apps), 'y revisa que Android deje leer la caché a la otra app');

@@ -88,11 +88,16 @@ export async function entregar(archivo) {
   const { Fs, Share } = nativos();
   if (Fs && Share) {
     const { uri } = await Fs.writeFile({ path: archivo.name, data: await aBase64(archivo), directory: 'CACHE' });
-    try { await Share.share({ title: archivo.name, files: [uri] }); return 'hoja'; }
+    try { await Share.share({ files: [uri], dialogTitle: 'Compartir' }); return 'hoja'; }
     catch (e) { if (/cancel/i.test(String(e?.message || e))) return 'cancelado'; throw e; }
   }
+  /* SÓLO el archivo, sin título ni texto (Mike, 9-oct-2026: «quiero
+   * compartir el PDF como tal, no el link al PDF»). Si junto al archivo va
+   * un texto, WhatsApp en el iPhone se queda con el texto y tira el
+   * archivo; y en Android el texto se manda aparte, como si fuera una liga.
+   * El nombre ya viaja en el archivo. */
   if (comoCompartir(navigator, archivo) === 'hoja') {
-    try { await navigator.share({ files: [archivo], title: archivo.name }); return 'hoja'; }
+    try { await navigator.share({ files: [archivo] }); return 'hoja'; }
     catch (e) { if (e && e.name === 'AbortError') return 'cancelado'; /* si no se pudo, se descarga */ }
   }
   const a = document.createElement('a');
