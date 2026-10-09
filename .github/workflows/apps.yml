@@ -68,10 +68,10 @@ jobs:
       # se ha subido. Vive en el bucket privado `quell101-llaves`, al que no está
       # atado ningún Worker: no hay dirección por la que se pueda bajar.
       #
-      # Va como la llave de depuración que Gradle ya usa sola
-      # (`~/.android/debug.keystore`, alias `androiddebugkey`, clave `android`),
-      # así que el proyecto que rehace `cap add` no se toca. Lo secreto es el
-      # archivo, no la clave.
+      # Tiene la forma de una llave de depuración (`~/.android/debug.keystore`,
+      # alias `androiddebugkey`, clave `android`) y con ella se firma el .apk a
+      # mano después de armarlo, así que el proyecto que rehace `cap add` no se
+      # toca. Lo secreto es el archivo, no la clave.
       #
       # Sólo se CREA si se pide (`crear_llave`) y si R2 contesta que no existe.
       # Cualquier otra falla al leerla tumba el armado: generar una llave nueva
@@ -114,18 +114,23 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      # Que de verdad salió firmada con la llave de siempre, y su huella a la vista.
-      - name: Revisar la firma
+      # Gradle no siempre toma `~/.android/debug.keystore` (el 9-oct firmó con
+      # otra llave del corredor), así que el .apk se FIRMA aquí, a mano, con la
+      # llave de siempre, y luego se revisa que la huella sea la de esa llave.
+      - name: Firmar con la llave de siempre y revisar
         run: |
           set -e
           APK=$(ls android/app/build/outputs/apk/debug/*.apk | head -1)
-          FIRMA=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          "$FIRMA" verify --print-certs "$APK" | tee "$RUNNER_TEMP/firma.txt"
+          HERR=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$HERR/apksigner" sign --ks ~/.android/debug.keystore --ks-key-alias androiddebugkey \
+            --ks-pass pass:android --key-pass pass:android --out "$RUNNER_TEMP/firmada.apk" "$APK"
+          mv "$RUNNER_TEMP/firmada.apk" "$APK"
+          "$HERR/apksigner" verify --print-certs "$APK" | grep -v '^WARNING' | tee "$RUNNER_TEMP/firma.txt"
           APK_SHA=$(grep -m1 'SHA-256 digest' "$RUNNER_TEMP/firma.txt" | awk '{print $NF}')
           LLAVE_SHA=$(keytool -list -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey \
             | grep 'SHA256:' | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
           echo "apk: $APK_SHA"; echo "llave: $LLAVE_SHA"
-          [ "$APK_SHA" = "$LLAVE_SHA" ] || { echo "::error::El .apk no salió firmado con la llave de siempre"; exit 1; }
+          [ -n "$APK_SHA" ] && [ "$APK_SHA" = "$LLAVE_SHA" ] || { echo "::error::El .apk no salió firmado con la llave de siempre"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
