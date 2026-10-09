@@ -55,7 +55,7 @@ const a2 = archivoDelPlano({ name: 'Planta baja', image_key: 'orgs/x/planos/1.pn
 rev(a2 && a2.llave === 'orgs/x/planos/1.png' && a2.nombre === 'Planta baja.png', 'un plano viejo sin original comparte su imagen, nombrada', JSON.stringify(a2));
 rev(archivoDelPlano({ name: 'x' }) === null && archivoDelPlano(null) === null, 'sin archivo, no hay botón');
 const proy = sinComentarios(readFileSync('web/src/Project.jsx', 'utf8'));
-rev(/import \{ BotonCompartir \} from '\.\/Fotos\.jsx'/.test(proy) && /import \{ archivoDelPlano \} from '\.\/compartir\.js'/.test(proy), 'Project.jsx trae el botón y la cuenta del archivo');
+rev(/import \{ BotonCompartir \} from '\.\/Fotos\.jsx'/.test(proy) && /import \{ archivoDelPlano(, [^}]*)? \} from '\.\/compartir\.js'/.test(proy), 'Project.jsx trae el botón y la cuenta del archivo');
 rev(/vista === 'plan' && archivoDelPlano\(plan\) && \(\s*<BotonCompartir url=\{fileUrl\(archivoDelPlano\(plan\)\.llave\)\} nombre=\{archivoDelPlano\(plan\)\.nombre\} className="btn sm ico" etiqueta="Compartir">/.test(proy), 'el plano que se ve tiene «Compartir» arriba, junto a Imprimir (como ícono desde el 5-oct)');
 rev(/archivoDelPlano\(p\) && <BotonCompartir url=\{fileUrl\(archivoDelPlano\(p\)\.llave\)\} nombre=\{archivoDelPlano\(p\)\.nombre\} className="btn sm">⇪<\/BotonCompartir>/.test(proy), 'y cada plano de la lista de planos también');
 

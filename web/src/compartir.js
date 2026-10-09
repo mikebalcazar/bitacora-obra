@@ -15,6 +15,7 @@
  *
  * Lo que se puede medir sin navegador vive en funciones puras: cómo se
  * decide y cómo se nombra. Lo demás usa el navegador. */
+import { esAndroid, plugin } from './nativo.js';
 
 /** `hoja` si el navegador puede compartir ese archivo; `descarga` si no. */
 export function comoCompartir(nav, archivo) {
@@ -51,7 +52,45 @@ export async function compartirArchivo(url, nombre) {
   const r = await fetch(url, { credentials: 'include' });
   if (!r.ok) throw new Error(`No se pudo bajar el archivo (${r.status}).`);
   const blob = await r.blob();
-  const archivo = new File([blob], nombreDelArchivo(nombre, url), { type: blob.type || 'application/octet-stream' });
+  return entregar(new File([blob], nombreDelArchivo(nombre, url), { type: blob.type || 'application/octet-stream' }));
+}
+
+/* Dentro de la app de Android (9-oct-2026). El navegador interno de Android
+ * NO sabe compartir archivos (`navigator.share` no existe ahí) y una
+ * descarga tampoco llega a ningún lado. Así que la app guarda el archivo en
+ * su caché (plugin `Filesystem`) y abre la hoja de compartir de Android con
+ * él (plugin `Share`): WhatsApp, correo, Drive, lo que haya. Los dos plugins
+ * se instalan al armar la app (`.github/workflows/apps.yml`). */
+const nativos = () => (esAndroid() ? { Fs: plugin('Filesystem'), Share: plugin('Share') } : {});
+
+/** ¿Este aparato abre la hoja de compartir con este archivo? Lo usa la
+ *  pantalla para decir «Compartir» o «Descargar» antes de picarle. */
+export function puedeCompartir(archivo) {
+  const { Fs, Share } = nativos();
+  if (Fs && Share) return true;
+  return typeof navigator !== 'undefined' && comoCompartir(navigator, archivo) === 'hoja';
+}
+
+/** Un `Blob` a base64 sin el prefijo `data:…;base64,` (lo que pide
+ *  `Filesystem.writeFile` para guardar binario). */
+export function aBase64(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(',')[1] || '');
+    r.onerror = () => rej(r.error || new Error('No se pudo leer el archivo.'));
+    r.readAsDataURL(blob);
+  });
+}
+
+/** Comparte un archivo que ya está en la mano: hoja de Android, hoja del
+ *  navegador (iPhone, Chrome de Android) o, si no hay, descarga. */
+export async function entregar(archivo) {
+  const { Fs, Share } = nativos();
+  if (Fs && Share) {
+    const { uri } = await Fs.writeFile({ path: archivo.name, data: await aBase64(archivo), directory: 'CACHE' });
+    try { await Share.share({ title: archivo.name, files: [uri] }); return 'hoja'; }
+    catch (e) { if (/cancel/i.test(String(e?.message || e))) return 'cancelado'; throw e; }
+  }
   if (comoCompartir(navigator, archivo) === 'hoja') {
     try { await navigator.share({ files: [archivo], title: archivo.name }); return 'hoja'; }
     catch (e) { if (e && e.name === 'AbortError') return 'cancelado'; /* si no se pudo, se descarga */ }

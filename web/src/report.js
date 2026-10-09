@@ -100,6 +100,8 @@ function groupBy(arr, k) { const o = {}; for (const x of arr) (o[x[k]] ||= []).p
 export const REPORT_CSS = `
 .report{position:fixed;inset:0;background:var(--bg);z-index:25;overflow:auto}
 .rbar{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:10px;align-items:center;z-index:2;padding-top:calc(10px + var(--sat))}
+.rbar .rtitulo{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:560px){.rbar{gap:6px;padding-left:10px;padding-right:10px}.rbar .rtitulo{display:none}}
 .sheet{width:210mm;max-width:100%;margin:0 auto;font-size:12px;color:#141C26}
 .page{background:#fff;min-height:297mm;margin:16px 0;padding:14mm 14mm 12mm;box-shadow:var(--shadow);position:relative;display:flex;flex-direction:column;break-after:page}
 .page .muted{color:#7A8593}

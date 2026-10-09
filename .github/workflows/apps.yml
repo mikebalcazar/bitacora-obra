@@ -64,7 +64,10 @@ jobs:
           # --save (sólo en esta corrida): Capacitor encuentra los plugins por
           # el package.json. Todo en UNA instalación: un segundo `npm i --save`
           # borraría lo que se puso con --no-save.
-          npm i --save @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7 @capacitor/app@^7 @capacitor/browser@^7
+          # `Filesystem` y `Share` (9-oct-2026): el PDF del reporte y las fotos
+          # se comparten con la hoja de Android (web/src/compartir.js); el
+          # navegador interno de Android no sabe compartir archivos.
+          npm i --save @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7 @capacitor/app@^7 @capacitor/browser@^7 @capacitor/filesystem@^7 @capacitor/share@^7
           npx cap add android
           # `cap add` rehace el proyecto en cada corrida, así que el ícono se
           # copia encima: si no, la app sale con el de Capacitor.
@@ -76,6 +79,12 @@ jobs:
           npx cap sync android
           grep -q '@capacitor/app' android/capacitor.settings.gradle
           grep -q '@capacitor/browser' android/capacitor.settings.gradle
+          grep -q '@capacitor/filesystem' android/capacitor.settings.gradle
+          grep -q '@capacitor/share' android/capacitor.settings.gradle
+          # La hoja de compartir lee el archivo de la caché por el FileProvider
+          # que trae la plantilla de Capacitor: si algún día no lo trae, que
+          # no se arme una app que comparte en silencio nada.
+          grep -q 'cache-path' android/app/src/main/res/xml/file_paths.xml
 
       # La llave de firma es SIEMPRE la misma (Mike, 9-oct-2026): con una llave
       # distinta en cada corrida, Android se niega a instalar la versión nueva
