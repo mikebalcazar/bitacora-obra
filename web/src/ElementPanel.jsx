@@ -483,6 +483,7 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff, veTodo = staff,
   const { toast } = useApp();
   const [f, setF] = useState({ title: '', resp: e.resp || '', due_date: todayISO(3), assignee_id: '' });
   const [evid, setEvid] = useState(null);          // el pendiente que se está dando por terminado
+  const [editando, setEditando] = useState(null);  // el pendiente que se está editando (a quién, qué, cuándo)
   const contratistas = (members || []).filter((m) => m.role === 'con');
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -564,11 +565,14 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff, veTodo = staff,
                 <Photos photos={k.photos} setLb={setLb} onDelete={staff ? delPhoto : null} />
                 {evid === k.id ? (
                   <Evidencia k={k} onListo={() => { setEvid(null); onChanged(); }} onCancel={() => setEvid(null)} />
+                ) : editando === k.id ? (
+                  <EditaPunch k={k} e={e} contratistas={contratistas} onListo={() => { setEditando(null); onChanged(); }} onCancel={() => setEditando(null)} />
                 ) : (
                   <div className="row" style={{ marginTop: 6, gap: 6 }}>
                     {staff && <label className="btn sm">+ Foto<input type="file" accept="image/*" capture="environment" multiple hidden onChange={(ev) => { addPhotos(k, [...ev.target.files]); ev.target.value = ''; }} /></label>}
                     {!veTodo && k.status !== 'ok' && <button className="btn primary sm" onClick={() => setEvid(k.id)}>Ya quedó — subir evidencia</button>}
                     {!veTodo && k.status === 'proc' && <span className="muted" style={{ fontSize: 12.5 }}>Esperando revisión del supervisor</span>}
+                    {staff && <button className="btn sm" data-editar-punch onClick={() => setEditando(k.id)}>Editar</button>}
                     {staff && <button className="btn sm danger" onClick={() => del(k)}>Borrar</button>}
                   </div>
                 )}
@@ -738,6 +742,62 @@ function MarcarDiseno({ e, onClose, onChanged }) {
         {e.diseno_definido && <button type="button" className="btn" disabled={busy} onClick={quitar}>Quitar la marca (diseño sin definir)</button>}
         <div className="acts"><button type="button" className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || !fecha}>{busy ? 'Guardando…' : 'Guardar'}</button></div>
       </form>
+    </div>
+  );
+}
+
+/* Editar un pendiente ya levantado: a quién le toca, qué es y para cuándo
+ * (Mike, 9-oct-2026: «una vez creado el ítem de punchlist no puedo editar a
+ * quien se le asigna»). Es del supervisor, como levantarlo. «Sin asignar»
+ * lo quita de la lista de quien lo tenía (API 0.90.2). Pasa por la fila:
+ * sin señal se ve cambiado y sube solo. */
+function EditaPunch({ k, e, contratistas, onListo, onCancel }) {
+  const { toast } = useApp();
+  const [f, setF] = useState({ title: k.title || '', assignee_id: k.assignee_id || '', resp: k.resp || '', due_date: k.due_date || '' });
+  const [busy, setBusy] = useState(false);
+  // Si el que lo tiene ya no está entre los contratistas de la obra, se
+  // queda en la lista para no cambiarlo sin querer.
+  const opciones = k.assignee_id && !contratistas.some((c) => c.id === k.assignee_id)
+    ? [...contratistas, { id: k.assignee_id, name: k.assignee_name || 'Quien lo tenía', company: k.assignee_company }]
+    : contratistas;
+  async function guardar() {
+    if (!f.title.trim()) return;
+    setBusy(true);
+    const cuerpo = { title: f.title.trim(), due_date: f.due_date || null, ...(opciones.length ? { assignee_id: f.assignee_id } : { resp: f.resp }) };
+    const quien = opciones.find((c) => c.id === f.assignee_id);
+    try {
+      const r = await escribir({
+        metodo: 'PATCH', ruta: `/punch/${k.id}`, cuerpo,
+        parche: {
+          clave: `/elements/${e.id}`,
+          fn: (d) => {
+            d.punch = (d.punch || []).map((x) => x.id === k.id ? {
+              ...x, ...cuerpo,
+              ...(opciones.length ? { assignee_id: f.assignee_id || null, assignee_name: quien?.name || null, assignee_company: quien?.company || null } : {}),
+              __pendiente: true,
+            } : x);
+            return d;
+          },
+        },
+      });
+      if (!r.subido) toast('Sin señal: el cambio se sube solo cuando vuelva.');
+      onListo();
+    } catch (x) { toast(x.message); } finally { setBusy(false); }
+  }
+  return (
+    <div className="newpi" data-edita-punch style={{ marginTop: 6 }}>
+      <input value={f.title} onChange={(ev) => setF({ ...f, title: ev.target.value })} placeholder="Describe el detalle o tarea…" />
+      <div className="two">
+        {opciones.length
+          ? <select value={f.assignee_id} onChange={(ev) => setF({ ...f, assignee_id: ev.target.value })} aria-label="Asignado a">
+              <option value="">Sin asignar</option>
+              {opciones.map((c) => <option key={c.id} value={c.id}>{c.name}{c.company ? ` · ${c.company}` : ''}</option>)}
+            </select>
+          : <input value={f.resp} onChange={(ev) => setF({ ...f, resp: ev.target.value })} placeholder="Responsable" />}
+        <input type="date" value={f.due_date} onChange={(ev) => setF({ ...f, due_date: ev.target.value })} aria-label="Fecha límite" />
+      </div>
+      {!!opciones.length && !f.assignee_id && <div className="muted" style={{ fontSize: 12.5 }}>Sin asignar, nadie lo va a ver en su lista.</div>}
+      <div className="row"><div className="spacer" /><button className="btn sm" onClick={onCancel}>Cancelar</button><button className="btn primary sm" disabled={busy || !f.title.trim()} onClick={guardar}>{busy ? 'Guardando…' : 'Guardar'}</button></div>
     </div>
   );
 }
