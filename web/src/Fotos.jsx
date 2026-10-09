@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { fileUrl, compressImage } from './api.js';
 import { imagenesDe, nombreDePegada } from './pegar.js';
 import { compartirArchivo } from './compartir.js';
+import { Dibujo } from './Dibujo.jsx';
 
 // Las fotos de la aplicación: verlas, elegirlas y ver las que están por subir.
 // Viven aquí y no dentro de una pantalla porque son las mismas en todas —la
@@ -90,11 +91,18 @@ export function usePegarYSoltar(add) {
     onDrop: (ev) => { ev.preventDefault(); setSoltando(false); toma(ev.dataTransfer); },
   };
 }
+/* Cámara, fotos de la galería y, desde el 9-oct-2026, un dibujo a mano
+ * (Mike: «un dibujo bitmap adicional a agregar imagen o tomar foto para
+ * anotaciones de la bitácora»). El dibujo sale como una imagen más y entra a
+ * la misma fila de por subir, así que sirve en todos los compositores. */
 export function PhotoInput({ onFiles, label = 'Foto' }) {
+  const [dibujando, setDibujando] = useState(false);
   return (
     <div className="row" style={{ gap: 6 }}>
       <label className="btn sm">Cámara<input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { onFiles([...e.target.files]); e.target.value = ''; }} /></label>
       <label className="btn sm">{label}s<input type="file" accept="image/*" multiple hidden onChange={(e) => { onFiles([...e.target.files]); e.target.value = ''; }} /></label>
+      <button type="button" className="btn sm" data-dibujar onClick={() => setDibujando(true)}>Dibujo</button>
+      {dibujando && <Dibujo onListo={(f) => onFiles([f])} onCerrar={() => setDibujando(false)} />}
     </div>
   );
 }
