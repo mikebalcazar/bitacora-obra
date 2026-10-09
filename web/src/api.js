@@ -156,7 +156,12 @@ export const fileUrl = (key) => {
 };
 
 // ---------- utilidades ----------
-export const fmtD = (iso) => iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+/* Una fecha sola (AAAA-MM-DD: límite, entrega, diseño) se lee a mediodía.
+ * `new Date('2026-10-12')` es la medianoche UTC, que en la Ciudad de México
+ * todavía es el 11: así salía un día antes (Mike lo vio el 9-oct-2026 en el
+ * límite de un pendiente). Una fecha con hora se deja como viene. */
+const soloDia = (iso) => (typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00` : iso);
+export const fmtD = (iso) => iso ? new Date(soloDia(iso)).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 export const fmtT = (iso) => iso ? new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '';
 export const fmtDay = (iso) => new Date(iso).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
 export const isLate = (k) => k.status !== 'ok' && k.due_date && new Date(k.due_date + 'T23:59:59') < new Date();
@@ -258,7 +263,9 @@ export const esContratista = (u) => u?.role === 'con';
 // El cliente del taller (0012): ve el plano de su obra y sus puntos por definir.
 export const esCliente = (u) => u?.role === 'cli';
 export const dirige = (u) => u?.role === 'admin' || u?.role === 'int';
-export const todayISO = (offsetDays = 0) => { const d = new Date(); d.setDate(d.getDate() + offsetDays); return d.toISOString().slice(0, 10); };
+// «Hoy» es el de aquí, no el de Greenwich: con `toISOString` a partir de las
+// 6 de la tarde en la Ciudad de México ya era mañana.
+export const todayISO = (offsetDays = 0) => { const d = new Date(); d.setDate(d.getDate() + offsetDays); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 
 // Comprimir imagen en cliente (máx 1600 px, JPEG .82) → File
 export async function compressImage(file, max = 1600, q = 0.82) {
