@@ -63,7 +63,9 @@ export default function App() {
   }), [user]);
 
   if (user === undefined) return <div className="center"><div className="spin" /></div>;
-  if (!user) return <Login onLogin={(u) => setUser(u)} />;
+  // El aviso de versión nueva también en la entrada: una app vieja de Android
+  // que ya no puede entrar tiene que poder actualizarse desde aquí.
+  if (!user) return <><Login onLogin={(u) => setUser(u)} /><VersionNueva /></>;
   // El portal del cliente es peek101 (Mike, 5-oct-2026: «Quiero que el único
   // visor del cliente sea Peek»). Un cliente que llega aquí —por una liga
   // vieja, por costumbre— no ve la obra: se le dice a dónde ir, con la liga

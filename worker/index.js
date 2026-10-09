@@ -232,6 +232,8 @@ export default {
         p.headers.set('X-App', APP);
         r = await env.API.fetch(p);
       }
+      else if (path === '/.well-known/assetlinks.json') return ligasDeAndroid();
+      else if (path === '/app/entrar' || path.startsWith('/app/entrar/')) return vueltaDeGoogleEnNavegador(url);
       else if (path.startsWith('/api/')) r = await api(req, env, url, path);
       else if (path.startsWith('/descargas/')) r = await entregaApp(env, path.slice(11));
       else if (path.startsWith('/files/')) r = await aLaSuite(req, env, url, `/files/${path.slice(7)}`);
@@ -254,6 +256,9 @@ export default {
 // viven en el de la suite.
 const APPS = {
   'android.apk': { llave: 'apps/android.apk', tipo: 'application/vnd.android.package-archive', nombre: 'quell101.apk' },
+  // El número de armado del .apk publicado: lo lee la app para avisar que hay
+  // versión nueva (web/src/VersionNueva.jsx). Lo sube «Armar apps» junto al .apk.
+  'android.json': { llave: 'apps/android.json', tipo: 'application/json; charset=utf-8', nombre: 'android.json', enLinea: true },
   'windows.exe': { llave: 'apps/windows.exe', tipo: 'application/vnd.microsoft.portable-executable', nombre: 'quell101.exe' },
   'windows-nativo.exe': { llave: 'apps/windows-nativo.exe', tipo: 'application/vnd.microsoft.portable-executable', nombre: 'quell101 (nativo).exe' },
   'piloto.zip': { llave: 'apps/piloto.zip', tipo: 'application/zip', nombre: 'quell101 piloto nativo.zip' },
@@ -266,7 +271,7 @@ async function entregaApp(env, cual) {
   if (!obj) return err('Todavía no se ha armado esta app.', 404);
   const h = new Headers();
   h.set('content-type', app.tipo);
-  h.set('content-disposition', `attachment; filename="${app.nombre}"`);
+  if (!app.enLinea) h.set('content-disposition', `attachment; filename="${app.nombre}"`);
   h.set('content-length', String(obj.size));
   // Sin caché larga: la liga es siempre la misma y detrás cambia la versión.
   h.set('cache-control', 'public, max-age=300');
@@ -343,4 +348,46 @@ async function api(req, env, url, path) {
 
   // Todo lo demás es del motor, que vive en la suite.
   return aLaSuite(req, env, url, `/${seg.join('/')}`);
+}
+
+/* ─────────── la app de Android y Google (Mike, 9-oct-2026) ───────────
+ * «Si le pido "entrar con google" me manda al browser y abre la aplicación en
+ * el browser, no en la app». Ahora la app abre Google encima de ella y le pide
+ * a la suite que devuelva el boleto a https://<este dominio>/app/entrar.
+ *
+ * `assetlinks.json` le dice a Android que esa dirección es de la app firmada
+ * con la llave fija (bucket `quell101-llaves`, huella SHA-256 de abajo): así
+ * Android le entrega la vuelta a la app y no al navegador. Si la llave
+ * cambiara, esto deja de funcionar — por eso la llave no se toca. */
+export const HUELLA_LLAVE_ANDROID = '84:4C:AF:EA:1F:A6:44:FC:1B:7D:47:E1:80:D2:FE:CA:FD:B7:26:F6:AE:35:1E:AA:B5:F4:53:4A:B3:71:E9:E4';
+export const PAQUETE_ANDROID = 'mx.forespot.bitacoraobra';
+
+function ligasDeAndroid() {
+  const cuerpo = [{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: { namespace: 'android_app', package_name: PAQUETE_ANDROID, sha256_cert_fingerprints: [HUELLA_LLAVE_ANDROID] },
+  }];
+  return new Response(JSON.stringify(cuerpo), {
+    headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' },
+  });
+}
+
+/* Si la vuelta de Google cae en un navegador (una app vieja, o un teléfono que
+ * todavía no reconoce el dominio), no se canjea aquí: el boleto es para la app.
+ * Se ofrece abrirla con él —un `intent://` al paquete, que Android sí respeta
+ * porque lo pica la persona— y, si no la tiene, seguir en el navegador. */
+export function vueltaDeGoogleEnNavegador(url) {
+  const entrada = url.searchParams.get('entrada') || '';
+  const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const q = entrada ? `?entrada=${encodeURIComponent(entrada)}` : '';
+  const aLaApp = `intent://${url.host}/app/entrar${q}#Intent;scheme=https;package=${PAQUETE_ANDROID};end`;
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>quell101</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#07141e;color:#e8f2f8;font:16px/1.5 system-ui,sans-serif;text-align:center;padding:24px;box-sizing:border-box}
+a{display:block;margin:14px auto 0;max-width:280px;padding:14px 18px;border-radius:12px;text-decoration:none;font-weight:700}
+.app{background:#0381c2;color:#fff}.web{color:#8fd3f5}</style></head><body><main>
+<p>Ya entraste con Google.</p>
+<a class="app" data-abrir-app href="${esc(aLaApp)}">Abrir la app de quell101</a>
+<a class="web" href="/${esc(q)}">Seguir en el navegador</a>
+</main></body></html>`;
+  return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
 }

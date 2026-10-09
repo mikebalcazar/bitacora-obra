@@ -14,6 +14,7 @@
  */
 
 import { BASE, empaquetada, setToken } from './api.js';
+import { esAndroid, plugin, VUELTA_GOOGLE } from './nativo.js';
 
 /** Los errores de la API, con palabras de obra. */
 const ERRORES = {
@@ -83,6 +84,12 @@ export const salirDeSuite = () => suite('/auth/salir', { method: 'POST' }).catch
 /** La ida a Google. La API devuelve a `volver_a` con un boleto de un solo uso,
  *  y al volver se canjea por la sesión de este origen. */
 export const irAGoogle = () => {
+  // En Android, Google se abre encima de la app y vuelve a ella (nativo.js).
+  const Browser = plugin('Browser');
+  if (esAndroid() && Browser) {
+    Browser.open({ url: `${BASE}/s101/auth/google?volver_a=${encodeURIComponent(VUELTA_GOOGLE)}` });
+    return;
+  }
   const volver = empaquetada ? BASE + '/' : location.origin + location.pathname;
   location.href = `${BASE}/s101/auth/google?volver_a=${encodeURIComponent(volver)}`;
 };
