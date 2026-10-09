@@ -10,7 +10,8 @@ import Marca from './Marca.jsx';
 import { buildReport, REPORT_CSS } from './report.js';
 import { siguienteCodigo } from './codigos.js';
 import { BotonCompartir } from './Fotos.jsx';
-import { archivoDelPlano } from './compartir.js';
+import { archivoDelPlano, entregar, puedeCompartir } from './compartir.js';
+import { armarPdf, nombreDelReporte } from './reportePdf.js';
 
 const TYPES = TIPOS.map((t) => t.clave);
 
@@ -551,7 +552,7 @@ export default function Project({ id, sub }) {
 
       {newAt && <NewElementModal elements={data.elements} members={data.members} sinUbicar={sinUbicar} tipoInicial={tipoNuevo} padre={padreNuevo} onCancel={() => { setNewAt(null); setTipoNuevo(null); setPadreNuevo(null); }} onOk={createElement} />}
       {report && <ReportModal hasSel={!!sel} onCancel={() => setReport(false)} onOk={generateReport} />}
-      {repView && <ReportView {...repView} onClose={() => setRepView(null)} />}
+      {repView && <ReportView {...repView} proyecto={data.project.name} onClose={() => setRepView(null)} />}
       {editPlan && <EditPlanModal plan={editPlan} onClose={() => setEditPlan(null)} onChanged={load} onSustituir={(file) => { setEditPlan(null); uploadPlan(file, editPlan.name, editPlan.id); }} />}
       {pendiente && <SubirPlanoModal pendiente={pendiente} ocupado={uploading} onConfirmar={confirmarPlano} onClose={() => setPendiente(null)} />}
       {planos && (
@@ -856,11 +857,51 @@ function EditPlanModal({ plan, onClose, onChanged, onSustituir }) {
   );
 }
 
-function ReportView({ html, title, onClose }) {
+/* El reporte en pantalla, con su PDF listo para mandar (Mike, 9-oct-2026:
+ * «desde el iPhone y Android quiero poder compartir directo a alguna app
+ * tipo WhatsApp el PDF ya listo»). El PDF se arma en cuanto se abre
+ * (`reportePdf.js` dice por qué) y el botón dice cuánto lleva; ya listo,
+ * «Compartir PDF» abre la hoja de compartir del teléfono, o «Descargar PDF»
+ * donde no la hay (la computadora). Imprimir sigue ahí. */
+function ReportView({ html, title, proyecto, onClose }) {
+  const { toast } = useApp();
+  const [pdf, setPdf] = useState(null);       // { archivo, hoja }
+  const [avance, setAvance] = useState('');
+  const [fallo, setFallo] = useState(null);
+  const [mandando, setMandando] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    setPdf(null); setFallo(null); setAvance('');
+    armarPdf(html, REPORT_CSS, { onAvance: (i, n) => vivo && setAvance(`${i}/${n}`) })
+      .then((blob) => {
+        if (!vivo) return;
+        const archivo = new File([blob], nombreDelReporte(title, proyecto), { type: 'application/pdf' });
+        setPdf({ archivo, hoja: puedeCompartir(archivo) });
+      })
+      .catch((e) => vivo && setFallo(e?.message || 'No se pudo armar el PDF.'));
+    return () => { vivo = false; };
+  }, [html]);
+  async function mandar() {
+    if (!pdf || mandando) return;
+    setMandando(true);
+    try {
+      const como = await entregar(pdf.archivo);
+      if (como === 'descarga') toast('Se guardó el PDF.');
+    } catch (e) { toast(e?.message || 'No se pudo compartir el PDF.'); }
+    finally { setMandando(false); }
+  }
   return (
     <div className="report">
       <style>{REPORT_CSS}</style>
-      <div className="rbar"><button className="btn sm" onClick={onClose}>← Volver</button><b>{title}</b><div className="spacer" /><button className="btn primary sm" onClick={() => window.print()}>Imprimir / Guardar PDF</button></div>
+      <div className="rbar">
+        <button className="btn sm" onClick={onClose}>← Volver</button>
+        <b className="rtitulo">{title}</b>
+        <div className="spacer" />
+        <button className="btn sm" onClick={() => window.print()} title="Imprimir o guardar como PDF desde el navegador">Imprimir</button>
+        <button className="btn primary sm" data-pdf-reporte disabled={!pdf || mandando} onClick={mandar} title={fallo || ''}>
+          {fallo ? 'PDF no disponible' : !pdf ? `Armando PDF…${avance ? ' ' + avance : ''}` : mandando ? 'Abriendo…' : pdf.hoja ? 'Compartir PDF' : 'Descargar PDF'}
+        </button>
+      </div>
       <div className="sheet" dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );
