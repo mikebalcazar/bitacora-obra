@@ -28,7 +28,7 @@
  *                             hasta que se rearmen.
  */
 
-const PROD = process.env.PROD || 'https://quell101.taller101.com';
+const PROD = process.env.PROD || 'https://quell.suite101.app';
 const API = process.env.API || 'https://suite101-api.mike-929.workers.dev';
 
 let fallas = 0, revisadas = 0;
