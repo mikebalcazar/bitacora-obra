@@ -24,11 +24,11 @@ const ASSETS = { fetch: async () => new Response('sitio') };
 const API = { fetch: async () => new Response('{}') };
 const guardado = { 'apps/android.json': '{"version":57,"fecha":"2026-10-09T16:00:00Z"}' };
 const FILES = { get: async (k) => (guardado[k] ? { body: guardado[k], size: guardado[k].length } : null) };
-const prod = { DOMINIO_PROPIO: 'quell101.taller101.com', APP_NAME: 'quell101', ORG_ID: 'forespot', ASSETS, API, FILES };
+const prod = { DOMINIO_PROPIO: 'quell.suite101.app', DOMINIO_ANTERIOR: 'quell101.taller101.com', APP_NAME: 'quell101', ORG_ID: 'forespot', ASSETS, API, FILES };
 const pide = (url, init) => worker.fetch(new Request(url, init), prod);
 
 console.log('· Android reconoce el dominio como de la app');
-let r = await pide('https://quell101.taller101.com/.well-known/assetlinks.json');
+let r = await pide('https://quell.suite101.app/.well-known/assetlinks.json');
 const ligas = await r.json();
 rev(r.status === 200 && /application\/json/.test(r.headers.get('content-type')), 'assetlinks.json contesta JSON');
 rev(ligas[0]?.target?.package_name === PAQUETE_ANDROID && PAQUETE_ANDROID === JSON.parse(readFileSync('capacitor.config.json', 'utf8')).appId,
@@ -38,15 +38,18 @@ rev(ligas[0]?.target?.sha256_cert_fingerprints?.[0] === HUELLA_LLAVE_ANDROID
   && HUELLA_LLAVE_ANDROID.replace(/:/g, '').toLowerCase() === '844cafea1fa644fc1b7d47e180d2fecafdb726f6ae351eaab5f4534ab371e9e4',
   'y la huella de la llave fija (quell101-llaves)');
 
+r = await pide('https://quell101.taller101.com/.well-known/assetlinks.json');
+rev(r.status === 200 && (await r.json())[0]?.target?.package_name === PAQUETE_ANDROID, 'y también en la dirección de antes, sin rebote (la que traen las apps ya instaladas)');
+
 console.log('· si la vuelta de Google cae en un navegador');
-r = await pide('https://quell101.taller101.com/app/entrar?entrada=BOLETO-1');
+r = await pide('https://quell.suite101.app/app/entrar?entrada=BOLETO-1');
 const html = await r.text();
 rev(r.status === 200 && /text\/html/.test(r.headers.get('content-type')), 'contesta una página, no la app');
-rev(html.includes(`intent://quell101.taller101.com/app/entrar?entrada=BOLETO-1#Intent;scheme=https;package=${PAQUETE_ANDROID};end`),
+rev(html.includes(`intent://quell.suite101.app/app/entrar?entrada=BOLETO-1#Intent;scheme=https;package=${PAQUETE_ANDROID};end`),
   'con un botón que abre la app con el mismo boleto');
 rev(html.includes('href="/?entrada=BOLETO-1"'), 'y otro para seguir en el navegador');
 rev(r.headers.get('cache-control') === 'no-store', 'sin caché: el boleto es de un solo uso');
-r = await pide('https://quell101.taller101.com/app/entrar?entrada=%22%3E%3Cscript%3E');
+r = await pide('https://quell.suite101.app/app/entrar?entrada=%22%3E%3Cscript%3E');
 rev(!(await r.text()).includes('"><script>'), 'lo que venga en la dirección no se cuela como HTML');
 
 console.log('· el número de la versión publicada');
@@ -58,7 +61,10 @@ console.log('· la pantalla');
 const nativo = readFileSync('web/src/nativo.js', 'utf8');
 const suite = readFileSync('web/src/suite.js', 'utf8');
 const vn = readFileSync('web/src/VersionNueva.jsx', 'utf8');
-rev(/VUELTA_GOOGLE = 'https:\/\/quell101\.taller101\.com\/app\/entrar'/.test(nativo), 'la vuelta de Google es la dirección que Android le da a la app');
+rev(/VUELTA_GOOGLE = 'https:\/\/quell101\.taller101\.com\/app\/entrar'/.test(nativo), 'la vuelta de Google sigue en la dirección que reclaman TODAS las apps instaladas (la de antes)');
+const ligasPy = readFileSync('apps/android/ligas.py', 'utf8');
+rev(ligasPy.includes('android:host="quell.suite101.app" android:pathPrefix="/app/entrar"') && ligasPy.includes('android:host="quell101.taller101.com" android:pathPrefix="/app/entrar"'),
+  'el manifiesto reclama la vuelta en el dominio nuevo y en el de antes (apps ya instaladas)');
 rev(/esAndroid\(\) && Browser/.test(suite) && /Browser\.open\(\{ url: `\$\{BASE\}\/s101\/auth\/google\?volver_a=\$\{encodeURIComponent\(VUELTA_GOOGLE\)\}` \}\)/.test(suite),
   'en Android, Google se abre encima de la app (Browser) y vuelve a ella');
 rev(/addListener\('appUrlOpen'/.test(nativo) && /getLaunchUrl/.test(nativo) && /location\.replace\(`\$\{location\.pathname\}\?entrada=/.test(nativo),

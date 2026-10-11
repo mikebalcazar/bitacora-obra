@@ -154,6 +154,17 @@ function permiso(req) {
  * rebote les rompería el CORS; y `/s101/*` desde workers.dev viene de una
  * página que ya se está yendo. Staging no tiene `DOMINIO_PROPIO`. */
 const SIN_REBOTE = ['/api/', '/files/', '/descargas/', PREFIJO_SUITE + '/'];
+/* 11-oct-2026 · la suite se mudó a suite101.app (Mike: «taller101 será una
+ * marca de FORESPOT»): el dominio propio pasó a quell.suite101.app y el de
+ * antes, quell101.taller101.com (`DOMINIO_ANTERIOR`, puede ser una lista
+ * separada por comas), SE QUEDA VIVO pero manda aquí, con las mismas reglas
+ * que workers.dev. Dos rutas más no rebotan desde la dirección de antes,
+ * porque las apps de Android ya instaladas la tienen adentro: Android
+ * verifica `/.well-known/assetlinks.json` en ESE dominio y no sigue
+ * redirecciones, y la vuelta de Google (`/app/entrar`) arma su `intent://`
+ * con el dominio por el que llegó, que es el que reclama el manifiesto. */
+const SIN_REBOTE_ANTERIOR = ['/.well-known/assetlinks.json', '/app/entrar'];
+const anteriores = (env) => String(env.DOMINIO_ANTERIOR || '').split(',').map((s) => s.trim()).filter(Boolean);
 export function aDominioPropio(req, env, u) {
   const d = env.DOMINIO_PROPIO;
   /* Sin la «s» (Mike, 30-sep-2026: en un Android nuevo abrió
@@ -165,9 +176,11 @@ export function aDominioPropio(req, env, u) {
   if (d && u.protocol === 'http:' && u.hostname === d && (req.method === 'GET' || req.method === 'HEAD')) {
     return Response.redirect(`https://${d}${u.pathname}${u.search}`, 301);
   }
-  if (!d || u.hostname === d || !u.hostname.endsWith('.workers.dev')) return null;
+  const anterior = anteriores(env).includes(u.hostname);
+  if (!d || u.hostname === d || !(u.hostname.endsWith('.workers.dev') || anterior)) return null;
   if (req.method !== 'GET' && req.method !== 'HEAD') return null;
   if (u.pathname === PREFIJO_SUITE || SIN_REBOTE.some((p) => u.pathname.startsWith(p))) return null;
+  if (anterior && SIN_REBOTE_ANTERIOR.some((p) => u.pathname === p || u.pathname.startsWith(p + '/'))) return null;
   if (u.pathname === '/sw.js') return swQueSeVa(d);
   return Response.redirect(`https://${d}${u.pathname}${u.search}`, 301);
 }

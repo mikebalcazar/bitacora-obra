@@ -100,15 +100,17 @@ function parseHash() {
 }
 
 /* A dónde vive el portal del cliente, deducido de dónde vive esta app:
- * `quell101.X` → `peek101.X` (taller101.com o el dominio propio de la empresa);
- * staging → el peek101 de staging; otra cosa → producción. Es la misma regla
- * que la API usa para los correos al cliente (motor.js, sitioPeek). */
+ * `quell.X` → `peek.X` (suite101.app o el dominio propio de la empresa, desde
+ * el 11-oct-2026 sin el «101»); `quell101.X` → `peek101.X` (las direcciones
+ * de antes); staging → el peek101 de staging; otra cosa → producción. Es la
+ * misma regla que la API usa para los correos al cliente (motor.js, sitioPeek). */
 export function sitioPeek(origen = location.origin) {
   let h = '';
   try { h = new URL(origen).hostname.toLowerCase(); } catch { /* sin dirección */ }
+  if (h.startsWith('quell.')) return `https://peek.${h.slice('quell.'.length)}`;
   if (h.startsWith('quell101.')) return `https://peek101.${h.slice('quell101.'.length)}`;
   if (h.endsWith('.workers.dev') || h === 'localhost' || h === '127.0.0.1') return 'https://peek101-staging.mike-929.workers.dev';
-  return 'https://peek101.taller101.com';
+  return 'https://peek.suite101.app';
 }
 
 function ClienteAPeek({ user, onSalir }) {

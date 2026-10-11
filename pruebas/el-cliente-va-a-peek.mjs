@@ -27,7 +27,10 @@ console.log('· a dónde manda');
 // La función se evalúa aparte: se copia tal cual del archivo para no armar un navegador.
 const fn = app.slice(app.indexOf('export function sitioPeek('), app.indexOf('function ClienteAPeek('));
 const sitioPeek = new Function(`${fn.replace('export function', 'function').replace('origen = location.origin', 'origen')} return sitioPeek;`)();
-rev(sitioPeek('https://quell101.taller101.com') === 'https://peek101.taller101.com', 'producción: quell101.taller101.com → peek101.taller101.com');
+rev(sitioPeek('https://quell.suite101.app') === 'https://peek.suite101.app', 'producción: quell.suite101.app → peek.suite101.app');
+rev(sitioPeek('https://quell.acme.com') === 'https://peek.acme.com', 'dominio propio sin el «101»: quell.X → peek.X');
+rev(sitioPeek('https://quell101.taller101.com') === 'https://peek101.taller101.com', 'la dirección de antes: quell101.taller101.com → peek101.taller101.com');
+rev(sitioPeek('https://otra.cosa') === 'https://peek.suite101.app', 'otra cosa → producción, en suite101.app');
 rev(sitioPeek('https://quell101.acme.com.mx') === 'https://peek101.acme.com.mx', 'dominio propio: quell101.X → peek101.X');
 rev(sitioPeek('https://bitacora-obra-staging.mike-929.workers.dev') === 'https://peek101-staging.mike-929.workers.dev', 'staging → el peek101 de staging');
 rev(/`\$\{peek\}\/#\/pieza\/\$\{pieza\}`/.test(app) && /`\$\{peek\}\/#\/obra\/\$\{obra\}`/.test(app), 'una liga vieja #/p/OBRA o #/p/OBRA/e/PIEZA se traduce a #/obra o #/pieza de peek101');

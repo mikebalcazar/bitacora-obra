@@ -11,7 +11,10 @@ compatibility_flags = ["nodejs_compat"]
 # a peek101). Las dos direcciones se quedan.
 workers_dev = true
 routes = [
-  { pattern = "quell101.taller101.com", custom_domain = true }
+  { pattern = "quell101.taller101.com", custom_domain = true },
+  # 11-oct-2026 · suite101.app es la marca (Mike: «taller101 será una marca de
+  # FORESPOT»). Ésta es la buena; la de arriba manda aquí.
+  { pattern = "quell.suite101.app", custom_domain = true }
 ]
 
 [assets]
@@ -34,7 +37,11 @@ run_worker_first = true
 APP_NAME = "quell101"
 # La dirección de workers.dev manda al dominio (Mike, 25-sep: «redirigir, no
 # apagar»). Sólo producción: staging tiene sus propias `vars` y no lleva esto.
-DOMINIO_PROPIO = "quell101.taller101.com"
+DOMINIO_PROPIO = "quell.suite101.app"
+# 11-oct-2026 · la dirección de antes (taller101.com) sigue viva y también
+# manda al dominio propio, con las mismas reglas que workers.dev. Acepta varias,
+# separadas por comas.
+DOMINIO_ANTERIOR = "quell101.taller101.com"
 # La empresa de la suite de este sitio. Desde el 19-sep quell101 no tiene base:
 # sus datos viven en la base por empresa de la suite, y esta es la empresa que
 # se abre por omisión a quien es miembro de varias (y al dueño de la suite).

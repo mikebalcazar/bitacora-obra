@@ -89,9 +89,14 @@ jobs:
       - name: Medir la puerta de la suite
         id: medir
         continue-on-error: true
+        env:
+          PROD: https://quell.suite101.app
         run: |
           set -o pipefail
-          sleep 12
+          # 11-oct-2026 · el dominio es quell.suite101.app. Un dominio recién
+          # colgado tarda en tener certificado: se espera a que conteste.
+          url="$PROD/api/salud"
+          for i in $(seq 1 24); do curl -sf -o /dev/null "$url" && break; sleep 5; done
           node scripts/medir.mjs 2>&1 | tee /tmp/medicion.txt
 
       - name: Dejar la medición en el commit
@@ -119,9 +124,11 @@ jobs:
         run: |
           set -e
           # Producción se mira en su dominio: workers.dev manda para allá desde
-          # el 25-sep (DOMINIO_PROPIO en wrangler.toml).
-          DIR=https://quell101.taller101.com
-          sleep 12
+          # el 25-sep (DOMINIO_PROPIO en wrangler.toml), y desde el 11-oct
+          # también quell101.taller101.com (DOMINIO_ANTERIOR).
+          DIR=https://quell.suite101.app
+          url="$DIR/api/salud"
+          for i in $(seq 1 24); do curl -sf -o /dev/null "$url" && break; sleep 5; done
           curl -fsS "$DIR/api/salud"
           echo ""
           echo "### Publicado en $DIR" >> "$GITHUB_STEP_SUMMARY"
@@ -132,7 +139,7 @@ jobs:
     needs: publicar
     uses: ./.github/workflows/verificar.yml
     with:
-      url: https://quell101.taller101.com
+      url: https://quell.suite101.app
       marca: quell101
       # Las cinco fuentes, una por una. Que la portada responda no dice nada de
       # ellas: si una .woff2 se cae, la app sigue abriendo y solo se ve con otra
