@@ -61,7 +61,7 @@ console.log('· la pantalla');
 const nativo = readFileSync('web/src/nativo.js', 'utf8');
 const suite = readFileSync('web/src/suite.js', 'utf8');
 const vn = readFileSync('web/src/VersionNueva.jsx', 'utf8');
-rev(/VUELTA_GOOGLE = 'https:\/\/quell\.suite101\.app\/app\/entrar'/.test(nativo), 'la vuelta de Google es la dirección que Android le da a la app');
+rev(/VUELTA_GOOGLE = 'https:\/\/quell101\.taller101\.com\/app\/entrar'/.test(nativo), 'la vuelta de Google sigue en la dirección que reclaman TODAS las apps instaladas (la de antes)');
 const ligasPy = readFileSync('apps/android/ligas.py', 'utf8');
 rev(ligasPy.includes('android:host="quell.suite101.app" android:pathPrefix="/app/entrar"') && ligasPy.includes('android:host="quell101.taller101.com" android:pathPrefix="/app/entrar"'),
   'el manifiesto reclama la vuelta en el dominio nuevo y en el de antes (apps ya instaladas)');

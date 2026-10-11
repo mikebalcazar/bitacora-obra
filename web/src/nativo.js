@@ -16,7 +16,12 @@ export const plugin = (nombre) => cap()?.Plugins?.[nombre] || null;
  * dirección. Android se la entrega a la app —no al navegador— porque el
  * dominio la reconoce como suya (`/.well-known/assetlinks.json`, con la huella
  * de la llave fija) y el manifiesto la reclama (`apps/android/ligas.py`). */
-export const VUELTA_GOOGLE = 'https://quell.suite101.app/app/entrar';
+/* 11-oct-2026 · se queda en la dirección de antes aunque la suite se mudó a
+ * suite101.app: la pantalla la cargan también las apps de Android ya
+ * instaladas, y ésas sólo reclaman quell101.taller101.com (el Worker la sigue
+ * contestando ahí, sin rebote). Se pasa a quell.suite101.app cuando la app de
+ * Android que reclama las dos ya esté en todos los teléfonos. */
+export const VUELTA_GOOGLE = 'https://quell101.taller101.com/app/entrar';
 
 /** Cuando Android abre la app con la vuelta de Google: se cierra la pestaña y
  *  se recarga la pantalla con el boleto, que es lo que ya sabe canjear
