@@ -4,8 +4,14 @@ const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<'
 
 // Recorte del plano alrededor del ítem → dataURL (canvas)
 const imgCache = {};
+// 13-oct-2026 · el plano se baja por fetch y blob, no con <img> directo: en
+// la app de Android (otro origen) un <img> sin CORS ensucia el lienzo y el
+// recorte salía vacío.
 function loadImg(src) {
-  if (!imgCache[src]) imgCache[src] = new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+  if (!imgCache[src]) imgCache[src] = fetch(src, { credentials: 'same-origin' })
+    .then((r) => { if (!r.ok) throw new Error(`plano ${r.status}`); return r.blob(); })
+    .then((b) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(b); }))
+    .catch((e) => { delete imgCache[src]; throw e; });
   return imgCache[src];
 }
 async function crop(planKey, pw, ph, x, y, code) {

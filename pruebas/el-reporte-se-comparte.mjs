@@ -25,7 +25,8 @@ const pdfJs = readFileSync('web/src/reportePdf.js', 'utf8');
 const comp = readFileSync('web/src/compartir.js', 'utf8');
 const apps = readFileSync('.github/workflows/apps.yml', 'utf8');
 const webPkg = JSON.parse(readFileSync('web/package.json', 'utf8'));
-const { cortes, nombreDelReporte, ANCHO_PX } = await import('../web/src/reportePdf.js');
+const { cortes, nombreDelReporte, ANCHO_PX, medidaReducida, LADO_MAX_PX } = await import('../web/src/reportePdf.js');
+const repJs = readFileSync('web/src/report.js', 'utf8');
 
 console.log('· el PDF');
 rev(ANCHO_PX === 794, 'se dibuja a lo ancho de una A4 (794 px), no del teléfono');
@@ -36,6 +37,18 @@ rev(nombreDelReporte('Reporte de punchlist', 'Sanje', new Date(2026, 9, 9)) === 
 rev(nombreDelReporte('Reporte', 'Obra/Lomas: "A"', new Date(2026, 9, 9)) === 'Reporte - Obra Lomas A - 2026-10-09.pdf', 'sin lo que un teléfono no acepta en un nombre');
 rev(/useCORS: true/.test(pdfJs) && /scale: 2/.test(pdfJs), 'las fotos entran y la letra chica se lee (al doble)');
 rev(/import\('jspdf'\)/.test(pdfJs) && /import\('html2canvas-pro'\)/.test(pdfJs) && webPkg.dependencies.jspdf && webPkg.dependencies['html2canvas-pro'], 'las librerías se bajan sólo al abrir un reporte');
+
+/* 13-oct-2026 · Mike: «los reportes de punchlist de quell no están saliendo
+ * con las imágenes en el pdf. Salen vacíos los recuadros». Y cada hoja
+ * dejaba detrás otra en blanco con sólo el pie (32 hojas para 16). El
+ * recorrido en Chromium (como Pixel 7, CPU 6× lenta) quedó en el PR. */
+console.log('· las fotos y las hojas (13-oct)');
+rev(/await incrustarImagenes\(caja\);\s*const hojas/.test(pdfJs), 'antes de dibujar, cada foto se baja UNA vez y entra ya dibujada (como el plano)');
+rev(/fetch\(src, \{ credentials: 'same-origin' \}\)/.test(pdfJs) && /URL\.createObjectURL\(blob\)/.test(pdfJs), 'por fetch y blob: no ensucia el lienzo ni en la app de Android');
+rev(LADO_MAX_PX === 1400 && JSON.stringify(medidaReducida(4032, 3024)) === '{"w":1400,"h":1050}', 'una foto de 12 MP se reduce a 1400 px por lado (se ve igual en la A4, pesa mucho menos)', JSON.stringify(medidaReducida(4032, 3024)));
+rev(JSON.stringify(medidaReducida(800, 600)) === '{"w":800,"h":600}', 'una foto chica no se agranda');
+rev(/h\.style\.boxSizing = 'border-box';/.test(pdfJs) && /h\.style\.minHeight = `\$\{Math\.round\(ANCHO_PX \* A4\.h \/ A4\.w\)\}px`;/.test(pdfJs), 'cada hoja mide una A4 con su margen: ya no sale una hoja en blanco detrás');
+rev(/fetch\(src, \{ credentials: 'same-origin' \}\)/.test(repJs) && /URL\.createObjectURL\(b\)/.test(repJs), 'el recorte del plano también se baja por fetch y blob');
 
 console.log('· la pantalla del reporte');
 rev(/armarPdf\(html, REPORT_CSS,/.test(proj) && /useEffect\(\(\) => \{\s*let vivo = true;/.test(proj), 'el PDF se arma al abrir, no al picar (el iPhone sólo comparte en el mismo toque)');

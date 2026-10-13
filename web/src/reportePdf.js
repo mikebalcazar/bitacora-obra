@@ -37,6 +37,54 @@ export function nombreDelReporte(titulo, proyecto, cuando = new Date()) {
   return [limpio(titulo) || 'Reporte', limpio(proyecto), dia].filter(Boolean).join(' - ') + '.pdf';
 }
 
+/* 13-oct-2026 · Mike: «los reportes de punchlist de quell no están saliendo
+ * con las imágenes en el pdf. Salen vacíos los recuadros». Las fotos entraban
+ * al PDF como liga a su archivo de 12 MP: html2canvas tiene que bajarlas y
+ * decodificarlas otra vez por cada hoja, con 15 s por imagen, y en el
+ * teléfono no le alcanza (y en la app, de otro origen, puede ni dejarlo). El
+ * recorte del plano sí salía porque ya iba dibujado. Ahora cada foto se baja
+ * UNA vez, se reduce a lo que se ve en una A4 y entra ya dibujada. */
+export const LADO_MAX_PX = 1400;
+
+/** Las medidas para que una foto quepa en `max` px por su lado mayor. */
+export function medidaReducida(w, h, max = LADO_MAX_PX) {
+  const k = Math.min(1, max / Math.max(w || 1, h || 1));
+  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+}
+
+/** Baja una imagen (con la sesión, como cualquier archivo de quell) y la
+ *  devuelve dibujada y reducida, como data URL JPEG. Por fetch y blob, no por
+ *  <img crossOrigin>: así no «ensucia» el lienzo ni en la app de Android. */
+export async function imagenIncrustada(src, max = LADO_MAX_PX) {
+  const r = await fetch(src, { credentials: 'same-origin' });
+  if (!r.ok) throw new Error(`foto ${r.status}`);
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const { w, h } = medidaReducida(img.naturalWidth, img.naturalHeight, max);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+    g.drawImage(img, 0, 0, w, h);
+    return c.toDataURL('image/jpeg', 0.85);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Cambia cada <img> de `raiz` que todavía es liga por su versión dibujada.
+ *  De tres en tres; la que no se pueda bajar se queda como estaba. */
+async function incrustarImagenes(raiz) {
+  const pendientes = [...raiz.querySelectorAll('img')].filter((i) => i.getAttribute('src') && !i.getAttribute('src').startsWith('data:'));
+  const una = async (i) => {
+    try { i.src = await imagenIncrustada(i.src); await i.decode(); } catch { /* se queda la liga */ }
+  };
+  for (let k = 0; k < pendientes.length; k += 3) await Promise.all(pendientes.slice(k, k + 3).map(una));
+}
+
 /** Arma el PDF del HTML del reporte. Devuelve un `Blob` application/pdf. */
 export async function armarPdf(html, css, { onAvance } = {}) {
   const [{ jsPDF }, { default: html2canvas }] = await Promise.all([import('jspdf'), import('html2canvas-pro')]);
@@ -49,6 +97,7 @@ export async function armarPdf(html, css, { onAvance } = {}) {
   document.body.appendChild(caja);
   try {
     if (document.fonts?.ready) await document.fonts.ready;
+    await incrustarImagenes(caja);
     const hojas = [...caja.querySelectorAll('.page')];
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
     let primera = true;
@@ -56,6 +105,11 @@ export async function armarPdf(html, css, { onAvance } = {}) {
       const h = hojas[i];
       h.style.margin = '0';
       h.style.boxShadow = 'none';
+      /* La hoja mide una A4 CON su margen: el `min-height: 297mm` más el
+       * relleno la pasaba de la A4 y cada hoja dejaba detrás otra en blanco
+       * con sólo el pie (el reporte de Sanje: 32 hojas para 16). */
+      h.style.boxSizing = 'border-box';
+      h.style.minHeight = `${Math.round(ANCHO_PX * A4.h / A4.w)}px`;
       const lienzo = await html2canvas(h, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: ANCHO_PX });
       for (const [y0, y1] of cortes(lienzo.height, lienzo.width)) {
         const franja = document.createElement('canvas');
