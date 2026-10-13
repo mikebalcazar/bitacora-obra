@@ -902,6 +902,8 @@ function ReportView({ html, title, proyecto, onClose }) {
           {fallo ? 'PDF no disponible' : !pdf ? `Armando PDF…${avance ? ' ' + avance : ''}` : mandando ? 'Abriendo…' : pdf.hoja ? 'Compartir PDF' : 'Descargar PDF'}
         </button>
       </div>
+      {/* 13-oct-2026 · el porqué, a la vista: en el teléfono no hay «title». */}
+      {fallo && <div className="aviso-pdf" data-pdf-fallo>No se pudo armar el PDF ({fallo}). Usa «Imprimir» → «Guardar como PDF», o sácalo desde la computadora.</div>}
       <div className="sheet" dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );

@@ -25,7 +25,7 @@ const pdfJs = readFileSync('web/src/reportePdf.js', 'utf8');
 const comp = readFileSync('web/src/compartir.js', 'utf8');
 const apps = readFileSync('.github/workflows/apps.yml', 'utf8');
 const webPkg = JSON.parse(readFileSync('web/package.json', 'utf8'));
-const { cortes, nombreDelReporte, ANCHO_PX, medidaReducida, LADO_MAX_PX } = await import('../web/src/reportePdf.js');
+const { cortes, nombreDelReporte, ANCHO_PX, medidaReducida, LADO_MAX_PX, escalaPara, TOPE_PX } = await import('../web/src/reportePdf.js');
 const repJs = readFileSync('web/src/report.js', 'utf8');
 
 console.log('· el PDF');
@@ -35,7 +35,7 @@ rev(JSON.stringify(cortes(2280, 1588)) === '[[0,2280]]', 'si sobra muy poco (≤
 rev(cortes(5000, 1588).length === 3 && cortes(5000, 1588).at(-1)[1] === 5000, 'una hoja larga (muchas fotos) se parte en varias A4', JSON.stringify(cortes(5000, 1588)));
 rev(nombreDelReporte('Reporte de punchlist', 'Sanje', new Date(2026, 9, 9)) === 'Reporte de punchlist - Sanje - 2026-10-09.pdf', 'el nombre: reporte, obra y fecha', nombreDelReporte('Reporte de punchlist', 'Sanje', new Date(2026, 9, 9)));
 rev(nombreDelReporte('Reporte', 'Obra/Lomas: "A"', new Date(2026, 9, 9)) === 'Reporte - Obra Lomas A - 2026-10-09.pdf', 'sin lo que un teléfono no acepta en un nombre');
-rev(/useCORS: true/.test(pdfJs) && /scale: 2/.test(pdfJs), 'las fotos entran y la letra chica se lee (al doble)');
+rev(/useCORS: true/.test(pdfJs) && /scale: escala/.test(pdfJs) && escalaPara(794, 1123) === 2, 'las fotos entran y la letra chica se lee (al doble, si cabe en el teléfono)');
 rev(/import\('jspdf'\)/.test(pdfJs) && /import\('html2canvas-pro'\)/.test(pdfJs) && webPkg.dependencies.jspdf && webPkg.dependencies['html2canvas-pro'], 'las librerías se bajan sólo al abrir un reporte');
 
 /* 13-oct-2026 · Mike: «los reportes de punchlist de quell no están saliendo
@@ -49,6 +49,18 @@ rev(LADO_MAX_PX === 1400 && JSON.stringify(medidaReducida(4032, 3024)) === '{"w"
 rev(JSON.stringify(medidaReducida(800, 600)) === '{"w":800,"h":600}', 'una foto chica no se agranda');
 rev(/h\.style\.boxSizing = 'border-box';/.test(pdfJs) && /h\.style\.minHeight = `\$\{Math\.round\(ANCHO_PX \* A4\.h \/ A4\.w\)\}px`;/.test(pdfJs), 'cada hoja mide una A4 con su margen: ya no sale una hoja en blanco detrás');
 rev(/fetch\(src, \{ credentials: 'same-origin' \}\)/.test(repJs) && /URL\.createObjectURL\(b\)/.test(repJs), 'el recorte del plano también se baja por fetch y blob');
+
+/* 13-oct-2026 · Mike (Android, HOLCIM, 27 pendientes): «no genera el pdf»
+ * («PDF no disponible»). Un teléfono no deja usar un lienzo muy grande y se
+ * perdía el PDF entero. Medido en Chromium con un tope de lienzo simulado
+ * (3 MP): el PDF sale completo, las hojas que no cabían, más chicas. */
+console.log('· el PDF en un teléfono (13-oct)');
+rev(TOPE_PX === 8e6 && escalaPara(794, 1123) === 2, 'una hoja A4 normal se dibuja al doble, como antes', String(escalaPara(794, 1123)));
+rev(escalaPara(794, 4000) < 2 && 794 * 4000 * escalaPara(794, 4000) ** 2 <= TOPE_PX * 1.0001, 'una hoja larga (muchas fotos) se dibuja a la escala que cabe en el tope', escalaPara(794, 4000).toFixed(2));
+rev(/ignoreElements: \(el\) => el\.classList\?\.contains\('report'\)/.test(pdfJs), 'la copia de cada hoja ya no lleva el reporte en pantalla con todas sus fotos');
+rev(/for \(const escala of \[base, base \/ 2\]\)/.test(pdfJs) && /if \(!datosSirven\(datos\)\) throw/.test(pdfJs), 'si una hoja no se puede dibujar se reintenta más chica (y un lienzo vacío no pasa)');
+rev(/no se pudo dibujar en este teléfono/.test(pdfJs), 'y si tampoco, entra una hoja que lo dice: el PDF sale con lo demás');
+rev(/fallo && <div className="aviso-pdf" data-pdf-fallo>/.test(proj), 'si aun así no sale, la pantalla dice por qué (en el teléfono no hay «title»)');
 
 console.log('· la pantalla del reporte');
 rev(/armarPdf\(html, REPORT_CSS,/.test(proj) && /useEffect\(\(\) => \{\s*let vivo = true;/.test(proj), 'el PDF se arma al abrir, no al picar (el iPhone sólo comparte en el mismo toque)');
