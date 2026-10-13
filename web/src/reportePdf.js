@@ -85,6 +85,30 @@ async function incrustarImagenes(raiz) {
   for (let k = 0; k < pendientes.length; k += 3) await Promise.all(pendientes.slice(k, k + 3).map(una));
 }
 
+/* 13-oct-2026 · Mike (Android, HOLCIM, 27 pendientes): «no genera el pdf»,
+ * el botón decía «PDF no disponible». Un teléfono no deja usar un lienzo
+ * muy grande: una hoja con muchas fotos, dibujada al doble, pasa de los
+ * 10 millones de puntos y el lienzo sale vacío; jsPDF truena con eso y se
+ * perdía el PDF entero. Ahora:
+ *   · cada hoja se dibuja a la escala que quepa en TOPE_PX (al doble si cabe);
+ *   · la copia que hace html2canvas por hoja ya no lleva el reporte en
+ *     pantalla (con todas sus fotos), sólo la hoja;
+ *   · si una hoja no se puede dibujar, se reintenta más chica, y si tampoco,
+ *     entra una hoja que lo dice: el PDF sale con todo lo demás. */
+export const TOPE_PX = 8e6;
+
+/** La escala para dibujar una hoja de `ancho`×`alto` px: al doble si cabe
+ *  en `tope` puntos; si no, la que quepa (nunca más del doble). */
+export function escalaPara(ancho, alto, tope = TOPE_PX) {
+  const area = Math.max(1, ancho) * Math.max(1, alto);
+  return Math.min(2, Math.sqrt(tope / area));
+}
+
+/** ¿Este lienzo sirve? Uno que el teléfono no pudo crear sale de 0×0, o su
+ *  imagen sale vacía («data:,»). */
+const lienzoSirve = (c) => !!c && c.width > 0 && c.height > 0;
+const datosSirven = (d) => typeof d === 'string' && d.length > 'data:image/jpeg;base64,'.length && d.startsWith('data:image/');
+
 /** Arma el PDF del HTML del reporte. Devuelve un `Blob` application/pdf. */
 export async function armarPdf(html, css, { onAvance } = {}) {
   const [{ jsPDF }, { default: html2canvas }] = await Promise.all([import('jspdf'), import('html2canvas-pro')]);
@@ -110,19 +134,45 @@ export async function armarPdf(html, css, { onAvance } = {}) {
        * con sólo el pie (el reporte de Sanje: 32 hojas para 16). */
       h.style.boxSizing = 'border-box';
       h.style.minHeight = `${Math.round(ANCHO_PX * A4.h / A4.w)}px`;
-      const lienzo = await html2canvas(h, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: ANCHO_PX });
-      for (const [y0, y1] of cortes(lienzo.height, lienzo.width)) {
-        const franja = document.createElement('canvas');
-        franja.width = lienzo.width; franja.height = y1 - y0;
-        const g = franja.getContext('2d');
-        g.fillStyle = '#fff'; g.fillRect(0, 0, franja.width, franja.height);
-        g.drawImage(lienzo, 0, y0, lienzo.width, y1 - y0, 0, 0, lienzo.width, y1 - y0);
+      // Sólo la hoja: el reporte en pantalla (con todas sus fotos) no se copia.
+      const opciones = { useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: ANCHO_PX, ignoreElements: (el) => el.classList?.contains('report') };
+      const base = escalaPara(h.offsetWidth || ANCHO_PX, h.offsetHeight || ANCHO_PX * A4.h / A4.w);
+      let paginas = null;
+      for (const escala of [base, base / 2]) {
+        try {
+          const lienzo = await html2canvas(h, { ...opciones, scale: escala });
+          if (!lienzoSirve(lienzo)) continue;
+          const franjas = [];
+          for (const [y0, y1] of cortes(lienzo.height, lienzo.width)) {
+            const franja = document.createElement('canvas');
+            franja.width = lienzo.width; franja.height = y1 - y0;
+            const g = franja.getContext('2d');
+            if (!g) throw new Error('sin lienzo');
+            g.fillStyle = '#fff'; g.fillRect(0, 0, franja.width, franja.height);
+            g.drawImage(lienzo, 0, y0, lienzo.width, y1 - y0, 0, 0, lienzo.width, y1 - y0);
+            const datos = franja.toDataURL('image/jpeg', 0.8);
+            if (!datosSirven(datos)) throw new Error('lienzo vacío');
+            // Lo que sobró poquito (≤2 %) se encoge parejo para no deformarlo.
+            franjas.push({ datos, alto: (y1 - y0) * A4.w / lienzo.width });
+            franja.width = franja.height = 0; // se suelta la memoria ya
+          }
+          lienzo.width = lienzo.height = 0;
+          paginas = franjas;
+          break;
+        } catch { /* se intenta más chica */ }
+      }
+      if (!paginas) {
         if (!primera) pdf.addPage();
         primera = false;
-        // Lo que sobró poquito (≤2 %) se encoge parejo para no deformarlo.
-        const alto = (y1 - y0) * A4.w / lienzo.width;
-        const k = alto > A4.h ? A4.h / alto : 1;
-        pdf.addImage(franja.toDataURL('image/jpeg', 0.8), 'JPEG', (A4.w - A4.w * k) / 2, 0, A4.w * k, alto * k, undefined, 'FAST');
+        pdf.setFontSize(12);
+        pdf.text([`Hoja ${i + 1} de ${hojas.length}: no se pudo dibujar en este teléfono.`, 'Sácala desde la computadora, o con «Imprimir» → «Guardar como PDF».'], 20, 30);
+      } else {
+        for (const { datos, alto } of paginas) {
+          if (!primera) pdf.addPage();
+          primera = false;
+          const k = alto > A4.h ? A4.h / alto : 1;
+          pdf.addImage(datos, 'JPEG', (A4.w - A4.w * k) / 2, 0, A4.w * k, alto * k, undefined, 'FAST');
+        }
       }
       onAvance?.(i + 1, hojas.length);
     }
