@@ -22,6 +22,13 @@ let fallas = 0, revisadas = 0, galleta = '';
 const linea = (t) => console.log(t);
 const rev = (ok, texto, extra = '') => { revisadas++; if (!ok) fallas++; linea(`  ${ok ? 'ok   ' : 'FALLA'} ${texto}${extra ? '  →  ' + extra : ''}`); };
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+// El contrato se compara número por número: como texto, «0.102.0» quedaba
+// antes que «0.16.0» y el humo se cayó en cuanto la API pasó de 0.99 (16-oct-2026).
+const alMenos = (v, min) => {
+  const a = String(v || '').split('.').map(Number), b = min.split('.').map(Number);
+  for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0); }
+  return true;
+};
 
 async function pedir(ruta, { method = 'GET', body, form } = {}) {
   const h = {};
@@ -44,7 +51,7 @@ async function humo() {
   rev(portada.estado === 200, 'la portada contesta', `${portada.estado} en ${portada.ms} ms`);
   const salud = await pedir('/s101/salud');
   rev(salud.estado === 200 && salud.data?.entorno === 'staging', 'el enlace de servicio llega a la API de staging', `${salud.estado} · contrato ${salud.data?.contrato}`);
-  rev(salud.data?.contrato >= '0.16.0', 'y la API ya trae a quell101 adentro (contrato 0.16.0 o más)', String(salud.data?.contrato));
+  rev(alMenos(salud.data?.contrato, '0.16.0'), 'y la API ya trae a quell101 adentro (contrato 0.16.0 o más)', String(salud.data?.contrato));
 
   // Entrar como el dueño de la suite: en staging el código viene en la respuesta.
   const cod = await pedir('/s101/auth/codigo', { method: 'POST', body: { correo: CORREO } });

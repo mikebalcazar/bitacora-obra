@@ -34,6 +34,13 @@ const API = process.env.API || 'https://suite101-api.mike-929.workers.dev';
 let fallas = 0, revisadas = 0;
 const linea = (t) => console.log(t);
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+// El contrato se compara número por número: como texto, «0.102.0» quedaba
+// antes que «0.16.0» y el humo se cayó en cuanto la API pasó de 0.99 (16-oct-2026).
+const alMenos = (v, min) => {
+  const a = String(v || '').split('.').map(Number), b = min.split('.').map(Number);
+  for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0); }
+  return true;
+};
 function rev(ok, texto, extra = '') {
   revisadas++; if (!ok) fallas++;
   linea(`  ${ok ? 'ok   ' : 'FALLA'} ${texto}${extra ? '  →  ' + extra : ''}`);
@@ -142,7 +149,7 @@ async function medir() {
   const salud101 = await traer('/api/salud');
   rev(salud101.estado === 200 && salud101.cuerpo?.app === 'quell101', 'el Worker se nombra quell101', String(salud101.cuerpo?.app));
   rev(salud101.cuerpo?.datos === 'suite', 'y dice que sus datos viven en la suite (desde el 19-sep no hay base propia)', String(salud101.cuerpo?.datos));
-  rev(salud.cuerpo?.contrato >= '0.16.0', 'la API de producción ya trae a quell101 adentro (contrato 0.16.0 o más)', String(salud.cuerpo?.contrato));
+  rev(alMenos(salud.cuerpo?.contrato, '0.16.0'), 'la API de producción ya trae a quell101 adentro (contrato 0.16.0 o más)', String(salud.cuerpo?.contrato));
 
   // Levantar un ítem sigue pidiendo sesión; la cerradura del código vive
   // ahora en la base por empresa de la suite (migración 0006).
