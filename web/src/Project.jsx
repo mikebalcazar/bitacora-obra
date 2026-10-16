@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { api, leer, escribir, hayRed, fileUrl, FASES, ALCANCES, TIPOS, colorTipo, aguado, enRevision, fmtD, isLate, rasterizePlan, avance, veTodoEn, esCliente } from './api.js';
+import { api, leer, escribir, hayRed, alCambiarRed, fileUrl, FASES, ALCANCES, TIPOS, colorTipo, aguado, enRevision, fmtD, isLate, rasterizePlan, avance, veTodoEn, esCliente } from './api.js';
 import { HONDURA, irA, sellar, useEncima } from './navegar.js';
 import Dudas from './Dudas.jsx';
 import Cronograma from './Cronograma.jsx';
@@ -126,6 +126,8 @@ export default function Project({ id, sub }) {
     } catch (e) { toast(e.message); go('/'); }
   }, [id]);
   useEffect(() => { load(); leer('/projects').then((r) => setProjects(r.projects)).catch(() => {}); }, [load]);
+  // Y la obra también: los pines y la cuenta de pendientes, con lo que subió.
+  useEffect(() => alCambiarRed((n) => { if (n.subidas > 0) load(); }), [load]);
 
   /* Se pide aparte y con `catch` mudo a propósito: una obra sin proyecto
    * ligado en dash101 contesta 409 `sin_liga`, y eso no es un error que

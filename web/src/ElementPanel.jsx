@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, leer, escribir, fileUrl, FASES, ALCANCES, MOVIMIENTOS_ALCANCE, TIPOS, enRevision, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
+import { api, leer, escribir, alCambiarRed, fileUrl, FASES, ALCANCES, MOVIMIENTOS_ALCANCE, TIPOS, enRevision, fmtD, fmtT, fmtDay, isLate, ini, ST, ROLES, compressImage, todayISO } from './api.js';
 import { useApp } from './App.jsx';
 import { Photos, usePending, PhotoInput, PendingStrip, usePegarYSoltar, Lightbox } from './Fotos.jsx';
 import { Duda } from './Dudas.jsx';
@@ -22,6 +22,10 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
 
   const load = () => elementId && leer(`/elements/${elementId}`).then(setD).catch((e) => toast(e.message));
   useEffect(() => { setD(null); setProc(false); load(); }, [elementId]);
+  // Lo que se registró sin señal se pinta con «Por subir», un parche local. En
+  // cuanto la fila sube se vuelve a leer el ítem: si no, el letrero se quedaba
+  // hasta salir y volver a entrar (video de Forespot, 16-oct-2026).
+  useEffect(() => alCambiarRed((n) => { if (n.subidas > 0) load(); }), [elementId]);
   useEffect(() => { if (flash) setTab('punch'); }, [flash]);
   useEffect(() => { if (flash && d) setTimeout(() => document.querySelector(`[data-k="${flash}"]`)?.scrollIntoView({ block: 'center' }), 50); }, [flash, d]);
 
