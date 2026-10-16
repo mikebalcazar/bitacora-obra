@@ -119,15 +119,16 @@ export default function Project({ id, sub }) {
   useEffect(() => { const f = (e) => setRepView(e.detail); window.addEventListener('bo:report', f); return () => window.removeEventListener('bo:report', f); }, []);
 
   const load = useCallback(async () => {
-    try {
-      const r = await leer(`/projects/${id}`);
+    // Lo guardado sale al instante y lo del servidor llega después (16-oct-2026).
+    const pon = (r) => {
       setData(r);
       setPlanId((p) => (p && r.plans.some((x) => x.id === p) ? p : r.plans[0]?.id || null));
-    } catch (e) { toast(e.message); go('/'); }
+    };
+    try { pon(await leer(`/projects/${id}`, { alRefrescar: pon })); } catch (e) { toast(e.message); go('/'); }
   }, [id]);
   useEffect(() => { load(); leer('/projects').then((r) => setProjects(r.projects)).catch(() => {}); }, [load]);
   // Y la obra también: los pines y la cuenta de pendientes, con lo que subió.
-  useEffect(() => alCambiarRed((n) => { if (n.subidas > 0) load(); }), [load]);
+  useEffect(() => alCambiarRed((n) => { if (n.subidas > 0 || n.rechazadas > 0) load(); }), [load]);
 
   /* Se pide aparte y con `catch` mudo a propósito: una obra sin proyecto
    * ligado en dash101 contesta 409 `sin_liga`, y eso no es un error que
@@ -249,7 +250,7 @@ export default function Project({ id, sub }) {
       parche: { clave: `/projects/${id}`, fn: (d) => { d.elements = (d.elements || []).map((e) => (e.id === eid ? { ...e, x, y } : e)); return d; } },
     }).catch((e) => { toast(e.message); return null; });
     if (!r) return;
-    toast(r.subido ? `${code || 'Ítem'} reubicado.` : `${code || 'Ítem'} reubicado; sube en cuanto haya señal.`);
+    toast(r.sinSenal ? `${code || 'Ítem'} reubicado; sube en cuanto haya señal.` : `${code || 'Ítem'} reubicado.`);
     await load();
   }
   async function createElement(f) {
@@ -258,13 +259,15 @@ export default function Project({ id, sub }) {
     const r = await escribir({
       ruta: `/plans/${planDelPunto}/elements`,
       cuerpo: punto,
+      // El código (MW-01…) lo propone el servidor: con señal se espera.
+      esperar: true,
       // Sin señal el pin aparece igual, con sus ceros: para quien lo clavó ya
       // está puesto, y pedírselo otra vez mañana es la manera de que no lo haga.
       parche: {
         clave: `/projects/${id}`,
-        fn: (d) => {
+        fn: (d, op) => {
           d.elements = [...(d.elements || []), {
-            ...punto, id: 'local-' + Date.now(), plan_id: planDelPunto,
+            ...punto, id: op.id, plan_id: planDelPunto,
             n_pend: 0, n_proc: 0, n_total: 0, n_log: 0, created_at: new Date().toISOString(), __pendiente: true,
           }];
           return d;

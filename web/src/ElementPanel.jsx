@@ -6,6 +6,15 @@ import { Duda } from './Dudas.jsx';
 import Docs, { idOp, cuentaPaginas } from './DocsItem.jsx';
 import { planoDe, nombreDePlanoPegado } from './pegar.js';
 
+// Las fotos de algo que todavía no sube: se pintan desde el archivo mismo, que
+// la fila guarda en el teléfono (Photos sabe pintar `blob`).
+const fotosLocales = (op) => (op.archivos || []).map((f, i) => ({ id: `${op.id}-${i}`, blob: f, file_name: f.name || 'foto.jpg', __pendiente: true }));
+function quitaFoto(d, id) {
+  const sin = (xs) => (xs || []).map((x) => ({ ...x, photos: (x.photos || []).filter((p) => p.id !== id) }));
+  d.punch = sin(d.punch); d.log = sin(d.log);
+  return d;
+}
+
 // staff = puede escribir. veTodo = puede ver la obra completa. No son lo mismo:
 // el trabajador ve todo y no escribe nada, y el contratista ni ve todo ni
 // escribe, salvo la evidencia de lo que le tocó.
@@ -20,12 +29,21 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
   const [lb, setLb] = useState(null);
   const [edit, setEdit] = useState(false);
 
-  const load = () => elementId && leer(`/elements/${elementId}`).then(setD).catch((e) => toast(e.message));
+  // Lo guardado en el teléfono sale al instante y lo del servidor llega después
+  // (quell instantáneo, 16-oct-2026). `vigente` evita que la respuesta tardía
+  // de un ítem pinte encima de otro que se abrió después.
+  const vigente = useRef(elementId);
+  vigente.current = elementId;
+  const load = () => {
+    const id = elementId;
+    if (!id) return;
+    const pon = (x) => { if (vigente.current === id) setD(x); };
+    return leer(`/elements/${id}`, { alRefrescar: pon }).then(pon).catch((e) => toast(e.message));
+  };
   useEffect(() => { setD(null); setProc(false); load(); }, [elementId]);
-  // Lo que se registró sin señal se pinta con «Por subir», un parche local. En
-  // cuanto la fila sube se vuelve a leer el ítem: si no, el letrero se quedaba
-  // hasta salir y volver a entrar (video de Forespot, 16-oct-2026).
-  useEffect(() => alCambiarRed((n) => { if (n.subidas > 0) load(); }), [elementId]);
+  // Lo que se registró se pinta con «Por subir», un parche local. En cuanto la
+  // fila sube (o el servidor rechaza algo) se vuelve a leer el ítem.
+  useEffect(() => alCambiarRed((n) => { if (n.subidas > 0 || n.rechazadas > 0) load(); }), [elementId]);
   useEffect(() => { if (flash) setTab('punch'); }, [flash]);
   useEffect(() => { if (flash && d) setTimeout(() => document.querySelector(`[data-k="${flash}"]`)?.scrollIntoView({ block: 'center' }), 50); }, [flash, d]);
 
@@ -68,7 +86,10 @@ export default function ElementPanel({ elementId, flash, plan, staff, veTodo = s
       ? `¿Dar por entregado ${e.code || e.name}? A partir de ahí se le levantan pendientes.`
       : `¿Regresar ${e.code || e.name} a producción? Los pendientes que ya tiene no se borran: vuelven a la vista cuando se entregue otra vez.`;
     if (!confirm(aviso)) return;
-    await escribir({ ruta: `/elements/${e.id}/fase`, cuerpo: { fase: a } }).catch((x) => toast(x.message));
+    await escribir({
+      ruta: `/elements/${e.id}/fase`, cuerpo: { fase: a },
+      parche: { clave: `/elements/${e.id}`, fn: (d) => { d.element = { ...d.element, fase: a, entregado_en: yendo ? new Date().toISOString() : null }; return d; } },
+    }).catch((x) => toast(x.message));
     changed();
   }
 
@@ -217,9 +238,9 @@ function ItemCliente({ d, plan, user, onClose, onChanged }) {
     if (!t && !pending.length) return;
     setBusy(true);
     try {
-      const r = await escribir({ ruta: `/projects/${pid}/dudas`, campos: { texto: t, element_id: e.id }, archivos: pending.map((p) => p.file) });
+      const r = await escribir({ ruta: `/projects/${pid}/dudas`, campos: { texto: t, element_id: e.id }, archivos: pending.map((p) => p.file), esperar: true });
       setTexto(''); clear();
-      if (!r.subido) toast('Sin señal: tu pregunta se manda sola cuando vuelva.');
+      if (r.sinSenal) toast('Sin señal: tu pregunta se manda sola cuando vuelva.');
       onChanged();
     } catch (x) { toast(x.message); } finally { setBusy(false); }
   }
@@ -285,7 +306,7 @@ function Contratistas({ e, contratistas, members, onChanged }) {
     setBusy(true);
     // `escribir` envuelve la respuesta de la API en `.r` cuando subió; sin
     // señal se encola y no hay respuesta que leer (el aviso sale al recargar).
-    const hecho = await escribir({ metodo: 'PUT', ruta: `/elements/${e.id}/contratistas`, cuerpo: { user_ids: ids } }).catch((x) => { toast(x.message); return null; });
+    const hecho = await escribir({ metodo: 'PUT', ruta: `/elements/${e.id}/contratistas`, cuerpo: { user_ids: ids }, esperar: true }).catch((x) => { toast(x.message); return null; });
     const r = hecho && hecho.subido ? hecho.r : null;
     if (r && r.entraron_a_la_obra && r.entraron_a_la_obra.length) {
       const quien = r.entraron_a_la_obra.map((x) => x.name).join(', ');
@@ -344,9 +365,9 @@ function Log({ e, log, onChanged, setLb, user, staff }) {   // staff: quien no e
         archivos: pending.map((p) => p.file),
         parche: {
           clave: `/elements/${e.id}`,
-          fn: (d) => {
+          fn: (d, op) => {
             d.log = [...(d.log || []), {
-              id: 'local-' + Date.now(), text: txt.trim(), photos: [],
+              id: op.id, text: txt.trim(), photos: fotosLocales(op),
               user_name: user.name, user_role: user.role, user_id: user.id,
               created_at: new Date().toISOString(), __pendiente: true,
             }];
@@ -355,10 +376,14 @@ function Log({ e, log, onChanged, setLb, user, staff }) {   // staff: quien no e
         },
       });
       setTxt(''); clear(); onChanged();
-      if (!r.subido) toast('Sin señal: se sube solo cuando vuelva.');
+      if (r.sinSenal) toast('Sin señal: se sube solo cuando vuelva.');
     } catch (x) { toast(x.message); } finally { setBusy(false); }
   }
-  async function delPhoto(p) { if (!confirm('¿Quitar esta foto?')) return; await api.del(`/photos/${p.id}`).catch((x) => toast(x.message)); onChanged(); }
+  async function delPhoto(p) {
+    if (!confirm('¿Quitar esta foto?')) return;
+    await escribir({ metodo: 'DELETE', ruta: `/photos/${p.id}`, parche: { clave: `/elements/${e.id}`, fn: (d) => quitaFoto(d, p.id) } }).catch((x) => toast(x.message));
+    onChanged();
+  }
 
   let lastDay = null;
   return (
@@ -513,26 +538,40 @@ function Punch({ e, punch, flash, onChanged, setLb, user, staff, veTodo = staff,
         archivos: pending.map((p) => p.file),
         parche: {
           clave: `/elements/${e.id}`,
-          fn: (d) => {
+          fn: (d, op) => {
+            const quien = contratistas.find((c) => c.id === f.assignee_id);
             d.punch = [...(d.punch || []), {
-              id: 'local-' + Date.now(), title: f.title.trim(), status: 'pend', resp: f.resp,
-              due_date: f.due_date, photos: [], created_at: new Date().toISOString(), __pendiente: true,
+              id: op.id, title: f.title.trim(), status: 'pend', resp: f.resp,
+              ...(quien ? { assignee_id: quien.id, assignee_name: quien.name, assignee_company: quien.company } : {}),
+              due_date: f.due_date, photos: fotosLocales(op), created_at: new Date().toISOString(), __pendiente: true,
             }];
             return d;
           },
         },
       });
       setF({ ...f, title: '' }); clear(); setAdding(false); onChanged();
-      if (!r.subido) toast('Sin señal: el pendiente se sube solo cuando vuelva.');
+      if (r.sinSenal) toast('Sin señal: el pendiente se sube solo cuando vuelva.');
     } catch (x) { toast(x.message); } finally { setBusy(false); }
   }
   async function addPhotos(k, files) {
-    const fd = new FormData();
-    for (const file of files) fd.append('photos', await compressImage(file));
-    await api.form(`/punch/${k.id}/photos`, fd).catch((x) => toast(x.message)); onChanged();
+    const archivos = [];
+    for (const file of files) archivos.push(await compressImage(file));
+    await escribir({
+      ruta: `/punch/${k.id}/photos`, campos: {}, archivos,
+      parche: { clave: `/elements/${e.id}`, fn: (d, op) => { d.punch = (d.punch || []).map((x) => x.id === k.id ? { ...x, photos: [...(x.photos || []), ...fotosLocales(op)] } : x); return d; } },
+    }).catch((x) => toast(x.message));
+    onChanged();
   }
-  async function delPhoto(p) { if (!confirm('¿Quitar esta foto?')) return; await api.del(`/photos/${p.id}`).catch((x) => toast(x.message)); onChanged(); }
-  async function del(k) { if (!confirm('¿Borrar este detalle?')) return; await api.del(`/punch/${k.id}`).catch((x) => toast(x.message)); onChanged(); }
+  async function delPhoto(p) {
+    if (!confirm('¿Quitar esta foto?')) return;
+    await escribir({ metodo: 'DELETE', ruta: `/photos/${p.id}`, parche: { clave: `/elements/${e.id}`, fn: (d) => quitaFoto(d, p.id) } }).catch((x) => toast(x.message));
+    onChanged();
+  }
+  async function del(k) {
+    if (!confirm('¿Borrar este detalle?')) return;
+    await escribir({ metodo: 'DELETE', ruta: `/punch/${k.id}`, parche: { clave: `/elements/${e.id}`, fn: (d) => { d.punch = (d.punch || []).filter((x) => x.id !== k.id); return d; } } }).catch((x) => toast(x.message));
+    onChanged();
+  }
 
   // En producción no hay punchlist: todavía no se ha entregado nada que
   // corregir. En vez de una lista vacía sin explicación, se dice por qué y se
@@ -627,9 +666,10 @@ function Evidencia({ k, onListo, onCancel }) {
         ruta: `/punch/${k.id}/evidencia`,
         campos: { nota: nota.trim() },
         archivos: pending.map((p) => p.file),
+        parche: { clave: `/elements/${k.element_id}`, fn: (d) => { d.punch = (d.punch || []).map((x) => x.id === k.id ? { ...x, status: 'proc', __pendiente: true } : x); return d; } },
       });
       clear(); onListo();
-      if (!r.subido) toast('Sin señal: tu evidencia se sube sola cuando vuelva.');
+      if (r.sinSenal) toast('Sin señal: tu evidencia se sube sola cuando vuelva.');
     } catch (x) { toast(x.message); } finally { setBusy(false); }
   }
 
@@ -784,7 +824,7 @@ function EditaPunch({ k, e, contratistas, onListo, onCancel }) {
           },
         },
       });
-      if (!r.subido) toast('Sin señal: el cambio se sube solo cuando vuelva.');
+      if (r.sinSenal) toast('Sin señal: el cambio se sube solo cuando vuelva.');
       onListo();
     } catch (x) { toast(x.message); } finally { setBusy(false); }
   }
@@ -877,7 +917,7 @@ function Entrega({ e, staff, onChanged }) {
   const guardar = async (valor) => {
     setYendo(true);
     try {
-      await escribir({ ruta: `/elements/${e.id}/entrega`, cuerpo: { fecha: valor } });
+      await escribir({ ruta: `/elements/${e.id}/entrega`, cuerpo: { fecha: valor }, esperar: true });
       setAbierto(false);
       onChanged();
     } catch (err) {

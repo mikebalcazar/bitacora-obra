@@ -8,10 +8,19 @@ import { Dibujo } from './Dibujo.jsx';
 // Viven aquí y no dentro de una pantalla porque son las mismas en todas —la
 // bitácora, el punchlist y las dudas— y en obra casi todo se dice con una foto.
 
+// Una foto que todavía no sube trae su archivo (`blob`) y se pinta de ahí; la
+// liga se hace una vez por archivo (quell instantáneo, 16-oct-2026).
+const LIGAS = new WeakMap();
+const ligaDe = (p) => {
+  if (!p.blob) return fileUrl(p.r2_key);
+  if (!LIGAS.has(p.blob)) LIGAS.set(p.blob, URL.createObjectURL(p.blob));
+  return LIGAS.get(p.blob);
+};
 export function Photos({ photos, setLb, onDelete }) {
   if (!photos?.length) return null;
   // Al ampliar se guarda la liga y el nombre: el visor los usa para compartir.
-  return <div className="photos">{photos.map((p) => <div key={p.id} className="ph" onClick={() => setLb({ url: fileUrl(p.r2_key), nombre: p.file_name })}><img src={fileUrl(p.r2_key)} alt={p.file_name} loading="lazy" />{onDelete && <button className="rm" onClick={(ev) => { ev.stopPropagation(); onDelete(p); }} title="Quitar foto">×</button>}</div>)}</div>;
+  // Una foto por subir no se borra todavía: no tiene id en el servidor.
+  return <div className="photos">{photos.map((p) => <div key={p.id} className="ph" onClick={() => setLb({ url: ligaDe(p), nombre: p.file_name })}><img src={ligaDe(p)} alt={p.file_name} loading="lazy" />{onDelete && !p.__pendiente && <button className="rm" onClick={(ev) => { ev.stopPropagation(); onDelete(p); }} title="Quitar foto">×</button>}</div>)}</div>;
 }
 
 /* El botón de compartir una copia del archivo (Mike, 2-oct-2026). Es el

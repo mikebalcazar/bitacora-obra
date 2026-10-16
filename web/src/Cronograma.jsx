@@ -110,7 +110,7 @@ export default function Cronograma({ pid, onIr }) {
     setEstado('Guardando…');
     try {
       const cuerpo = { inicio: inicio || null, dias_objetivo: objetivo === '' ? null : Number(objetivo), tareas: tareas.map(aServidor) };
-      const r = await escribir({ metodo: 'PUT', ruta: `/projects/${pid}/cronograma`, cuerpo });
+      const r = await escribir({ metodo: 'PUT', ruta: `/projects/${pid}/cronograma`, cuerpo, esperar: true });
       if (!r.subido) { setEstado('Sin señal: se guarda cuando vuelva'); return; }
       setC(r.r);
       if (sucio.current === marca) { setTareas(r.r.tareas.map(limpia)); setEstado('Guardado'); }
