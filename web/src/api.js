@@ -136,7 +136,9 @@ export async function vaciaFila() {
     }
   } finally {
     vaciando = false;
-    avisa({ ultimoError });
+    // `subidas` le dice a la pantalla que lo que enseñaba como «Por subir» ya
+    // está en el servidor y hay que volver a leerlo (16-oct-2026).
+    avisa({ ultimoError, subidas });
   }
   return { subidas, rechazadas, ultimoError };
 }
