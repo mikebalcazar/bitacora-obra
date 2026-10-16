@@ -39,7 +39,12 @@ export default function App() {
   const faltan = useRef(0);
   useEffect(() => { faltan.current = red.faltan; }, [red.faltan]);
   useEffect(() => {
-    const quita = alCambiarRed((n) => setRed((antes) => (mismaSenal(antes, n) ? antes : n)));
+    const quita = alCambiarRed((n) => {
+      setRed((antes) => (mismaSenal(antes, n) ? antes : n));
+      // Lo que el servidor no quiso se dice: la pantalla ya lo había pintado y
+      // al volver a leer desaparece (quell instantáneo, 16-oct-2026).
+      if (n.rechazadas > 0 && n.ultimoError) setToast(`No se guardó un cambio: ${n.ultimoError}`);
+    });
     vaciaFila();
     revisaSenal();   // lo que quedó por subir de la vez pasada, con o sin señal
     const toca = () => hayRed() && document.visibilityState === 'visible' && faltan.current > 0;
@@ -48,6 +53,16 @@ export default function App() {
     document.addEventListener('visibilitychange', alVolver);
     return () => { quita(); clearInterval(cada); document.removeEventListener('visibilitychange', alVolver); };
   }, []);
+
+  // Con señal, la fila sube en un segundo o dos después de cada toque: avisarlo
+  // cada vez sería un parpadeo. El letrero sale sólo si algo tarda más de 4 s.
+  const [tarda, setTarda] = useState(false);
+  const subiendo = red.red && red.faltan > 0;
+  useEffect(() => {
+    if (!subiendo) { setTarda(false); return; }
+    const t = setTimeout(() => setTarda(true), 4000);
+    return () => clearTimeout(t);
+  }, [subiendo]);
 
   const ctx = useMemo(() => ({
     user,
@@ -80,7 +95,7 @@ export default function App() {
   return (
     <Ctx.Provider value={ctx}>
       {view}
-      {(!red.red || red.faltan > 0) && (
+      {(!red.red || (red.faltan > 0 && tarda)) && (
         <div className={'senal' + (red.red ? ' subiendo' : '')} onClick={() => vaciaFila()}>
           {!red.red && <span>Sin señal · lo que registres se guarda aquí</span>}
           {red.red && red.faltan > 0 && <span>Subiendo {red.faltan} {red.faltan === 1 ? 'cambio' : 'cambios'}…</span>}

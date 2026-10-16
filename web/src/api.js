@@ -54,8 +54,41 @@ export const revisaSenal = () => avisa();
 // El segundo no se guarda para reintentar: reintentarlo daría lo mismo.
 const esFalloDeRed = (e) => !e || !e.status;
 
-// Leer: la red manda, y lo guardado es la red de abajo.
-export async function leer(ruta, { soloCache = false } = {}) {
+// ─────────── quell instantáneo (Mike, 16-oct-2026) ───────────
+// «Que en pantalla sea suuuuper snappy y que en el background se vayan subiendo
+// esos cambios». Se midió: cada toque esperaba ~3 s, con señal buena o mala,
+// porque esperaba al servidor dos veces (guardar y volver a leer). Ahora:
+//   · escribir: va a la fila, se pinta en el teléfono y regresa al instante; la
+//     fila sube por detrás, haya señal o no;
+//   · leer: lo guardado se enseña enseguida y se pone al día por detrás; y
+//     mientras haya algo por subir, lo del teléfono manda, para que una lectura
+//     vieja del servidor no borre lo que el usuario acaba de hacer.
+
+const marcaDeCache = async (ruta, datos) => ({ ...datos, __deCache: true, __cuando: await local.cuando(ruta) });
+
+// Pone al día una ruta desde el servidor, por detrás. Si mientras tanto el
+// usuario hizo algo (hay fila), no se guarda: la fila sube primero y luego se
+// vuelve a leer.
+async function refrescar(ruta, antes, alRefrescar) {
+  try {
+    const datos = await call('GET', ruta);
+    if (await local.cuantosFaltan()) return;
+    await local.guarda(ruta, datos);
+    avisa({ deCache: false });
+    if (alRefrescar && JSON.stringify(datos) !== JSON.stringify(antes)) alRefrescar(datos);
+  } catch (e) { /* sin red o el servidor no quiso: se queda lo guardado */ }
+}
+
+// Leer. Con `alRefrescar`, lo guardado sale al momento y lo del servidor llega
+// después por esa función. Sin él, la red manda como antes, salvo que haya algo
+// por subir: entonces manda lo del teléfono.
+export async function leer(ruta, { soloCache = false, alRefrescar = null } = {}) {
+  const guardado = await local.lee(ruta);
+  const porSubir = guardado ? await local.cuantosFaltan() : 0;
+  if (guardado && (soloCache || porSubir > 0 || alRefrescar)) {
+    if (alRefrescar && !soloCache && !porSubir && hayRed()) refrescar(ruta, guardado, alRefrescar);
+    return hayRed() ? guardado : marcaDeCache(ruta, guardado);
+  }
   if (!soloCache && hayRed()) {
     try {
       const datos = await call('GET', ruta);
@@ -66,79 +99,84 @@ export async function leer(ruta, { soloCache = false } = {}) {
       if (!esFalloDeRed(e)) throw e;   // 403, 404: eso sí es respuesta
     }
   }
-  const guardado = await local.lee(ruta);
-  if (guardado) { avisa({ deCache: true }); return { ...guardado, __deCache: true, __cuando: await local.cuando(ruta) }; }
+  if (guardado) { avisa({ deCache: true }); return marcaDeCache(ruta, guardado); }
   throw new Error(hayRed() ? 'No se pudo cargar.' : 'Sin señal y sin copia guardada de esto todavía.');
 }
 
-// Escribir: se intenta subir; si no se puede, se guarda para después. Las fotos
-// se guardan tal cual —IndexedDB sí guarda archivos— y se vuelven a armar al
-// subirlas.
-export async function escribir({ metodo = 'POST', ruta, cuerpo = null, campos = null, archivos = null, parche = null }) {
-  // El identificador se hace aquí, no en el servidor, y viaja con la operación.
-  // Si la señal se cae justo al terminar de subir, nadie sabe si llegó: al
-  // reintentar, el servidor reconoce el identificador y no la repite. Sin esto,
-  // una foto subida con mala señal terminaría apareciendo tres veces.
+// Escribir. El identificador se hace aquí y viaja con la operación: si la señal
+// se cae justo al subir, al reintentar el servidor lo reconoce y no la repite.
+// Desde la 0.103.0 de la API también es el id de lo que se crea (pendiente,
+// nota, duda, pieza), así que el parche lo pinta con su id de verdad y el
+// siguiente toque ya va contra él.
+//
+// `parche.fn(datos, { id, archivos })` cambia lo guardado para que se vea al
+// instante. `esperar: true` es para lo poco que necesita la respuesta del
+// servidor (un correo que salió o no, una cuenta que hace allá): con señal se
+// espera como antes; sin señal, a la fila.
+export async function escribir({ metodo = 'POST', ruta, cuerpo = null, campos = null, archivos = null, parche = null, esperar = false }) {
   const idOp = crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
   if (campos || archivos) campos = { ...(campos || {}), op_id: idOp };
   else cuerpo = { ...(cuerpo || {}), op_id: idOp };
 
-  const subir = async () => {
-    if (campos || archivos) {
-      const fd = new FormData();
-      for (const [k, v] of Object.entries(campos || {})) fd.append(k, v);
-      for (const f of archivos || []) fd.append('photos', f);
-      return await call('POST', ruta, fd, true);
-    }
-    return await call(metodo, ruta, cuerpo);
-  };
-
-  if (hayRed()) {
-    try { const r = await subir(); avisa(); return { ok: true, subido: true, r }; }
-    catch (e) { if (!esFalloDeRed(e)) throw e; }
+  if (esperar && hayRed()) {
+    try {
+      let r;
+      if (campos || archivos) {
+        const fd = new FormData();
+        for (const [k, v] of Object.entries(campos || {})) fd.append(k, v);
+        for (const f of archivos || []) fd.append('photos', f);
+        r = await call('POST', ruta, fd, true);
+      } else r = await call(metodo, ruta, cuerpo);
+      avisa();
+      return { ok: true, subido: true, r, id: idOp, sinSenal: false };
+    } catch (e) { if (!esFalloDeRed(e)) throw e; }
   }
 
   const op = { id: idOp, metodo, ruta, cuerpo, campos, archivos, creado: Date.now() };
   await local.encola(op);
-  // Que se vea enseguida, aunque no haya subido: para quien lo escribió ya está
-  // hecho, y volver a pedírselo cuando haya señal es la manera segura de que no
-  // lo vuelva a hacer.
-  if (parche) await local.parchea(parche.clave, parche.fn);
+  if (parche) await local.parchea(parche.clave, (d) => parche.fn(d, { id: idOp, archivos: archivos || [] }));
   avisa();
-  return { ok: true, subido: false, id: op.id };
+  if (hayRed()) vaciaFila();   // por detrás: no se espera
+  return { ok: true, subido: false, id: idOp, sinSenal: !hayRed() };
 }
 
 // Vaciar la fila, en orden. Lo que el servidor rechaza de plano se saca de la
-// fila: reintentarlo eternamente solo la tapa.
-let vaciando = false;
+// fila: reintentarlo eternamente solo la tapa. Si mientras se vaciaba entró
+// algo nuevo, se da otra vuelta.
+let vaciando = false, otraVuelta = false;
 export async function vaciaFila() {
-  if (vaciando || !hayRed()) return { subidas: 0, rechazadas: 0 };
+  if (vaciando) { otraVuelta = true; return { subidas: 0, rechazadas: 0 }; }
+  if (!hayRed()) return { subidas: 0, rechazadas: 0 };
   vaciando = true;
   let subidas = 0, rechazadas = 0, ultimoError = null;
   try {
-    for (const op of await local.fila()) {
-      try {
-        if (op.campos || op.archivos) {
-          const fd = new FormData();
-          for (const [k, v] of Object.entries(op.campos || {})) fd.append(k, v);
-          for (const f of op.archivos || []) fd.append('photos', f);
-          await call('POST', op.ruta, fd, true);
-        } else {
-          await call(op.metodo, op.ruta, op.cuerpo);
+    do {
+      otraVuelta = false;
+      for (const op of await local.fila()) {
+        try {
+          if (op.campos || op.archivos) {
+            const fd = new FormData();
+            for (const [k, v] of Object.entries(op.campos || {})) fd.append(k, v);
+            for (const f of op.archivos || []) fd.append('photos', f);
+            await call('POST', op.ruta, fd, true);
+          } else {
+            await call(op.metodo, op.ruta, op.cuerpo);
+          }
+          await local.desencola(op.id);
+          subidas++;
+        } catch (e) {
+          if (esFalloDeRed(e)) { otraVuelta = false; break; }   // se fue la señal otra vez
+          await local.desencola(op.id);                          // el servidor dijo que no
+          rechazadas++; ultimoError = e.message;
         }
-        await local.desencola(op.id);
-        subidas++;
-      } catch (e) {
-        if (esFalloDeRed(e)) break;             // se fue la señal otra vez: mañana será
-        await local.desencola(op.id);           // el servidor dijo que no
-        rechazadas++; ultimoError = e.message;
       }
-    }
+    } while (otraVuelta && hayRed());
   } finally {
     vaciando = false;
-    // `subidas` le dice a la pantalla que lo que enseñaba como «Por subir» ya
-    // está en el servidor y hay que volver a leerlo (16-oct-2026).
-    avisa({ ultimoError, subidas });
+    // `subidas` y `rechazadas` le dicen a la pantalla que vuelva a leer: lo que
+    // enseñaba como «Por subir» ya está en el servidor, o el servidor no lo
+    // quiso y hay que enseñar lo que de verdad quedó.
+    avisa({ ultimoError, subidas, rechazadas });
   }
   return { subidas, rechazadas, ultimoError };
 }

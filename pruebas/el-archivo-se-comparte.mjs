@@ -44,7 +44,8 @@ console.log('· el botón está colgado');
 const fotos = readFileSync('web/src/Fotos.jsx', 'utf8');
 rev(/export function BotonCompartir\(/.test(fotos), 'hay un botón de compartir');
 rev(/export function Lightbox\(/.test(fotos) && /<BotonCompartir url=\{url\} nombre=\{nombre\} className="btn" \/>/.test(fotos), 'la foto ampliada lo trae');
-rev(/setLb\(\{ url: fileUrl\(p\.r2_key\), nombre: p\.file_name \}\)/.test(fotos), 'y al ampliar viaja el nombre de la foto');
+rev(/setLb\(\{ url: ligaDe\(p\), nombre: p\.file_name \}\)/.test(fotos), 'y al ampliar viaja el nombre de la foto');
+rev(/if \(!p\.blob\) return fileUrl\(p\.r2_key\);/.test(fotos), 'la liga es la del servidor, salvo una foto que todavía no sube (16-oct-2026)');
 const docs = readFileSync('web/src/DocsItem.jsx', 'utf8');
 rev(/<BotonCompartir url=\{fileUrl\(doc\.r2_key\)\} nombre=\{doc\.nombre\}>/.test(docs), 'la tarjeta de cada documento (plano, versión, soporte) lo trae');
 for (const f of ['web/src/ElementPanel.jsx', 'web/src/Dudas.jsx']) {

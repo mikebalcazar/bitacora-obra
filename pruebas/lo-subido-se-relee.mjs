@@ -24,16 +24,16 @@ const obra = readFileSync('web/src/Project.jsx', 'utf8');
 const vacia = api.slice(api.indexOf('export async function vaciaFila('), api.indexOf("if (typeof window !== 'undefined')"));
 
 console.log('· la fila');
-rev(/finally \{[\s\S]*avisa\(\{ ultimoError, subidas \}\);/.test(vacia), 'al terminar avisa cuántas subió');
+rev(/finally \{[\s\S]*avisa\(\{ ultimoError, subidas, rechazadas \}\);/.test(vacia), 'al terminar avisa cuántas subió y cuántas rechazó el servidor');
 rev(/subidas\+\+;/.test(vacia), 'y las cuenta sólo cuando el servidor las tomó');
 
 console.log('· el ítem abierto');
 rev(/import \{[^}]*\balCambiarRed\b[^}]*\} from '\.\/api\.js';/.test(panel), 'escucha a la fila');
-rev(/useEffect\(\(\) => alCambiarRed\(\(n\) => \{ if \(n\.subidas > 0\) load\(\); \}\), \[elementId\]\);/.test(panel), 'se vuelve a leer cuando subió algo, y deja de escuchar al cerrarse');
+rev(/useEffect\(\(\) => alCambiarRed\(\(n\) => \{ if \(n\.subidas > 0 \|\| n\.rechazadas > 0\) load\(\); \}\), \[elementId\]\);/.test(panel), 'se vuelve a leer cuando subió algo o el servidor rechazó algo, y deja de escuchar al cerrarse');
 
 console.log('· la obra');
 rev(/import \{[^}]*\balCambiarRed\b[^}]*\} from '\.\/api\.js';/.test(obra), 'escucha a la fila');
-rev(/useEffect\(\(\) => alCambiarRed\(\(n\) => \{ if \(n\.subidas > 0\) load\(\); \}\), \[load\]\);/.test(obra), 'pines y cuenta de pendientes se vuelven a leer');
+rev(/useEffect\(\(\) => alCambiarRed\(\(n\) => \{ if \(n\.subidas > 0 \|\| n\.rechazadas > 0\) load\(\); \}\), \[load\]\);/.test(obra), 'pines y cuenta de pendientes se vuelven a leer');
 
 console.log('· lo armado lo trae');
 const dir = 'web/dist/assets';

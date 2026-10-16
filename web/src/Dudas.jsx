@@ -38,7 +38,7 @@ export default function Dudas({ pid, staff, user, onIr, cli = false }) {
     if (!t && !pending.length) return;
     setBusy(true);
     try {
-      const r = await escribir({ ruta: `/projects/${pid}/dudas`, campos: { texto: t, ...(staff && paraCliente ? { para: 'cliente' } : {}) }, archivos: pending.map((p) => p.file) });
+      const r = await escribir({ ruta: `/projects/${pid}/dudas`, campos: { texto: t, ...(staff && paraCliente ? { para: 'cliente' } : {}) }, archivos: pending.map((p) => p.file), esperar: true });
       setTexto(''); clear();
       if (!r.subido) toast(cli ? 'Sin señal: tu pregunta se manda sola cuando vuelva.' : 'Sin señal: la duda se manda sola cuando vuelva.');
       load();
@@ -48,7 +48,7 @@ export default function Dudas({ pid, staff, user, onIr, cli = false }) {
   async function avisar() {
     setAvisando(true);
     try {
-      const r = await escribir({ ruta: `/projects/${pid}/avisar-cliente`, cuerpo: {} });
+      const r = await escribir({ ruta: `/projects/${pid}/avisar-cliente`, cuerpo: {}, esperar: true });
       if (!r.subido) toast('Sin señal: el aviso sale cuando vuelva.');
       else toast(r.r?.aviso ? `Se avisó a ${r.r.enviados}, pero: ${r.r.aviso}` : `Le avisamos al cliente: ${r.r?.puntos} ${r.r?.puntos === 1 ? 'punto' : 'puntos'} por definir.`);
     } catch (e) { toast(e.message); } finally { setAvisando(false); }
@@ -133,14 +133,14 @@ export function Duda({ d, staff, cli = false, user, onCambio, onIr, setLb }) {
     if (!t && !pending.length) return;
     setBusy(true);
     try {
-      const r = await escribir({ ruta: `/dudas/${d.id}/respuestas`, campos: { texto: t }, archivos: pending.map((p) => p.file) });
+      const r = await escribir({ ruta: `/dudas/${d.id}/respuestas`, campos: { texto: t }, archivos: pending.map((p) => p.file), esperar: true });
       setResp(''); clear(); setAbierto(false); onCambio();
       if (r.subido && r.r?.cerrada) toast(cli ? 'Listo: el punto quedó definido con tu respuesta.' : 'El punto del cliente quedó cerrado con tu respuesta.');
       else if (!r.subido) toast('Sin señal: tu respuesta sube sola cuando vuelva.');
     } catch (e) { toast(e.message); } finally { setBusy(false); }
   }
   async function cerrar(estado) {
-    await escribir({ ruta: `/dudas/${d.id}/estado`, cuerpo: { estado } }).catch((e) => toast(e.message));
+    await escribir({ ruta: `/dudas/${d.id}/estado`, cuerpo: { estado }, esperar: true }).catch((e) => toast(e.message));
     onCambio();
   }
 
