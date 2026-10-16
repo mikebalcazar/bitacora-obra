@@ -140,13 +140,15 @@ console.log('\n== la puerta ==');
    * pantalla se quedaría siempre sin lista, en silencio—. */
   env = mundo();
   await lee(pide(env, 'supervisora', '/api/projects/OBRA-1/sin-ubicar'));
-  rev(pedidas[1]?.ruta === '/orgs/forespot/obras/OBRA-1/sin-ubicar',
-      'los ítems sin ubicar van a /obras/:id/sin-ubicar, sin pasar por /quell', pedidas[1]?.ruta);
+  // Desde el 16-oct la empresa se recuerda por sesión: `/yo` puede no ir antes.
+  const alMotor = () => pedidas.find((x) => x.ruta !== '/yo');
+  rev(alMotor()?.ruta === '/orgs/forespot/obras/OBRA-1/sin-ubicar',
+      'los ítems sin ubicar van a /obras/:id/sin-ubicar, sin pasar por /quell', alMotor()?.ruta);
 
   env = mundo();
   await lee(pide(env, 'supervisora', '/api/projects/OBRA-1/punch'));
-  rev(pedidas[1]?.ruta === '/orgs/forespot/quell/projects/OBRA-1/punch',
-      'y lo demás de la obra sigue yendo al motor, con /quell', pedidas[1]?.ruta);
+  rev(alMotor()?.ruta === '/orgs/forespot/quell/projects/OBRA-1/punch',
+      'y lo demás de la obra sigue yendo al motor, con /quell', alMotor()?.ruta);
 
   env = mundo();
   const sinSesion = await lee(pide(env, null, '/api/projects/OBRA-1/sin-ubicar'));

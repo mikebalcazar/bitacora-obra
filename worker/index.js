@@ -91,28 +91,79 @@ export function empresaPedida(req) {
   return dominio && org ? org : null;
 }
 
+/* ─────────── la empresa de cada sesión, recordada (16-oct-2026) ───────────
+ * Cada pedido de quell preguntaba primero a la suite «¿quién es?» (/yo, ~0.7 s
+ * medido en staging) sólo para escoger a qué empresa tocar, y luego la suite
+ * volvía a revisar la sesión al atenderlo. Ahora la empresa se recuerda 5 min
+ * por sesión, en la memoria de este Worker. No abre nada: la suite sigue
+ * revisando sesión, empresa y permiso en CADA pedido. Si contesta 401 o 403
+ * con una empresa recordada, se olvida y se vuelve a preguntar una vez.
+ * La llave es un SHA-256 de las credenciales: aquí no se guarda ninguna. */
+const EMPRESAS = new Map();
+const VIVE_MS = 5 * 60 * 1000;
+const CUANTAS = 2000;
+async function llaveDeSesion(h, env, pedida) {
+  const crudo = `${h.get('cookie') || ''}\n${h.get('authorization') || ''}\n${pedida || ''}\n${env.ORG_ID || ''}`;
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(crudo));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+function recuerda(llave, empresa) {
+  if (EMPRESAS.size >= CUANTAS) EMPRESAS.delete(EMPRESAS.keys().next().value);
+  EMPRESAS.set(llave, { empresa, vence: Date.now() + VIVE_MS });
+}
+function recordada(llave) {
+  const x = EMPRESAS.get(llave);
+  if (!x) return null;
+  if (x.vence < Date.now()) { EMPRESAS.delete(llave); return null; }
+  return x.empresa;
+}
+/** Para las pruebas: empezar sin nada recordado. */
+export const olvidaEmpresas = () => EMPRESAS.clear();
+
 /** /api/* y /files/* → la suite, a /orgs/{empresa}/quell/… */
 async function aLaSuite(req, env, url, ruta, prefijo = '/quell') {
   if (!env.API) return err('La puerta de la suite no está conectada.', 503);
-  const yo = await laSuiteDiceQuien(req, env, url);
-  if (!yo) return err('no autorizado', 401);
-  const empresa = empresaDe(yo, env, empresaPedida(req));
-  if (!empresa) return err('no autorizado', 401);
-  const destino = new URL(`https://suite101-api/orgs/${encodeURIComponent(empresa)}${prefijo}${ruta}`);
-  destino.search = url.search;
-  destino.searchParams.delete('t');
-  const h = credenciales(req, url);
-  for (const nombre of ['content-type', 'content-length', 'if-none-match']) {
-    const v = req.headers.get(nombre);
-    if (v) h.set(nombre, v);
-  }
-  // Para las ligas de los correos que manda el motor (invitaciones, avisos).
-  h.set('X-Sitio', url.origin);
+  const credencial = credenciales(req, url);
+  if (!credencial.has('cookie') && !credencial.has('authorization')) return err('no autorizado', 401);
+  const pedida = empresaPedida(req);
+  const llave = await llaveDeSesion(credencial, env, pedida);
+  const preguntaALaSuite = async () => {
+    const yo = await laSuiteDiceQuien(req, env, url);
+    const empresa = yo ? empresaDe(yo, env, pedida) : null;
+    if (empresa) recuerda(llave, empresa);
+    return empresa;
+  };
+
   // El cuerpo se lee entero antes de reenviarlo (un plano son unos MB; cabe):
   // así el enlace de servicio no se queda con un flujo a medias si la suite
-  // contesta antes de leerlo todo.
+  // contesta antes de leerlo todo, y se puede reenviar si hay que reintentar.
   const cuerpo = req.method === 'GET' || req.method === 'HEAD' ? null : await req.arrayBuffer();
-  return env.API.fetch(new Request(destino.toString(), { method: req.method, headers: h, body: cuerpo }));
+  const manda = (empresa) => {
+    const destino = new URL(`https://suite101-api/orgs/${encodeURIComponent(empresa)}${prefijo}${ruta}`);
+    destino.search = url.search;
+    destino.searchParams.delete('t');
+    const h = credenciales(req, url);
+    for (const nombre of ['content-type', 'content-length', 'if-none-match']) {
+      const v = req.headers.get(nombre);
+      if (v) h.set(nombre, v);
+    }
+    // Para las ligas de los correos que manda el motor (invitaciones, avisos).
+    h.set('X-Sitio', url.origin);
+    return env.API.fetch(new Request(destino.toString(), { method: req.method, headers: h, body: cuerpo }));
+  };
+
+  const deMemoria = recordada(llave);
+  const empresa = deMemoria || (await preguntaALaSuite());
+  if (!empresa) return err('no autorizado', 401);
+  const r = await manda(empresa);
+  if (!deMemoria || (r.status !== 401 && r.status !== 403)) return r;
+  // La empresa recordada ya no sirve (salió de la sesión, le quitaron la app,
+  // cambió de empresa): se olvida y se pregunta otra vez, una sola vez.
+  EMPRESAS.delete(llave);
+  const otra = await preguntaALaSuite();
+  if (!otra) return err('no autorizado', 401);
+  if (otra === empresa) return r;
+  return manda(otra);
 }
 
 // ---------- CORS ----------
