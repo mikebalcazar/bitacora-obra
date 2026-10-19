@@ -185,7 +185,7 @@ export default function Home() {
 
 // Mismas reglas que la suite (`normalizar`): sin acentos, sin mayúsculas, sin
 // espacios de más. Así se dice aquí lo mismo que va a hacer la API.
-const normalizar = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const normalizar = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const clienteIgual = (clientes, nombre) => { const n = normalizar(nombre); return n ? clientes.find((c) => normalizar(c.nombre) === n) : null; };
 
 // Lo que va a pasar con el cliente, dicho antes de crear: el que ya existe, uno
