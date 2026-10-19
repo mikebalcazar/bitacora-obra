@@ -38,7 +38,10 @@ rev(/ctx\.rotate\(\(rotation \* Math\.PI\) \/ 180\)/.test(api), 'una imagen se g
 rev(/ultimo = \{ blob, width: w, height: h, rotation \}/.test(api), 'y el resultado dice con qué giro salió');
 
 console.log('· la capa nítida gira igual que la imagen');
-rev(/const rotation = \[90, 180, 270\]\.includes\(Number\(plan\.rotation\)\)/.test(lienzo), 'PlanCanvas lee el giro del plano');
+/* Desde el 19-oct-2026 el giro no se lee a secas del plano: cuando el PDF trae
+ * su propio `/Rotate`, el guardado no alcanza y hay que escoger (plano.js,
+ * `giroDeHoja`). El porqué y las cuentas están en `el-plano-no-se-voltea.mjs`. */
+rev(/giroGuardado: plan\.rotation/.test(lienzo), 'PlanCanvas lee el giro del plano');
 rev(/pg\.getViewport\(\{ scale: 1, rotation \}\)/.test(lienzo) && /pg\.getViewport\(\{ scale: escala, rotation \}\)/.test(lienzo),
     'y se lo pasa a pdf.js en las dos cuentas');
 rev(!/getViewport\(\{ scale: escala \}\)/.test(lienzo), 'ya no queda un viewport sin giro');
