@@ -64,6 +64,54 @@ export function hayQueRedibujar({ vv, hv, w, h, p = 1 }) {
   return null;
 }
 
+/* ── con qué giro se le pide la página a pdf.js ──────────────────────────── */
+/* Mike, 19-oct-2026: «Cuando abro ese proyecto en el app de Android abre el
+ * plano bien y luego lo Voltea.»
+ *
+ * Qué pasaba. Un PDF puede traer su propio giro adentro (`/Rotate`): la hoja
+ * se guarda vertical y el archivo dice «enséñala de lado». Y `rotation` del
+ * viewport de pdf.js NO se suma a ése: lo REEMPLAZA. Medido:
+ *
+ *     hoja vertical 595x842 con /Rotate 90
+ *       sin pedir rotation  →  842x595   (respeta el /Rotate)
+ *       rotation: 0         →  595x842   (lo ignora)
+ *
+ * Hasta el 1-oct-2026 la imagen del plano se rasterizaba sin pedir rotation,
+ * o sea respetando el /Rotate: salía de lado, bien. Desde ese día se pide el
+ * giro con que se subió (0029) y la capa nítida pide el mismo. Para un PDF sin
+ * /Rotate da igual; para uno CON /Rotate subido antes, la imagen quedó de lado
+ * y la capa nítida pide `rotation: 0`, que lo ignora: encima del plano correcto
+ * se dibuja la misma hoja vertical, y eso es el plano «volteándose».
+ *
+ * Qué hace esto. Entre los dos giros posibles —el guardado, y el guardado
+ * sumado al /Rotate— escoge el que cuadra con la forma de la imagen que ya
+ * está en el plano (`plan.width`/`plan.height`). Si los dos cuadran igual, o
+ * el PDF no trae /Rotate, se queda el guardado: para un PDF normal esto no
+ * cambia nada. Y dice si lo escogido de veras cuadra, porque dibujar la hoja
+ * cruzada es peor que no dibujarla. */
+const GIROS = [0, 90, 180, 270];
+const normalizaGiro = (g) => {
+  const n = ((Math.round(Number(g) || 0) % 360) + 360) % 360;
+  return GIROS.includes(n) ? n : 0;
+};
+
+/** @returns {{giro:number, cuadra:boolean, relativo:boolean}} */
+export function giroDeHoja({ rotatePagina = 0, anchoPagina = 0, altoPagina = 0, giroGuardado = 0, anchoPlano = 0, altoPlano = 0 }) {
+  const guardado = normalizaGiro(giroGuardado);
+  const propio = normalizaGiro(rotatePagina);
+  const W = Number(anchoPagina) || 0, H = Number(altoPagina) || 0;
+  const w = Number(anchoPlano) || 0, h = Number(altoPlano) || 0;
+  // Sin /Rotate no hay nada que adivinar; sin medidas no hay con qué.
+  if (!propio || !(W > 0 && H > 0 && w > 0 && h > 0)) return { giro: guardado, cuadra: true, relativo: false };
+  const relativo = (propio + guardado) % 360;
+  // Un giro de 90 o 270 cambia ancho por alto; el de 0 y 180 no.
+  const forma = (g) => (g === 90 || g === 270 ? H / W : W / H);
+  const lejos = (g) => Math.abs(Math.log(forma(g) / (w / h)));
+  const eg = lejos(guardado), er = lejos(relativo);
+  const giro = er < eg - 1e-6 ? relativo : guardado;
+  return { giro, cuadra: Math.min(eg, er) <= 0.05, relativo: giro !== guardado };
+}
+
 /** El estado de la señal que la app enseña. Sólo cambia si cambió algo: un
  *  aviso igual al anterior no tiene por qué volver a pintar toda la app. */
 export function mismaSenal(a, b) {
