@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api, esCliente, esDueno } from './api.js';
 import { ponerPin } from './suite.js';
 import { useApp } from './App.jsx';
@@ -22,6 +22,38 @@ export default function Home() {
    * abre esta pantalla. Borrar es del dueño y lo decide la API. */
   const [verArchivo, setVerArchivo] = useState(false);
   const [borrando, setBorrando] = useState(null); // la obra que se va a borrar
+
+  /* Cambiar el nombre de la obra, desde aquí (Mike, 19-oct-2026): «quiero
+   * poder editar el nombre del proyecto desde la pantalla principal de quell.
+   * A lo mejor dejando presionado sobre el proyecto y que pregunte editar?».
+   * Dejarlo presionado medio segundo —en el celular es el gesto de siempre— y
+   * sale la pregunta con el nombre listo para corregir. No es un botón más en
+   * la tarjeta porque ya trae dos y en obra se pican sin querer. */
+  const [renombrando, setRenombrando] = useState(null);
+  const PRESION_MS = 500;
+  const presion = useRef({ t: null, x: 0, y: 0, saltar: false });
+  const sueltaPresion = () => { if (presion.current.t) clearTimeout(presion.current.t); presion.current.t = null; };
+  function presionaObra(p, ev) {
+    if (!staff || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
+    sueltaPresion();
+    presion.current.x = ev.clientX; presion.current.y = ev.clientY;
+    presion.current.t = setTimeout(() => {
+      presion.current.t = null;
+      presion.current.saltar = true;   // para que al soltar no se abra la obra
+      setRenombrando(p);
+    }, PRESION_MS);
+  }
+  // Si el dedo se movió, estaba deslizando la lista, no presionando la obra.
+  function mueveObra(ev) {
+    if (!presion.current.t) return;
+    if (Math.abs(ev.clientX - presion.current.x) > 10 || Math.abs(ev.clientY - presion.current.y) > 10) sueltaPresion();
+  }
+  function abreObra(p) {
+    sueltaPresion();
+    if (presion.current.saltar) { presion.current.saltar = false; return; }
+    go(`/p/${p.id}`);
+  }
+  useEffect(() => sueltaPresion, []);
 
   const load = () => api.get('/projects').then((r) => setProjects(r.projects)).catch((e) => toast(e.message));
   useEffect(() => { load(); }, []);
@@ -100,7 +132,20 @@ export default function Home() {
         /* La tarjeta era un <button>; ahora lleva botones adentro (archivar,
            borrar) y un botón no puede traer otros. Es un div que se pica. */
         <div key={p.id} className={'card' + (p.status === 'cerrado' ? ' archivada' : '')} role="button" tabIndex={0}
-          onClick={() => go(`/p/${p.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(`/p/${p.id}`); } }}>
+          title={staff ? 'Déjalo presionado para cambiarle el nombre' : undefined}
+          /* Sin esto, dejar la tarjeta presionada en el teléfono hace otra
+             cosa: selecciona el texto y saca el menú del navegador («copiar»,
+             «buscar») encima de la pregunta. */
+          style={staff ? { WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' } : undefined}
+          onPointerDown={(e) => presionaObra(p, e)} onPointerMove={mueveObra}
+          onPointerUp={sueltaPresion} onPointerCancel={sueltaPresion} onPointerLeave={sueltaPresion}
+          onContextMenu={(e) => { if (staff) e.preventDefault(); }}
+          onClick={() => abreObra(p)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(`/p/${p.id}`); }
+            // Con teclado no hay «dejar presionado»: F2 es lo que renombra en todas partes.
+            if (staff && e.key === 'F2') { e.preventDefault(); setRenombrando(p); }
+          }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h3>{p.name}</h3>
             <div className="muted">{p.client}{p.status === 'cerrado' ? <span className="pill gen" style={{ marginLeft: 6 }}>archivado</span> : null}</div>
@@ -117,6 +162,7 @@ export default function Home() {
         </div>
       ))}
       {borrando && <BorrarObra p={borrando} onClose={() => setBorrando(null)} onBorrada={() => { setBorrando(null); load(); }} />}
+      {renombrando && <RenombrarObra p={renombrando} onClose={() => setRenombrando(null)} onHecho={() => { setRenombrando(null); load(); }} />}
       {pinAbierto && <CambiarPin onClose={() => setPin(false)} />}
       {invitando && <InvitarCliente projects={projects || []} onClose={() => setInvitando(false)} />}
       {creating && (
@@ -139,7 +185,7 @@ export default function Home() {
 
 // Mismas reglas que la suite (`normalizar`): sin acentos, sin mayúsculas, sin
 // espacios de más. Así se dice aquí lo mismo que va a hacer la API.
-const normalizar = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const normalizar = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const clienteIgual = (clientes, nombre) => { const n = normalizar(nombre); return n ? clientes.find((c) => normalizar(c.nombre) === n) : null; };
 
 // Lo que va a pasar con el cliente, dicho antes de crear: el que ya existe, uno
@@ -156,6 +202,51 @@ function AvisoCliente({ clientes, nombre }) {
       Cliente nuevo: se da de alta en dash101 y quote101.
       {parecidos.length > 0 && <> Se parece a {parecidos.slice(0, 3).map((c, i) => <React.Fragment key={c.id}>{i ? ', ' : ''}<b>{c.nombre}</b></React.Fragment>)}; si es el mismo, escógelo de la lista.</>}
     </small>
+  );
+}
+
+/* La pregunta de «¿editar?» y el nombre nuevo, en una sola pantalla: en obra,
+ * preguntar primero y luego pedir el nombre son dos toques de más. El nombre
+ * viejo viene escrito y seleccionado, así que corregir una letra es corregir
+ * una letra. Sólo el taller lo ve, y la API además lo exige (`isStaff`).
+ *
+ * Nada más el nombre: el cliente de la obra amarra al cliente de la suite
+ * (dash101, quote101) y cambiarlo aquí de un teclazo desligaría la obra. */
+function RenombrarObra({ p, onClose, onHecho }) {
+  const { toast } = useApp();
+  const [nombre, setNombre] = useState(p.name);
+  const [busy, setBusy] = useState(false);
+  const limpio = nombre.trim();
+
+  async function guardar(e) {
+    e.preventDefault();
+    if (!limpio) return;
+    if (limpio === String(p.name).trim()) { onClose(); return; }   // no se tocó nada
+    setBusy(true);
+    try {
+      await api.patch(`/projects/${p.id}`, { name: limpio });
+      toast(`Ahora se llama «${limpio}».`);
+      onHecho();
+    } catch (x) { toast(x.message); setBusy(false); }
+  }
+
+  return (
+    <div className="ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <form className="modal" onSubmit={guardar} data-renombrar-obra={p.id}>
+        <h2>¿Editar «{p.name}»?</h2>
+        <div className="field">
+          <label>Nombre de la obra</label>
+          <input required autoFocus value={nombre} maxLength={120}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setNombre(e.target.value)} placeholder="Casa Lomas 214" />
+        </div>
+        <small className="muted">Es el nombre que ve toda la gente de obra. Los planos, los ítems y la bitácora se quedan como están.</small>
+        <div className="acts">
+          <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+          <button className="btn primary" disabled={busy || !limpio}>{busy ? 'Guardando…' : 'Guardar'}</button>
+        </div>
+      </form>
+    </div>
   );
 }
 
