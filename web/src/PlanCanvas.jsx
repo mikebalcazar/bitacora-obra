@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fileUrl, colorTipo, aguado, enRevision } from './api.js';
 import { pdfjs, esPdf } from './pdf.js';
-import { hojaConMargen, pegado, hayQueRedibujar, ESPERA_MS } from './plano.js';
+import { hojaConMargen, pegado, hayQueRedibujar, giroDeHoja, ESPERA_MS } from './plano.js';
 
 // Plano + pines. Pan (arrastrar), zoom (rueda / pinch), tap para elegir.
 //
@@ -237,10 +237,19 @@ export default function PlanCanvas({ plan, elements, sel, flash, adding, mios = 
     if (!w || !h) return;
     if (!hayQueRedibujar({ vv, hv: hojaVista.current, w, h, p })) return;
 
-    /* El giro con que se subió el plano (0029). La imagen ya viene girada;
-     * el PDF original no, así que se le pide a pdf.js con el mismo giro, o
-     * la capa nítida saldría cruzada sobre el plano. */
-    const rotation = [90, 180, 270].includes(Number(plan.rotation)) ? Number(plan.rotation) : 0;
+    /* Con qué giro se le pide la página (0029 + el volteo del 19-oct). El
+     * giro guardado al subir, o ése sumado al que el PDF trae adentro: manda
+     * el que cuadra con la forma de la imagen que ya está abajo. La cuenta
+     * está en plano.js, medida, con el porqué largo. */
+    const natural = pg.getViewport({ scale: 1, rotation: 0 });
+    const { giro: rotation, cuadra } = giroDeHoja({
+      rotatePagina: pg.rotate, anchoPagina: natural.width, altoPagina: natural.height,
+      giroGuardado: plan.rotation, anchoPlano: plan.width, altoPlano: plan.height,
+    });
+    /* Ninguno de los dos cuadra: la hoja saldría cruzada encima del plano, que
+     * es justo lo que se veía. Mejor quedarse con la imagen de siempre —se ve
+     * bien, nada más no se afina al acercar— que tapar el plano. */
+    if (!cuadra) { setFalla(true); return; }
     const base = pg.getViewport({ scale: 1, rotation });
     const deseada = (plan.width / base.width) * vv.s * p;
     if (!(deseada > 0) || !Number.isFinite(deseada)) return;
